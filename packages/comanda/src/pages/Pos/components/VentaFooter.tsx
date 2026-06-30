@@ -56,20 +56,16 @@ export const VentaFooter = React.memo(function VentaFooter({
       <div className="grid grid-cols-2 gap-1.5 px-2 pb-2.5">
         {/* Marchar — enviar items pendientes a cocina */}
         <Button
+          variant="default"
           size="sm"
           onClick={onMarchar}
           disabled={!editable || totalHold === 0}
-          className={cn(
-            'gap-1.5 text-white transition-colors',
-            totalHold > 0 && editable
-              ? 'bg-emerald-600 hover:bg-emerald-700'
-              : 'bg-emerald-600/40',
-          )}
+          className="gap-1.5"
         >
           <Send className="h-3.5 w-3.5" />
           Marchar
           {totalHold > 0 && (
-            <span className="inline-flex items-center justify-center h-4 min-w-[1rem] rounded-full bg-white/30 text-[10px] font-bold px-1 tabular-nums">
+            <span className="inline-flex items-center justify-center h-4 min-w-[1rem] rounded-full bg-white/25 text-[10px] font-bold px-1 tabular-nums">
               {totalHold}
             </span>
           )}
@@ -83,7 +79,7 @@ export const VentaFooter = React.memo(function VentaFooter({
           disabled={!editable || totalHold === 0}
           className={cn(
             'gap-1.5',
-            todosEnStay && 'border-purple-400 text-purple-700 bg-purple-50 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-700',
+            todosEnStay && 'bg-accent text-foreground',
           )}
         >
           <PauseCircle className="h-3.5 w-3.5" />

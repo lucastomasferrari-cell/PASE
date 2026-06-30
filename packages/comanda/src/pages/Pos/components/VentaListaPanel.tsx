@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Send, Trash2, PauseCircle, Play, CloudUpload } from 'lucide-react';
-import { Badge } from '../../../components/Badge';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
 import type { VentaPosItem } from '../../../types/database';
 import type { ItemConGrupo } from '../../../services/itemsService';
 
+// Paleta sobria (Lucas 2026-06-30): el único acento del POS es el índigo
+// primary. Los cursos NO se diferencian por color — todos en muted neutro,
+// se distinguen por el número.
 const CURSO_COLORS: Record<number, string> = {
-  1: 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 border-amber-200 dark:border-amber-800',
-  2: 'bg-orange-100 text-orange-900 dark:bg-orange-900/30 dark:text-orange-100 border-orange-200 dark:border-orange-800',
-  3: 'bg-purple-100 text-purple-900 dark:bg-purple-900/30 dark:text-purple-100 border-purple-200 dark:border-purple-800',
+  1: 'bg-muted text-foreground border-border',
+  2: 'bg-muted text-foreground border-border',
+  3: 'bg-muted text-foreground border-border',
 };
 
 interface CheckRowProps {
@@ -52,7 +54,7 @@ function CheckRow({
       className={cn(
         'border-b border-border/40 transition-colors',
         anulado && 'opacity-40',
-        flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
+        flashed && 'bg-primary/10 ring-1 ring-primary/40',
         selected && 'bg-accent/50',
       )}
     >
@@ -76,13 +78,13 @@ function CheckRow({
             </span>
           )}
           {item.es_cortesia && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase ml-1.5">Cortesía</span>
+            <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-bold uppercase ml-1.5">Cortesía</span>
           )}
           {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase ml-1.5">Precio mod.</span>
+            <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-bold uppercase ml-1.5">Precio mod.</span>
           )}
           {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse ml-1.5">
+            <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-bold uppercase inline-flex items-center gap-0.5 animate-pulse ml-1.5">
               <CloudUpload className="h-2.5 w-2.5" /> Queued
             </span>
           )}
@@ -92,7 +94,7 @@ function CheckRow({
 
       {/* Nota / aclaración (solo si existe) */}
       {item.notas && (
-        <div className="px-2 pb-1 -mt-0.5 text-[11px] text-warning italic truncate">{item.notas}</div>
+        <div className="px-2 pb-1 -mt-0.5 text-[11px] text-muted-foreground italic truncate">{item.notas}</div>
       )}
 
       {/* Acciones — solo cuando el item está seleccionado */}
@@ -114,7 +116,7 @@ function CheckRow({
               <div className="flex-1" />
               {usarCursos && (
                 <button type="button" onClick={onMandarSolo} title="Enviar solo este item a cocina"
-                  className="h-7 px-2.5 rounded text-[11px] font-medium inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800">
+                  className={cn(btnCls, 'inline-flex items-center gap-1')}>
                   <Send className="h-3 w-3" /> Enviar solo
                 </button>
               )}
@@ -122,7 +124,7 @@ function CheckRow({
                 <button type="button" onClick={onToggleStay} title={enStay ? 'Liberar' : 'Hold'}
                   className={cn('h-7 px-2.5 rounded text-[11px] font-medium inline-flex items-center gap-1 border transition-colors',
                     enStay
-                      ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-700'
+                      ? 'bg-accent text-foreground border-border'
                       : 'bg-muted text-muted-foreground border-border hover:text-foreground hover:bg-accent')}>
                   {enStay ? <Play className="h-3 w-3" /> : <PauseCircle className="h-3 w-3" />}{enStay ? 'Liberar' : 'Hold'}
                 </button>
@@ -214,7 +216,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                 <div className="flex items-center gap-1.5">
                   <span>{usarCursos ? `Curso ${curso}` : 'Pedido'}</span>
                   {usarCursos && stay > 0 && (
-                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase text-[9px]">
+                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-background/60 text-muted-foreground border border-border font-bold uppercase text-[9px]">
                       <PauseCircle className="h-2 w-2" /> {stay} hold
                     </span>
                   )}
@@ -226,7 +228,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                       {editable && <Send className="h-3 w-3" />}
                     </>
                   ) : stay === 0 ? (
-                    <Badge variant="green">Enviado</Badge>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Enviado</span>
                   ) : null}
                 </div>
               </button>
