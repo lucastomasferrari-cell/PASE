@@ -41,10 +41,16 @@ export function LoginPage() {
     }
     setError(null);
     setLoading(true);
-    const { error: err } = await db.auth.signInWithPassword({
-      email: normalizarEmail(email),
-      password,
-    });
+    let err: { message: string } | null = null;
+    try {
+      const res = await db.auth.signInWithPassword({
+        email: normalizarEmail(email),
+        password,
+      });
+      err = res.error;
+    } catch (caught) {
+      err = { message: caught instanceof Error ? caught.message : String(caught) };
+    }
     setLoading(false);
     if (err) {
       setError(traducirError(err.message));
@@ -125,5 +131,13 @@ function traducirError(msg: string): string {
   if (m.includes('too many requests')) {
     return 'Demasiados intentos. Esperá unos minutos.';
   }
-  return msg;
+  // Errores de red (fetch falla por conexión / servidor caído / CORS).
+  if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('load failed') || m.includes('network request failed')) {
+    return 'No se pudo conectar. Revisá tu conexión a internet e intentá de nuevo.';
+  }
+  if (m.includes('timeout') || m.includes('timed out')) {
+    return 'La conexión tardó demasiado. Probá de nuevo.';
+  }
+  // Fallback en español — nunca mostramos el error crudo en inglés.
+  return 'No pudimos iniciar sesión. Probá de nuevo en unos segundos.';
 }
