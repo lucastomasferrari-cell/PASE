@@ -27,8 +27,17 @@ export function PWAUpdatePrompt() {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegisteredSW(swUrl: string) {
+    onRegisteredSW(swUrl: string, registration: ServiceWorkerRegistration | undefined) {
       console.log('[PWA] SW registrado:', swUrl);
+      // Chequeo periódico de actualización: sin esto, el SW solo busca
+      // versión nueva al cargar la página. Con esto, si dejás la pestaña
+      // abierta y deployamos, el toast "Nueva versión disponible" aparece
+      // en ~1 min sin necesidad de recargar a mano.
+      if (registration) {
+        setInterval(() => {
+          void registration.update();
+        }, 60_000);
+      }
     },
     onRegisterError(err: unknown) {
       console.warn('[PWA] error al registrar SW:', err);
