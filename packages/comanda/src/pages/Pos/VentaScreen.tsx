@@ -454,6 +454,37 @@ export function VentaScreen() {
     }
   }
 
+  // Imprime la PRE-CUENTA (sin validez fiscal) en la impresora térmica del
+  // cajero. No registra pago — es el resumen que se muestra al cliente antes
+  // de cobrar. Sin CAE → sale como "DOCUMENTO NO FISCAL".
+  async function imprimirPreCuenta() {
+    if (!venta) return;
+    const itemsTicket = items
+      .filter((it) => it.estado !== 'anulado')
+      .map((it) => ({
+        nombre: it.nombre_display ?? catalogo.find((c) => c.id === it.item_id)?.nombre ?? `Item #${it.item_id}`,
+        cantidad: Number(it.cantidad),
+        subtotal: it.es_cortesia ? 0 : Number(it.subtotal),
+      }));
+    if (itemsTicket.length === 0) { toast.warning('No hay items para imprimir'); return; }
+    try {
+      const { imprimirTicket } = await import('@/services/printerService');
+      const r = await imprimirTicket({
+        titulo: 'PRE-CUENTA',
+        venta_id: venta.numero_local ?? venta.id,
+        items: itemsTicket,
+        descuento: Number(venta.descuento_total) > 0 ? Number(venta.descuento_total) : undefined,
+        total: Number(venta.total),
+        pagos: [],
+        fechaHora: new Date().toLocaleString('es-AR'),
+      });
+      if (!r.ok) toast.error('No se pudo imprimir: ' + (r.error ?? 'sin impresora'));
+      else toast.success('Pre-cuenta enviada a la impresora');
+    } catch (err) {
+      toast.error('Error imprimiendo: ' + (err instanceof Error ? err.message : 'desconocido'));
+    }
+  }
+
   // Handler del botón "Hold": alterna stay en TODOS los items en hold.
   // Si todos ya están en stay → los libera. Si no → los pone todos en stay.
   async function handleHoldTodos() {
@@ -985,7 +1016,7 @@ export function VentaScreen() {
               variant="outline"
               size="sm"
               className="flex-1"
-              onClick={() => window.print()}
+              onClick={() => void imprimirPreCuenta()}
             >
               Imprimir
             </Button>
