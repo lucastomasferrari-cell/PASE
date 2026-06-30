@@ -471,7 +471,7 @@ export async function imprimirCocinaSiCorresponde(
     const retrySuffix = options.retryToken ? `-r${options.retryToken}` : '';
 
     // Imprimir en paralelo a cada (estación, curso)
-    await Promise.all(Array.from(porEstacionCurso.values()).map(async ({ estacion, curso: c, items: itemList }) => {
+    const resultados = await Promise.all(Array.from(porEstacionCurso.values()).map(async ({ estacion, curso: c, items: itemList }) => {
       const idempotencyKey = `cocina-${ventaId}-c${c}-${estacion}${retrySuffix}`;
       const r = await imprimirPorEstacion(estacion, {
         tipo: 'cocina',
@@ -484,7 +484,20 @@ export async function imprimirCocinaSiCorresponde(
       if (!r.ok) {
         console.warn(`[print kitchen] estación ${estacion} curso ${c} falló: ${r.error}`);
       }
+      return r;
     }));
+    // Feedback al usuario: el envío a cocina es fire-and-forget, pero si HAY
+    // impresora configurada (mode != none) y falló, avisamos — antes quedaba
+    // mudo y el cajero no sabía que la comanda no salió. Si no hay impresora
+    // (KDS-only) no molestamos.
+    const fallos = resultados.filter((r) => !r.ok && r.mode !== 'none');
+    if (fallos.length > 0) {
+      const { toast } = await import('sonner');
+      toast.error(
+        'La comanda no se imprimió. Revisá que haya una impresora asignada a la estación de cocina (Hardware → Impresoras) y que el Print Agent esté corriendo.',
+        { duration: 9000 },
+      );
+    }
   } catch (err) {
     console.warn('[print kitchen] error inesperado:', err);
   }
