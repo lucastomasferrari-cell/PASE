@@ -27,10 +27,15 @@ export function ColumnFilter({ label, values, selected, onChange, align = "left"
   const filtered = search ? sorted.filter(v => v.toLowerCase().includes(search.toLowerCase())) : sorted;
 
   const toggle = (v: string) => {
-    const next = new Set(selected);
-    if (next.has(v)) next.delete(v); else next.add(v);
-    if (next.size === values.length) { onChange(new Set()); return; }
-    onChange(next);
+    // Semántica: set vacío = "todos". Para que tildar/destildar se sienta
+    // intuitivo (todo tildado → destildar uno deja el RESTO tildado, no lo
+    // contrario), partimos del set EFECTIVO: si está vacío, son todos.
+    const base = selected.size === 0 ? new Set(values) : new Set(selected);
+    base.delete("__none__"); // si venía de "Ninguno", arrancamos limpio al tildar
+    if (base.has(v)) base.delete(v); else base.add(v);
+    if (base.size === 0) { onChange(new Set(["__none__"])); return; }  // destildó todo = nada
+    if (base.size === values.length) { onChange(new Set()); return; }   // todos = sin filtro
+    onChange(base);
   };
 
   const selectAll = () => onChange(new Set());
