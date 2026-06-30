@@ -219,8 +219,8 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-5 pt-5 pb-3 shrink-0 text-left space-y-0">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-4 pt-4 pb-2 shrink-0 text-left space-y-0">
           <DialogTitle className="text-base font-semibold">
             Cobrar venta #{venta.numero_local}
           </DialogTitle>
@@ -232,13 +232,13 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
           <button
             type="button"
             onClick={() => setTicketExpandido((v) => !v)}
-            className="w-full flex items-center justify-between px-5 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
           >
             <span>Detalle de la cuenta</span>
             {ticketExpandido ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
           {ticketExpandido && (
-            <div className="px-5 pb-3 space-y-3 max-h-52 overflow-y-auto">
+            <div className="px-4 pb-2 space-y-1 max-h-36 overflow-y-auto">
               {cursos.map((curso) => {
                 const its = itemsActivos.filter((i) => i.curso === curso);
                 return (
@@ -303,9 +303,9 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
         </div>
 
         {/* Total — el foco de la pantalla */}
-        <div className="px-5 shrink-0">
+        <div className="px-4 py-2 shrink-0">
           <div className={cn(
-            'rounded-2xl px-5 py-4 transition-colors duration-200',
+            'rounded-xl px-4 py-2.5 transition-colors duration-200',
             cubrió ? 'bg-success/15' : 'bg-muted/50',
           )}>
             <div className="flex items-center justify-between gap-2">
@@ -319,7 +319,7 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
               )}
             </div>
             <div className={cn(
-              'mt-1 text-[2.5rem] leading-none font-semibold tabular-nums tracking-tight',
+              'mt-0.5 text-2xl leading-tight font-semibold tabular-nums tracking-tight',
               cubrió ? 'text-success' : 'text-foreground',
             )}>
               {formatARS(cubrió ? totalConPropina : restante)}
@@ -327,7 +327,7 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0">
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
 
           {/* Pagos ya registrados (split) */}
           {pagos.length > 0 && (
@@ -374,15 +374,15 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
                         aria-pressed={sel}
                         onClick={() => setMetodoNuevo(m.slug)}
                         className={cn(
-                          'flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 min-h-[64px] text-center transition-colors duration-150',
+                          'flex items-center justify-center gap-2 rounded-lg px-2 py-2 min-h-[40px] text-center transition-colors duration-150',
                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                           sel
-                            ? 'bg-primary/15 ring-2 ring-primary text-foreground'
+                            ? 'bg-primary/15 ring-1 ring-primary text-foreground'
                             : 'bg-muted/40 hover:bg-muted text-foreground/90',
                         )}
                       >
-                        <span className="text-xl leading-none">{m.emoji}</span>
-                        <span className="text-xs font-medium leading-tight line-clamp-2">{m.nombre}</span>
+                        <span className="text-base leading-none">{m.emoji}</span>
+                        <span className="text-xs font-medium leading-tight line-clamp-1">{m.nombre}</span>
                       </button>
                     );
                   })}
@@ -494,18 +494,18 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
 
         </div>
 
-        <DialogFooter className="px-5 py-4 border-t border-border shrink-0 flex-row gap-2">
-          <Button variant="outline" size="lg" className="flex-1 sm:flex-none" onClick={() => onOpenChange(false)} disabled={confirmando}>
+        <DialogFooter className="px-4 py-3 border-t border-border/40 shrink-0 flex-row gap-2">
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => onOpenChange(false)} disabled={confirmando}>
             Cancelar
           </Button>
           <Button
-            variant="success"
-            size="xl"
-            className="flex-[2]"
+            variant="default"
+            size="default"
+            className="flex-1"
             onClick={confirmar}
             disabled={confirmando || (pagos.length === 0 && (montoNuevo <= 0 || Math.abs(montoNuevo - totalConPropina) > 0.01)) || (pagos.length > 0 && !cubrió)}
           >
-            <CheckCircle2 className="h-5 w-5 mr-2" />
+            <CheckCircle2 className="h-4 w-4 mr-1.5" />
             {confirmando ? 'Procesando…' : `Cobrar ${formatARS(totalConPropina)}`}
           </Button>
         </DialogFooter>
