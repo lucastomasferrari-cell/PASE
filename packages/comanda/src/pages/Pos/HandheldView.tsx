@@ -305,11 +305,20 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const [cRes, gRes, iRes, vRes] = await Promise.all([
-      listItems({ tenantId }),
-      listGrupos(tenantId),
+    // Venta primero → su local define la MARCA del menú (igual que useVentaData).
+    const vRes = await getVenta(ventaId);
+    let marcaId: number | null = null;
+    const lid = vRes.data?.local_id ?? null;
+    if (lid) {
+      try {
+        const { data } = await db.from('locales').select('marca_id').eq('id', lid).maybeSingle();
+        marcaId = (data?.marca_id as number | null) ?? null;
+      } catch { /* sin red → sin filtro */ }
+    }
+    const [cRes, gRes, iRes] = await Promise.all([
+      listItems({ tenantId, marcaId }),
+      listGrupos(tenantId, marcaId),
       listVentasItems(ventaId),
-      getVenta(ventaId),
     ]);
     setCatalogo(cRes.data);
     setGrupos(gRes.data);

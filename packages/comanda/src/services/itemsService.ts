@@ -12,7 +12,7 @@ const ITEMS_CACHE_TTL_MS = 60_000;
 interface CacheEntry { data: ItemConGrupo[]; cachedAt: number; key: string }
 
 function cacheKey(f: ItemsListFilter): string {
-  return JSON.stringify([f.tenantId, f.localId, f.grupoId, f.estado, f.search]);
+  return JSON.stringify([f.tenantId, f.localId, f.marcaId ?? null, f.grupoId, f.estado, f.search]);
 }
 function readCache(key: string): ItemConGrupo[] | null {
   try {
@@ -42,6 +42,9 @@ export interface ItemsListFilter {
   grupoId?: number | null;
   estado?: ItemEstado | 'todos';
   localId?: number | null;
+  /** Marca activa (del local). Trae items de esa marca + los compartidos
+   * (marca_id NULL). Si es null/undefined no filtra por marca (compat). */
+  marcaId?: number | null;
   tenantId: string | null;
 }
 
@@ -74,6 +77,9 @@ export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemCo
     .limit(200);
 
   if (filter.tenantId) q = q.eq('tenant_id', filter.tenantId);
+  // Menú por marca: items de la marca activa + compartidos (marca_id NULL).
+  // Si marcaId viene null/undefined (ej. local sin marca) NO filtra → todos.
+  if (filter.marcaId != null) q = q.or(`marca_id.eq.${filter.marcaId},marca_id.is.null`);
   if (filter.grupoId) q = q.eq('grupo_id', filter.grupoId);
   if (filter.estado && filter.estado !== 'todos') q = q.eq('estado', filter.estado);
   if (filter.search && filter.search.trim()) {

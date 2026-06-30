@@ -3,8 +3,11 @@ import type { ItemGrupo } from '../types/database';
 import { translateError } from '../lib/errors';
 import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
-export async function listGrupos(tenantId: string | null): Promise<{ data: ItemGrupo[]; error: string | null }> {
-  const cacheKey = `grupos:${tenantId ?? 'all'}`;
+export async function listGrupos(
+  tenantId: string | null,
+  marcaId?: number | null,
+): Promise<{ data: ItemGrupo[]; error: string | null }> {
+  const cacheKey = `grupos:${tenantId ?? 'all'}:${marcaId ?? 'all'}`;
   let q = db
     .from('item_grupos')
     .select('*')
@@ -12,6 +15,8 @@ export async function listGrupos(tenantId: string | null): Promise<{ data: ItemG
     .order('orden', { ascending: true })
     .order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
+  // Menú por marca: grupos de la marca activa + compartidos (marca_id NULL).
+  if (marcaId != null) q = q.or(`marca_id.eq.${marcaId},marca_id.is.null`);
   try {
     const { data, error } = await q;
     if (error) {

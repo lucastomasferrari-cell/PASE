@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { db } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/auth';
 import { listItems, type ItemConGrupo } from '../../../services/itemsService';
 import { listGrupos } from '../../../services/gruposService';
@@ -53,14 +54,29 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
   const reloadFull = useCallback(async () => {
     setLoading(true);
     try {
-      const [vRes, iRes, cRes, gRes] = await Promise.all([
-        getVenta(ventaId),
-        listVentasItems(ventaId),
-        listItems({ tenantId: user?.tenant_id ?? null }),
-        listGrupos(user?.tenant_id ?? null),
-      ]);
+      // 1) Venta primero — necesitamos su local para resolver la MARCA.
+      const vRes = await getVenta(ventaId);
       if (vRes.error) toast.error(vRes.error);
       setVenta(vRes.data);
+
+      // 2) Menú por marca: la marca sale del local de la venta. Si no se puede
+      //    resolver (offline, local sin marca) → marcaId null → el catálogo NO
+      //    filtra por marca (comportamiento previo: todo el tenant).
+      let marcaId: number | null = null;
+      const localId = vRes.data?.local_id ?? null;
+      if (localId) {
+        try {
+          const { data: locRow } = await db.from('locales').select('marca_id').eq('id', localId).maybeSingle();
+          marcaId = (locRow?.marca_id as number | null) ?? null;
+        } catch { /* sin red → marcaId null → sin filtro */ }
+      }
+
+      // 3) Resto en paralelo, con el catálogo ya filtrado por marca.
+      const [iRes, cRes, gRes] = await Promise.all([
+        listVentasItems(ventaId),
+        listItems({ tenantId: user?.tenant_id ?? null, marcaId }),
+        listGrupos(user?.tenant_id ?? null, marcaId),
+      ]);
       setItems(iRes.data);
       setCatalogo(cRes.data);
       setGrupos(gRes.data);
