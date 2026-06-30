@@ -49,9 +49,9 @@ function CheckRow({
         flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
       )}
     >
-      {/* Línea 1: nombre + precio */}
-      <div className="flex items-start gap-1.5">
-        <div className="flex-1 min-w-0">
+      {/* Línea 1: nombre + (porciones inline) + precio */}
+      <div className="flex items-baseline gap-1.5">
+        <div className="flex-1 min-w-0 truncate">
           <span
             className={cn(
               'text-sm font-medium',
@@ -62,31 +62,31 @@ function CheckRow({
           >
             {item.nombre_display ?? it?.nombre ?? `Item #${item.item_id}`}
           </span>
+          {/* Modificadores (porciones) inline, al lado del nombre */}
+          {item.modificadores && item.modificadores.length > 0 && (
+            <span className="text-[11px] text-muted-foreground ml-1.5">
+              {item.modificadores.map((m) => m.nombre).join(' · ')}
+            </span>
+          )}
           {/* Badges inline */}
-          <span className="inline-flex gap-1 ml-1.5 align-middle">
-            {item.es_cortesia && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
-            )}
-            {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase">Precio mod.</span>
-            )}
-            {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse">
-                <CloudUpload className="h-2.5 w-2.5" /> Queued
-              </span>
-            )}
-          </span>
+          {item.es_cortesia && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase ml-1.5">Cortesía</span>
+          )}
+          {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase ml-1.5">Precio mod.</span>
+          )}
+          {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse ml-1.5">
+              <CloudUpload className="h-2.5 w-2.5" /> Queued
+            </span>
+          )}
         </div>
         <strong className="text-sm tabular-nums shrink-0">{formatARS(item.subtotal)}</strong>
       </div>
 
-      {/* Modificadores / notas */}
-      {(item.modificadores && item.modificadores.length > 0 || item.notas) && (
-        <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-          {item.modificadores?.map((m) => m.nombre).join(' · ')}
-          {item.modificadores?.length && item.notas ? ' · ' : ''}
-          {item.notas && <span className="text-warning italic">{item.notas}</span>}
-        </div>
+      {/* Nota / aclaración (solo si existe) */}
+      {item.notas && (
+        <div className="text-[11px] text-warning italic mt-0.5 truncate">{item.notas}</div>
       )}
 
       {/* Fila de controles */}
