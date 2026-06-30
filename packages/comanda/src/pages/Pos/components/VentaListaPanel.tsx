@@ -44,7 +44,7 @@ function CheckRow({
   return (
     <div
       className={cn(
-        'py-2 px-2 border-b border-border/40 transition-colors duration-700',
+        'py-1.5 px-2 border-b border-border/40 transition-colors duration-700',
         anulado && 'opacity-40',
         flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
       )}
@@ -91,7 +91,7 @@ function CheckRow({
 
       {/* Fila de controles */}
       {editable && !anulado && (
-        <div className="flex items-center gap-1.5 mt-1.5">
+        <div className="flex items-center gap-1.5 mt-1">
 
           {enHold ? (
             <>
@@ -155,46 +155,27 @@ function CheckRow({
             </>
           ) : (
             <>
-              {/* Item ya enviado: solo repetir + menú override */}
+              {/* Item ya enviado: cantidad + menú override (incluye Repetir) */}
               <span className="text-xs text-muted-foreground">×{item.cantidad}</span>
-              <button
-                type="button"
-                onClick={onRepetir}
-                className="text-[10px] text-primary hover:underline"
-              >
-                + Repetir
-              </button>
-              {!item.es_cortesia && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent ml-auto"
-                    >
-                      <MoreHorizontal className="h-3 w-3" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
-                    <DropdownMenuItem onClick={onCambiarPrecio}>Cambiar precio…</DropdownMenuItem>
-                    <DropdownMenuItem onClick={onCortesia}>Cortesía (gratis)</DropdownMenuItem>
-                    <DropdownMenuItem onClick={onAnular} className="text-destructive">Anular item</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent ml-auto"
+                  >
+                    <MoreHorizontal className="h-3 w-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={onRepetir}>Repetir item</DropdownMenuItem>
+                  {!item.es_cortesia && <DropdownMenuItem onClick={onCambiarPrecio}>Cambiar precio…</DropdownMenuItem>}
+                  {!item.es_cortesia && <DropdownMenuItem onClick={onCortesia}>Cortesía (gratis)</DropdownMenuItem>}
+                  <DropdownMenuItem onClick={onAnular} className="text-destructive">Anular item</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         </div>
-      )}
-
-      {/* Repetir también disponible en hold (abajo de los controles) */}
-      {editable && !anulado && enHold && (
-        <button
-          type="button"
-          onClick={onRepetir}
-          className="text-[10px] text-primary hover:underline mt-0.5"
-        >
-          + Repetir
-        </button>
       )}
     </div>
   );
