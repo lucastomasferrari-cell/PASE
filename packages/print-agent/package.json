@@ -76,8 +76,9 @@
     },
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://pase-yndx.vercel.app/print-agent-releases/${os}/"
+        "provider": "github",
+        "owner": "lucastomasferrari-cell",
+        "repo": "PASE"
       }
     ]
   }
