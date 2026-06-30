@@ -1,5 +1,4 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { ADMIN_NAVIGATION, findActiveCategory } from '@/lib/adminNavigation';
@@ -8,7 +7,6 @@ import { useEffect, useState } from 'react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { UserAvatarMenu } from '@/components/UserAvatarMenu';
 import { AdminCategoryItem } from './AdminCategoryItem';
 import { cn } from '@/lib/utils';
 
@@ -41,8 +39,8 @@ export function AdminSidebar({ onItemClick, className }: Props) {
     <aside className={cn('flex flex-col h-full bg-card border-r border-border', className)}>
       {/* Header marca + selector */}
       <div className="px-4 py-4 border-b border-border">
-        <Link to="/reportes/dashboard" className="block text-base font-semibold tracking-tight text-foreground">
-          COMANDA
+        <Link to="/reportes/dashboard" className="block text-lg font-medium tracking-tight text-foreground leading-none">
+          comanda<span style={{ color: '#F5C518' }}>.</span>
         </Link>
         {locales.length > 1 ? (
           <Select
@@ -81,26 +79,6 @@ export function AdminSidebar({ onItemClick, className }: Props) {
         ))}
       </nav>
 
-      {/* Footer: volver al POS + avatar */}
-      <div className="border-t border-border p-2 space-y-1 flex-shrink-0">
-        <Link
-          to="/pos"
-          onClick={onItemClick}
-          className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground/70 hover:bg-accent hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver al POS
-        </Link>
-        <div className="px-3 py-2 flex items-center gap-2">
-          <UserAvatarMenu />
-          {user && (
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium truncate">{user.email ?? 'Sin email'}</div>
-              <div className="text-[10px] text-muted-foreground capitalize">{user.rol}</div>
-            </div>
-          )}
-        </div>
-      </div>
     </aside>
   );
 }

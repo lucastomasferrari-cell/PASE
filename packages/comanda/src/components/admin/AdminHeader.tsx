@@ -1,6 +1,9 @@
-import { Menu, Bell } from 'lucide-react';
+import { Menu, Bell, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { UserAvatarMenu } from '@/components/UserAvatarMenu';
 import { AdminBreadcrumb } from './AdminBreadcrumb';
 
 interface Props {
@@ -16,8 +19,9 @@ interface Props {
 // confuso ("Buscar items, mesas, empleados…" sonaba a POS). Cuando se
 // implemente buscador real, se agrega de vuelta con placeholder admin-aware.
 export function AdminHeader({ onOpenSidebar }: Props) {
+  const navigate = useNavigate();
   return (
-    <header className="sticky top-0 z-20 bg-card border-b border-border h-14 flex items-center px-4 gap-3">
+    <header className="sticky top-0 z-20 bg-card border-b border-border h-14 flex items-center px-4 gap-2">
       {/* Hamburguesa mobile */}
       {onOpenSidebar && (
         <Button
@@ -31,12 +35,24 @@ export function AdminHeader({ onOpenSidebar }: Props) {
         </Button>
       )}
 
-      {/* Breadcrumb (ahora puede ocupar todo el ancho) */}
-      <div className="flex-1">
+      {/* Breadcrumb (ocupa todo el ancho) */}
+      <div className="flex-1 min-w-0">
         <AdminBreadcrumb />
       </div>
 
-      {/* Notificaciones stub */}
+      {/* Cluster derecho: Volver al POS · tema · notificaciones · usuario */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-1.5 shrink-0"
+        onClick={() => navigate('/pos')}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Volver al POS</span>
+      </Button>
+
+      <ThemeToggle />
+
       <Button
         variant="ghost"
         size="icon"
@@ -48,6 +64,8 @@ export function AdminHeader({ onOpenSidebar }: Props) {
       >
         <Bell className="h-4 w-4" />
       </Button>
+
+      <UserAvatarMenu />
     </header>
   );
 }
