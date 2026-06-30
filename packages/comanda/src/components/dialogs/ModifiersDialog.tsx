@@ -67,6 +67,18 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
         opciones: opcionesByGroup.get((g as ModifierGroup).id) ?? [],
       }));
       setGroups(enriched);
+      // Pre-selección por defecto: en grupos obligatorios de UNA opción (ej.
+      // Porciones x10/x5) dejamos elegida la primera (la base, precio_madre).
+      // Así el grupo ya queda completo al abrir → sin error rojo ni paso
+      // extra; el cajero solo toca si quiere cambiar. Multi-select queda vacío.
+      const initSel: Record<number, Set<number>> = {};
+      for (const g of enriched) {
+        if (g.requerido && g.tipo === 'opcion' && g.opciones.length > 0) {
+          const first = [...g.opciones].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0];
+          if (first) initSel[g.id] = new Set([first.id]);
+        }
+      }
+      setSeleccion(initSel);
       setLoading(false);
     })();
   }, [open, item.id]);
@@ -205,22 +217,23 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
               <>
                 {groups.map((g) => {
                   const count = seleccion[g.id]?.size ?? 0;
-                  const requerido = g.requerido && count === 0;
+                  const faltante = g.requerido && count === 0;
                   return (
                     <div key={g.id} className={cn(
                       'space-y-2 rounded-md p-2.5 -mx-1 border transition-colors',
-                      requerido ? 'border-destructive/40 bg-destructive/5' : 'border-transparent',
+                      faltante ? 'border-border bg-muted/30' : 'border-transparent',
                     )}>
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-sm font-medium flex items-center gap-1.5">
                           {g.nombre}
                           {g.requerido && (
-                            <span className={cn(
-                              'text-[10px] px-1.5 py-0.5 rounded uppercase font-bold',
-                              count > 0 ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive',
-                            )}>
-                              {count > 0 ? <Check className="h-3 w-3 inline" /> : 'Obligatorio'}
-                            </span>
+                            count > 0 ? (
+                              <Check className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-medium tracking-wide bg-muted text-muted-foreground">
+                                Elegí 1
+                              </span>
+                            )
                           )}
                         </Label>
                         <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -299,8 +312,8 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
             </div>
 
             {requisitosFaltantes > 0 && (
-              <div className="text-[11px] text-destructive bg-destructive/10 rounded px-2 py-1">
-                ⚠ Falta completar {requisitosFaltantes} {requisitosFaltantes === 1 ? 'grupo' : 'grupos'} obligatorios
+              <div className="text-[11px] text-muted-foreground bg-muted rounded px-2 py-1">
+                Elegí una opción para continuar
               </div>
             )}
 
