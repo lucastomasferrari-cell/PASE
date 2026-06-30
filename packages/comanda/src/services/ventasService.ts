@@ -474,6 +474,7 @@ export async function imprimirCocinaSiCorresponde(
     await Promise.all(Array.from(porEstacionCurso.values()).map(async ({ estacion, curso: c, items: itemList }) => {
       const idempotencyKey = `cocina-${ventaId}-c${c}-${estacion}${retrySuffix}`;
       const r = await imprimirPorEstacion(estacion, {
+        tipo: 'cocina',
         estacion,
         mesa: mesaStr,
         items: itemList,

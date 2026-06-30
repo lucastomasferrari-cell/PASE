@@ -184,6 +184,13 @@ async function print(printerCfg, ticket) {
     throw new Error(`Impresora ${printerCfg.nombre} no responde`);
   }
 
+  // Ticket de COCINA: sin precios, sin total, sin pie fiscal. Es una comanda
+  // para la estación, no un comprobante. (Antes caía en el render de cliente
+  // y salía "Ticket #undefined" + "$NaN" porque no trae número ni precios.)
+  if (ticket.tipo === 'cocina') {
+    return printKitchen(printer, ticket);
+  }
+
   // ── Header
   printer.alignCenter();
   printer.setTextDoubleHeight();
@@ -286,6 +293,49 @@ async function print(printerCfg, ticket) {
   printer.println(ticket.mensaje_final || 'Gracias por su visita');
   printer.cut();
 
+  await printer.execute();
+}
+
+// Comanda de cocina: encabezado de estación, mesa/curso, e items con
+// cantidad + modificadores + notas. SIN precios, total ni pie fiscal.
+async function printKitchen(printer, ticket) {
+  printer.alignCenter();
+  printer.setTextDoubleHeight();
+  printer.setTextDoubleWidth();
+  printer.bold(true);
+  printer.println(ticket.estacion || 'COCINA');
+  printer.setTextNormal();
+  printer.bold(false);
+
+  if (ticket.mesa) {
+    printer.setTextDoubleHeight();
+    printer.println(`Mesa ${ticket.mesa}`);
+    printer.setTextNormal();
+  }
+  printer.println(`Curso ${ticket.curso != null ? ticket.curso : 1} - ${ticket.fechaHora || ''}`);
+  printer.drawLine();
+
+  printer.alignLeft();
+  for (const it of (ticket.items || [])) {
+    printer.bold(true);
+    printer.setTextDoubleHeight();
+    printer.println(`${it.cantidad}x ${it.nombre}`);
+    printer.setTextNormal();
+    printer.bold(false);
+    if (it.modificadores && it.modificadores.length > 0) {
+      for (const mod of it.modificadores) {
+        printer.println(`   - ${mod.nombre || mod}`);
+      }
+    }
+    if (it.notas) {
+      printer.bold(true);
+      printer.println(`   ** ${it.notas} **`);
+      printer.bold(false);
+    }
+    printer.newLine();
+  }
+
+  printer.cut();
   await printer.execute();
 }
 

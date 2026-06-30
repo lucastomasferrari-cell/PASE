@@ -370,6 +370,8 @@ export class Printer {
 
   /** Imprime un ticket de cocina (kitchen ticket) — texto grande, sin total. */
   async printKitchenTicket(args: {
+    /** Discriminador para el print-server (ignora en WebUSB). */
+    tipo?: 'cocina';
     estacion: string;
     mesa?: string;
     items: Array<{ cantidad: number; nombre: string; notas?: string | null; modificadores?: string[] | null }>;
