@@ -27,8 +27,8 @@ input[type="number"] {
      * abajo para la tienda pública/marketplace si se quisiera diferenciarlas
      * más adelante. */
 
-    /* Surfaces — blanco neutro como PASE */
-    --background: 0 0% 100%;           /* #FFFFFF (--pase-bg) */
+    /* Surfaces — crema cálido, no blanco puro */
+    --background: 36 30% 97%;          /* #F9F7F4 crema muy suave */
     --foreground: 211 56% 24%;         /* #1A3A5E (--pase-text) */
 
     --card: 0 0% 100%;
