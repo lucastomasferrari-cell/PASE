@@ -3,279 +3,406 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cocina — el sistema de tu local</title>
-  <meta name="description" content="Cocina: el lanzador de tu ecosistema gastronómico. Entrá a Comanda, Mesa, Pase y todos tus sistemas desde un solo lugar." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='8' y='78' font-family='Inter,system-ui,sans-serif' font-size='86' font-weight='500' fill='%231A3A5E' letter-spacing='-4'>c</text><circle cx='80' cy='74' r='9' fill='%23F5C518'/></svg>" />
+  <title>Cocina — Command Center</title>
+  <meta name="description" content="Cocina: El centro de mando de tu ecosistema gastronómico." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='8' y='78' font-family='Inter,system-ui,sans-serif' font-size='86' font-weight='500' fill='%23F5C518' letter-spacing='-4'>c</text><circle cx='80' cy='74' r='9' fill='%2375AADB'/></svg>" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
   <style>
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 18px;
+      background-color: var(--pase-gold);
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
     :root {
-      /* Paleta canónica de PASE — IRAM 7677-2002 + dorado moneda */
       --pase-celeste: #75AADB;
-      --pase-celeste-100: #EAF3FB;
-      --pase-celeste-200: #D7E8F5;
-      --pase-celeste-300: #9DC3E2;
       --pase-gold: #F5C518;
-      --pase-text: #1A3A5E;
-      --pase-text-muted: #6E8CAB;
-      --pase-border: #E0EAF4;
-      --pase-border-strong: #D0DCEA;
-      --pase-bg: #FFFFFF;
-      --pase-bg-page: #EFF3F8;
-      --pase-bg-soft: #EBF0F6;
-
-      --pase-radius-card: 14px;
-      --pase-radius-md: 8px;
-      --pase-shadow-sm: 0 1px 2px rgba(26,58,94,0.04), 0 2px 4px rgba(26,58,94,0.04);
-      --pase-shadow-md: 0 2px 4px rgba(26,58,94,0.03), 0 4px 12px rgba(26,58,94,0.06);
-      --pase-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
-
-      --pase-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --bg-command: #060912;
+      --card-bg: #0D1425;
+      --border-dim: #162035;
+      --text-dim: #94A3B8;
+      --text-bright: #F8FAFC;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        /* Dark mode "Argentina 2006" idéntico a PASE — celeste y dorado intactos */
-        --pase-bg: #1A2540;
-        --pase-bg-page: #0C1220;
-        --pase-bg-soft: #1A2540;
-        --pase-text: #F0F4F8;
-        --pase-text-muted: #93A8C2;
-        --pase-border: #2A3550;
-        --pase-border-strong: #3F4D6E;
-        --pase-celeste-100: #1E3155;
-        --pase-celeste-200: #2E4878;
-        --pase-celeste-300: #4A6FA8;
-        --pase-shadow-sm: 0 1px 2px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.10);
-        --pase-shadow-md: 0 2px 4px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.15);
-      }
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
+    
     body {
-      font-family: var(--pase-font);
-      background: var(--pase-bg-page);
-      color: var(--pase-text);
-      -webkit-font-smoothing: antialiased;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 48px 20px 32px;
-      min-height: 100%;
-    }
-    .wrap { width: 100%; max-width: 880px; }
-
-    /* Header */
-    header { margin-bottom: 40px; }
-    .brand-row {
-      display: flex; align-items: baseline; gap: 12px;
-      margin-bottom: 10px;
-    }
-    .brand {
-      font-size: 38px; font-weight: 500;
-      letter-spacing: -0.035em; line-height: 1;
-      color: var(--pase-text);
-    }
-    .brand .accent { color: var(--pase-gold); }
-    .live-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--pase-gold);
-      box-shadow: 0 0 0 4px rgba(245,197,24,0.28);
-      align-self: center;
-    }
-    .tagline {
-      font-size: 14px;
-      color: var(--pase-text-muted);
-      max-width: 540px;
-      line-height: 1.55;
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: var(--bg-command);
+      color: var(--text-bright);
+      overflow-x: hidden;
     }
 
-    /* Sections */
-    section { margin-bottom: 28px; }
-    .sec-title {
-      font-size: 12px; font-weight: 500;
-      color: var(--pase-text-muted);
-      padding-bottom: 10px; margin-bottom: 14px;
-      border-bottom: 0.5px solid var(--pase-border);
-      letter-spacing: -0.005em;
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    .glow-dot {
+      box-shadow: 0 0 10px var(--pase-gold), 0 0 4px var(--pase-gold);
     }
 
-    /* Grid */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 10px;
+    .status-bar {
+      background: rgba(13, 20, 37, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-dim);
     }
 
-    /* Card */
-    .card {
-      display: flex; flex-direction: column;
-      padding: 16px 18px;
-      background: var(--pase-bg);
-      border: 0.5px solid var(--pase-border);
-      border-radius: var(--pase-radius-card);
-      box-shadow: var(--pase-shadow-sm);
-      text-decoration: none; color: inherit;
-      transition:
-        transform 0.2s var(--pase-ease-out),
-        box-shadow 0.2s var(--pase-ease-out),
-        border-color 0.12s var(--pase-ease-out);
-      cursor: pointer;
+    .system-row {
+      border-bottom: 1px solid rgba(22, 32, 53, 0.6);
+      transition: all 0.2s ease;
+      background: transparent;
     }
-    .card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--pase-shadow-md);
-      border-color: var(--pase-border-strong);
-    }
-    .card:focus-visible {
-      outline: none;
+
+    .system-row:hover {
+      background: rgba(117, 170, 219, 0.04);
       border-color: var(--pase-celeste);
-      box-shadow: 0 0 0 3px var(--pase-celeste-100), var(--pase-shadow-sm);
+      box-shadow: inset 0 0 20px rgba(117, 170, 219, 0.02);
     }
 
-    .card-top {
-      display: flex; align-items: flex-start; justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .icon {
-      width: 36px; height: 36px;
-      border-radius: var(--pase-radius-md);
-      background: var(--pase-celeste-100);
-      color: var(--pase-text);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .icon svg { width: 18px; height: 18px; stroke-width: 1.5; }
-
-    .badge {
-      font-size: 10px;
-      font-weight: 500;
-      color: var(--pase-text-muted);
-      letter-spacing: 0.02em;
-      align-self: flex-start;
-      padding-top: 9px;
-    }
-
-    .card-name {
-      font-size: 15px; font-weight: 500;
-      color: var(--pase-text);
-      letter-spacing: -0.01em;
-      display: flex; align-items: center; gap: 5px;
-      margin-bottom: 4px;
-    }
-    .card-name .ext {
-      width: 10px; height: 10px;
-      opacity: 0.4;
-      flex-shrink: 0;
-    }
-    .card-desc {
-      font-size: 12.5px;
-      color: var(--pase-text-muted);
-      line-height: 1.5;
-      margin-bottom: 12px;
-    }
-    .card-cta {
-      font-size: 11.5px; font-weight: 500;
+    .icon-box {
+      background: rgba(117, 170, 219, 0.08);
       color: var(--pase-celeste);
-      margin-top: auto;
-      display: flex; align-items: center; gap: 4px;
     }
-    .card:hover .card-cta { color: var(--pase-text); }
 
-    /* Footer */
-    footer {
-      margin-top: 32px; padding-top: 18px;
-      border-top: 0.5px solid var(--pase-border);
-      width: 100%; max-width: 880px;
-      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-      font-size: 11px; color: var(--pase-text-muted);
+    .kbd-hint {
+      font-size: 9px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(117, 170, 219, 0.03);
+      border: 1px solid rgba(117, 170, 219, 0.1);
+      color: var(--text-dim);
     }
-    .footer-brand { font-weight: 500; color: var(--pase-text); }
-    .footer-brand .accent { color: var(--pase-gold); }
 
-    @media (max-width: 520px) {
-      body { padding: 32px 16px 24px; }
-      .brand { font-size: 32px; }
-      header { margin-bottom: 32px; }
+    .scanline {
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background: linear-gradient(to bottom, transparent 50%, rgba(6, 9, 18, 0.07) 50%);
+      background-size: 100% 4px;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    .status-active {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
     }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <div class="brand-row">
-        <div class="brand">cocina<span class="accent">.</span></div>
-        <div class="live-dot" aria-hidden="true"></div>
+<body class="antialiased">
+  <div class="scanline"></div>
+  
+  <div class="min-h-screen flex flex-col">
+    <!-- Top Control Strip -->
+    <nav class="status-bar sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-[var(--pase-gold)] glow-dot animate-pulse"></div>
+          <span class="mono text-[10px] font-medium tracking-[0.2em] text-[var(--pase-gold)] uppercase">System Live</span>
+        </div>
+        <div class="hidden md:flex gap-4 mono text-[10px] text-[var(--text-dim)]">
+          <span class="flex items-center gap-1"><iconify-icon icon="lucide:cpu" class="text-xs"></iconify-icon> LATENCY: 24ms</span>
+          <span class="flex items-center gap-1"><iconify-icon icon="lucide:database" class="text-xs"></iconify-icon> SYNC: OK</span>
+        </div>
       </div>
-      <div class="tagline">El sistema de tu local. Elegí a dónde entrar.</div>
-    </header>
+      
+      <div class="flex items-center gap-4">
+        <div class="mono text-[10px] text-[var(--text-dim)]">
+          OPERATOR: <span class="text-[var(--pase-celeste)]">ADMIN_01</span>
+        </div>
+        <div class="h-4 w-[1px] bg-slate-900"></div>
+        <div id="current-time" class="mono text-[11px] font-medium">00:00:00</div>
+      </div>
+    </nav>
 
-    <section>
-      <div class="sec-title">Operación diaria</div>
-      <div class="grid" id="grid-operacion"></div>
-    </section>
+    <main class="flex-1 w-full max-w-[1000px] mx-auto px-6 pt-8 pb-12">
+      <header class="mb-10 pl-2">
+        <div class="mono flex items-baseline gap-2 mb-2">
+          <span class="text-[var(--pase-celeste)] opacity-70">root@cocina:~#</span>
+          <h1 class="text-3xl font-bold tracking-tight">
+            cocina<span class="text-[var(--pase-gold)]">.</span><span class="text-[var(--text-dim)] font-light text-xl">os</span>
+          </h1>
+          <div class="cursor"></div>
+        </div>
+        <div class="mono text-[10px] text-[var(--text-dim)] opacity-60 flex flex-col gap-0.5 border-l border-slate-800 pl-4">
+          <p>> INIT_SEQUENCE: SUCCESSFUL</p>
+          <p>> MAPPING_MODULE_REGISTRY... OK</p>
+          <p>> ECOSYSTEM_STATUS: STANDBY</p>
+        </div>
+      </header>
 
-    <section>
-      <div class="sec-title">Gestión y administración</div>
-      <div class="grid" id="grid-gestion"></div>
-    </section>
+      <!-- Roster 01: Operación Diaria -->
+      <section class="mb-16">
+        <div class="flex items-center gap-3 mb-4">
+          <h2 class="mono text-[11px] font-semibold text-[var(--pase-celeste)] tracking-[0.3em] uppercase">01 / Operación Diaria</h2>
+          <div class="h-[1px] flex-1 bg-gradient-to-r from-slate-800 to-transparent"></div>
+        </div>
+        
+        <div class="flex flex-col">
+          <!-- System: Comanda -->
+          <a href="https://pase-comanda.vercel.app" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-comanda">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:terminal" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Comanda</h3>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">POS.SYS</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Gestión de salón, mostrador y liquidación de mesas en tiempo real.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">CORE_OPS</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">ACTIVE</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">MOD+1</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+
+          <!-- System: Mesa -->
+          <a href="https://mesa-orpin.vercel.app/admin" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-mesa">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:layout-grid" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Mesa</h3>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">RESV.MNGR</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Control de plano, lista de espera dinámica y perfiles de comensales.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">PLANNING</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">READY</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">MOD+2</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+
+          <!-- System: KDS -->
+          <a href="https://pase-comanda.vercel.app/kds" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-kds">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:monitor-dot" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">KDS</h3>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">KITCHEN.UI</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Matriz de flujo de comandas y control de tiempos de preparación.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">PRODUCTION</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">LIVE</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">MOD+3</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Roster 02: Gestión y Control -->
+      <section class="mb-16">
+        <div class="flex items-center gap-3 mb-4">
+          <h2 class="mono text-[11px] font-semibold text-[var(--pase-celeste)] tracking-[0.3em] uppercase">02 / Gestión y Control</h2>
+          <div class="h-[1px] flex-1 bg-gradient-to-r from-slate-800 to-transparent"></div>
+        </div>
+        
+        <div class="flex flex-col">
+          <!-- System: Pase -->
+          <a href="https://pase-yndx.vercel.app" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-pase">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:bar-chart-3" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h4 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Pase</h4>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">CORE.ADMIN</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Back-office, conciliaciones y administración fiscal.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">FINANCE</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">ONLINE</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">ALT+P</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+
+          <!-- System: Habitué -->
+          <a href="https://habitue-ruddy.vercel.app/admin" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-habitue">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:users" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h4 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Habitué</h4>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">CRM.DATA</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Inteligencia de clientes y campañas de fidelización.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">MARKETING</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">SYNCED</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">ALT+H</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+
+          <!-- System: Accesos -->
+          <a href="https://accesos-eight.vercel.app" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-accesos">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:shield-check" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h4 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Accesos</h4>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">AUTH.GATE</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Matriz de permisos, roles y auditoría de seguridad.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">SECURITY</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">SECURE</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">ALT+A</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+
+          <!-- System: Admin console -->
+          <a href="https://pase-admin-console.vercel.app" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-admin">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:server-cog" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h4 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Admin console</h4>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">ROOT.SYS</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Superadmin: tenants, backups y configuración global.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">SYSTEM</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">ROOT</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">ALT+C</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+
+          <!-- System: Bot -->
+          <a href="https://pase-instagram-bot.vercel.app" target="_blank" class="system-row group px-4 py-4 flex items-center gap-6" id="row-bot">
+            <div class="icon-box w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border border-[var(--pase-celeste)]/20">
+              <iconify-icon icon="lucide:bot" class="text-lg"></iconify-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h4 class="text-base font-semibold group-hover:text-[var(--pase-celeste)] transition-colors">Bot Instagram</h4>
+                <span class="mono text-[9px] text-[var(--text-dim)] opacity-50">AI.NODE</span>
+              </div>
+              <p class="text-xs text-[var(--text-dim)] truncate">Asistente autónomo con IA para consultas y reservas.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+              <span class="mono text-[9px] text-[var(--text-dim)] tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded">AUTOMATION</span>
+              <div class="flex items-center gap-2">
+                <div class="status-active"></div>
+                <span class="mono text-[9px] text-[var(--text-dim)]">STANDBY</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+              <span class="kbd-hint hidden sm:block">ALT+B</span>
+              <iconify-icon icon="lucide:chevron-right" class="text-[var(--pase-celeste)] opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all"></iconify-icon>
+            </div>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="p-6 border-t border-slate-900 bg-[#04060B] flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-4 mono text-[10px] text-[var(--text-dim)]">
+        <span class="text-[var(--pase-celeste)] uppercase font-semibold">v4.2.0-STABLE</span>
+        <div class="w-1 h-1 rounded-full bg-slate-800"></div>
+        <span>ENCRYPTED_LINK: ACTIVE</span>
+        <div class="w-1 h-1 rounded-full bg-slate-800"></div>
+        <span>UI_VARIANT: MISSION_ROSTER</span>
+      </div>
+      
+      <div class="flex items-center gap-1 text-xs mono">
+        <span class="text-[var(--text-dim)] opacity-60">BUILT_BY</span>
+        <span class="font-bold tracking-tight">cocina<span class="text-[var(--pase-gold)]">.</span></span>
+      </div>
+    </footer>
   </div>
 
-  <footer>
-    <span>Todos los sistemas comparten la misma base en tiempo real.</span>
-    <span class="footer-brand">cocina<span class="accent">.</span></span>
-  </footer>
-
   <script>
-    // Íconos line-art outline — stroke 1.5px, fill="none", inherit color.
-    // Estilo Tabler/Lucide, mismo lenguaje que Icons.tsx en PASE.
-    const ICONS = {
-      pos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
-      reservas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="7" rx="1"/><path d="M6 5v4M18 5v4M6 16v4M18 16v4"/></svg>',
-      kds: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="1"/><path d="M8 21h8M12 17v4"/><path d="M7 9h2M11 9h6M7 12h4"/></svg>',
-      gestion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V12M9 20V8M15 20v-6M21 20v-12"/></svg>',
-      crm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="6" r="2.5"/><path d="M21 17c0-2.2-1.8-4-4-4"/></svg>',
-      accesos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',
-      sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
-      bot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 14a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/><circle cx="9.5" cy="11" r="0.8" fill="currentColor"/><circle cx="13" cy="11" r="0.8" fill="currentColor"/><circle cx="16.5" cy="11" r="0.8" fill="currentColor"/></svg>',
-    };
-
-    const EXT_ARROW = '<svg class="ext" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2H2.5A.5.5 0 0 0 2 2.5v7a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V7"/><path d="M7 2h3v3"/><path d="M10 2 5.5 6.5"/></svg>';
-
-    const SISTEMAS = {
-      operacion: [
-        { nombre: "Comanda",            badge: "Punto de venta", icon: "pos",      desc: "Tomá pedidos en salón y mostrador, cobrá y gestioná mesas.",   url: "https://pase-comanda.vercel.app" },
-        { nombre: "Mesa",               badge: "Reservas",       icon: "reservas", desc: "Reservas, plano del salón, lista de espera y comensales.",     url: "https://mesa-orpin.vercel.app/admin" },
-        { nombre: "Pantalla de cocina", badge: "KDS",            icon: "kds",      desc: "Vista de órdenes por estado para el equipo de cocina.",        url: "https://pase-comanda.vercel.app/kds" },
-      ],
-      gestion: [
-        { nombre: "Pase",          badge: "Back-office", icon: "gestion", desc: "EERR, RRHH, caja, conciliaciones y facturas.",                         url: "https://pase-yndx.vercel.app" },
-        { nombre: "Habitué",       badge: "CRM",         icon: "crm",     desc: "Comensales, segmentos, campañas y fidelidad.",                          url: "https://habitue-ruddy.vercel.app/admin" },
-        { nombre: "Accesos",       badge: "Permisos",    icon: "accesos", desc: "Personas, roles, accesos a apps, PIN del POS y auditoría.",            url: "https://accesos-eight.vercel.app" },
-        { nombre: "Admin console", badge: "Sistema",     icon: "sistema", desc: "Superadmin: tenants, backups y configuración global del sistema.",     url: "https://pase-admin-console.vercel.app" },
-        { nombre: "Bot Instagram", badge: "Mensajería",  icon: "bot",     desc: "Responde a tus clientes en Instagram con IA: consultas y reservas.",   url: "https://pase-instagram-bot.vercel.app" },
-      ],
-    };
-
-    function card(s) {
-      const a = document.createElement("a");
-      a.className = "card";
-      a.href = s.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.innerHTML = `
-        <div class="card-top">
-          <div class="icon">${ICONS[s.icon]}</div>
-          <span class="badge">${s.badge}</span>
-        </div>
-        <div class="card-name">${s.nombre}${EXT_ARROW}</div>
-        <div class="card-desc">${s.desc}</div>
-        <div class="card-cta">Abrir →</div>`;
-      return a;
+    // Live clock update
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      const clockEl = document.getElementById('current-time');
+      if(clockEl) clockEl.innerText = `${h}:${m}:${s}`;
     }
+    setInterval(updateClock, 1000);
+    updateClock();
 
-    const gop = document.getElementById("grid-operacion");
-    const gge = document.getElementById("grid-gestion");
-    SISTEMAS.operacion.forEach((s) => gop.appendChild(card(s)));
-    SISTEMAS.gestion.forEach((s) => gge.appendChild(card(s)));
+    // Shortcut handling simulation
+    document.addEventListener('keydown', (e) => {
+       if(e.altKey) {
+         if(e.key === 'p') window.open('https://pase-yndx.vercel.app', '_blank');
+         if(e.key === 'h') window.open('https://habitue-ruddy.vercel.app/admin', '_blank');
+         if(e.key === 'a') window.open('https://accesos-eight.vercel.app', '_blank');
+         if(e.key === 'c') window.open('https://pase-admin-console.vercel.app', '_blank');
+         if(e.key === 'b') window.open('https://pase-instagram-bot.vercel.app', '_blank');
+       }
+    });
   </script>
 </body>
 </html>
