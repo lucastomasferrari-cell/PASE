@@ -231,8 +231,9 @@ async function print(printerCfg, ticket) {
   // ── Items
   printer.alignLeft();
   for (const it of (ticket.items || [])) {
-    const line = `${it.cantidad}x ${truncate(it.nombre, 22).padEnd(22)} ${formatMoney(it.subtotal).padStart(7)}`;
-    printer.println(line);
+    // leftRight ajusta solo al ancho del papel (58/80mm) → no se deforma
+    // cuando el nombre es largo (antes el padding fijo lo hacía wrappear feo).
+    printer.leftRight(`${it.cantidad}x ${it.nombre}`, formatMoney(it.subtotal));
     if (it.modificadores && it.modificadores.length > 0) {
       for (const mod of it.modificadores) {
         printer.println(`   + ${mod.nombre || mod}`);
