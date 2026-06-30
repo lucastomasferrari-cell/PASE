@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone, Zap, Plug, Star, MessageCircle } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
+import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { Tablero } from './Tablero';
 import { Comensales } from './Comensales';
 import { Segmentos } from './Segmentos';
@@ -119,26 +120,21 @@ export function AdminHome() {
 
   if (!sesion) {
     return (
-      <div className="min-h-screen grid place-items-center px-6">
-        <form onSubmit={entrar} className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-card p-8 space-y-4">
-          <div className="mb-2">
-            <span className="text-2xl font-medium text-brand-600">habitué<span className="text-gold">.</span></span>
-            <p className="text-xs text-ink-muted mt-1">CRM y marketing — misma cuenta que PASE/COMANDA/MESA.</p>
+      <LoginCard appName="habitué" subtitle="CRM y marketing — misma cuenta que PASE/COMANDA/MESA.">
+        <form onSubmit={entrar} className="space-y-4">
+          <div>
+            <label htmlFor="h-email" className={loginLabelCls}>Usuario o email</label>
+            <input id="h-email" className={loginInputCls} placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
           </div>
-          <div className="space-y-1.5">
-            <label htmlFor="h-email" className="text-sm font-medium">Usuario o email</label>
-            <input id="h-email" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+          <div>
+            <label htmlFor="h-pass" className={loginLabelCls}>Contraseña</label>
+            <input id="h-pass" type="password" className={loginInputCls} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <label htmlFor="h-pass" className="text-sm font-medium">Contraseña</label>
-            <input id="h-pass" type="password" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-          <button type="submit" disabled={entrando}
-                  className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-60">
+          <button type="submit" disabled={entrando} className={loginBtnCls}>
             {entrando ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-      </div>
+      </LoginCard>
     );
   }
 

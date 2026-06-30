@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
+import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { AdminTablero } from './AdminTablero';
 import { AdminDiario } from './AdminDiario';
 import { AdminReservas } from './AdminReservas';
@@ -135,28 +136,23 @@ export function AdminHome() {
 
   if (!sesion) {
     return (
-      <div className="min-h-screen grid place-items-center px-6">
-        <form onSubmit={entrar} className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-card p-8 space-y-4">
-          <div className="mb-2">
-            <span className="text-2xl font-medium text-brand-600">mesa<span className="text-gold">.</span></span>
-            <p className="text-xs text-ink-muted mt-1">Panel del restaurante — misma cuenta que PASE/COMANDA.</p>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="m-email" className="text-sm font-medium">Usuario o email</label>
-            <input id="m-email" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm"
+      <LoginCard appName="mesa" subtitle="Panel del restaurante — misma cuenta que PASE/COMANDA.">
+        <form onSubmit={entrar} className="space-y-4">
+          <div>
+            <label htmlFor="m-email" className={loginLabelCls}>Usuario o email</label>
+            <input id="m-email" className={loginInputCls} placeholder="tu@email.com"
                    value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
           </div>
-          <div className="space-y-1.5">
-            <label htmlFor="m-pass" className="text-sm font-medium">Contraseña</label>
-            <input id="m-pass" type="password" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm"
+          <div>
+            <label htmlFor="m-pass" className={loginLabelCls}>Contraseña</label>
+            <input id="m-pass" type="password" className={loginInputCls} placeholder="••••••••"
                    value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
-          <button type="submit" disabled={entrando}
-                  className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-60">
+          <button type="submit" disabled={entrando} className={loginBtnCls}>
             {entrando ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-      </div>
+      </LoginCard>
     );
   }
 
