@@ -901,7 +901,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   }
 
   const anularRemito = async (r: Remito) => {
-    if (!confirm(`¿Anular remito ${r.nro}?`)) return;
+    const aviso = r.estado === "pagado"
+      ? `¿Anular remito ${r.nro}? Está PAGADO: también se va a revertir el pago en caja (vuelve la plata).`
+      : `¿Anular remito ${r.nro}?`;
+    if (!confirm(aviso)) return;
     const motivo = prompt("Motivo (opcional):") || "Anulado desde UI";
     if (tienePermiso(user, "compras_anular")) {
       await ejecutarAnularRemito(r, motivo);
@@ -1239,11 +1242,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                           {r.estado === "sin_factura" && (
                             <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); /* idempKey se setea via useEffect según sessionStorage */ }}>{IconPay}</IconBtn>
                           )}
-                          {/* Siempre visible. Si no tiene permiso, anularRemito
-                              abre modal de Manager Override pidiendo código TOTP. */}
-                          {r.estado !== "pagado" && (
-                            <IconBtn title="Anular" tone="danger" onClick={() => anularRemito(r)}>{IconX}</IconBtn>
-                          )}
+                          {/* Siempre visible (incluso pagado — la RPC revierte el
+                              pago en caja). Si no tiene permiso, anularRemito abre
+                              modal de Manager Override pidiendo código TOTP. */}
+                          <IconBtn title="Anular" tone="danger" onClick={() => anularRemito(r)}>{IconX}</IconBtn>
                         </div>
                       )}
                     </td>
