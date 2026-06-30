@@ -117,6 +117,8 @@ export type ItemDraft = Pick<
 > & {
   tenant_id: string;
   local_id: number | null;
+  /** Marca a la que pertenece el item. null = compartido entre marcas. */
+  marca_id?: number | null;
   tiempo_prep_min?: number | null;
   // SKU externos para sync con partners. null si no integra con ese partner.
   sku_rappi?: string | null;

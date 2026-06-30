@@ -4,6 +4,7 @@ import type { Usuario } from '@/types/auth';
 import type { ItemConGrupo } from '@/services/itemsService';
 import { listItems, softDeleteItem } from '@/services/itemsService';
 import { listGrupos } from '@/services/gruposService';
+import { listMarcas, type MarcaLite } from '@/services/marcasService';
 import type { ItemGrupo, ItemEstado } from '@/types/database';
 import { tienePermiso } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,6 +29,8 @@ type EstadoFilter = ItemEstado | 'todos';
 export function ItemsTab({ user }: Props) {
   const [items, setItems] = useState<ItemConGrupo[]>([]);
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
+  const [marcas, setMarcas] = useState<MarcaLite[]>([]);
+  const [marcaFilter, setMarcaFilter] = useState<string>('todas');
   const [search, setSearch] = useState('');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos');
@@ -40,22 +43,30 @@ export function ItemsTab({ user }: Props) {
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
   const puedeEliminar = tienePermiso(user, 'comanda.catalogo.eliminar');
 
+  const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
+
   const reload = useCallback(async () => {
     setLoading(true);
     const grupoIdNum = grupoFilter === 'todos' ? null : Number(grupoFilter);
+    const marcaIdNum = marcaFilter === 'todas' ? null : Number(marcaFilter);
     const [itemsRes, gruposRes] = await Promise.all([
-      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, tenantId: user.tenant_id }),
-      listGrupos(user.tenant_id),
+      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, marcaId: marcaIdNum, tenantId: user.tenant_id }),
+      listGrupos(user.tenant_id, marcaIdNum),
     ]);
     if (itemsRes.error) setError(itemsRes.error);
     setItems(itemsRes.data);
     setGrupos(gruposRes.data);
     setLoading(false);
-  }, [search, grupoFilter, estadoFilter, user.tenant_id]);
+  }, [search, grupoFilter, estadoFilter, marcaFilter, user.tenant_id]);
 
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Marcas: se cargan una vez (no dependen de filtros).
+  useEffect(() => {
+    listMarcas(user.tenant_id).then((r) => setMarcas(r.data));
+  }, [user.tenant_id]);
 
   // Realtime SACADO sprint optimización egress 2026-05-16. Tabla master,
   // se edita poco, no necesita refresh inter-tab. El propio save del form
@@ -99,6 +110,19 @@ export function ItemsTab({ user }: Props) {
             className="pl-10 h-11"
           />
         </div>
+        {marcas.length > 0 && (
+          <Select value={marcaFilter} onValueChange={setMarcaFilter}>
+            <SelectTrigger className="w-[200px] h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas las marcas</SelectItem>
+              {marcas.map((m) => (
+                <SelectItem key={m.id} value={String(m.id)}>{m.nombre}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={grupoFilter} onValueChange={setGrupoFilter}>
           <SelectTrigger className="w-[200px] h-11">
             <SelectValue />
@@ -208,6 +232,8 @@ export function ItemsTab({ user }: Props) {
         <ItemForm
           user={user}
           grupos={grupos}
+          marcas={marcas}
+          defaultMarcaId={marcaIdFiltro}
           item={editingItem === 'new' ? null : editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={() => { setEditingItem(null); reload(); }}

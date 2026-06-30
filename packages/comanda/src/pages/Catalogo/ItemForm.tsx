@@ -3,6 +3,7 @@ import type { Usuario } from '../../types/auth';
 import type { Item, ItemGrupo, TaxRate, Estacion } from '../../types/database';
 import type { ItemDraft } from '../../services/itemsService';
 import { createItem, updateItem } from '../../services/itemsService';
+import type { MarcaLite } from '../../services/marcasService';
 import { listTaxRates } from '../../services/taxRatesService';
 import { recalcularAtadosDeItem } from '../../services/preciosService';
 import { validarNombre, validarPrecio } from '../../lib/validate';
@@ -23,6 +24,9 @@ import {
 interface Props {
   user: Usuario;
   grupos: ItemGrupo[];
+  marcas: MarcaLite[];
+  /** Marca por defecto para items nuevos (la del filtro de la lista). */
+  defaultMarcaId: number | null;
   item: Item | null;
   onClose: () => void;
   onSaved: () => void;
@@ -36,9 +40,14 @@ const ESTACIONES: { value: Estacion | '_none'; label: string }[] = [
   { value: 'postres',         label: 'Postres' },
 ];
 
-export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
+export function ItemForm({ user, grupos, marcas, defaultMarcaId, item, onClose, onSaved }: Props) {
   const isEdit = item !== null;
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
+  const [marcaId, setMarcaId] = useState<number | null>(
+    isEdit
+      ? ((item as { marca_id?: number | null }).marca_id ?? null)
+      : (defaultMarcaId ?? marcas[0]?.id ?? null),
+  );
   const [nombre, setNombre] = useState(item?.nombre ?? '');
   const [descripcion, setDescripcion] = useState(item?.descripcion ?? '');
   const [emoji, setEmoji] = useState<string | null>(item?.emoji ?? null);
@@ -96,6 +105,7 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
         tiempo_prep_min: typeof tiempoPrepMin === 'number' && tiempoPrepMin > 0 ? tiempoPrepMin : null,
         tenant_id: user.tenant_id,
         local_id: null,
+        marca_id: marcaId,
         // SKU externos para partners — null si vacío para no inflar la fila
         sku_rappi: skuRappi.trim() || null,
         sku_pedidosya: skuPedidosya.trim() || null,
@@ -155,6 +165,26 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
               rows={2}
             />
           </div>
+
+          {marcas.length > 0 && (
+            <div className="space-y-2">
+              <Label>Marca</Label>
+              <Select
+                value={marcaId === null ? '_shared' : String(marcaId)}
+                onValueChange={(v) => setMarcaId(v === '_shared' ? null : Number(v))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {marcas.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.nombre}</SelectItem>
+                  ))}
+                  <SelectItem value="_shared">Compartido (todas las marcas)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
