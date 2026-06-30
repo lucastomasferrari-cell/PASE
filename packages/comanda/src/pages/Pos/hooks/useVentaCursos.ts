@@ -17,6 +17,9 @@ export function useVentaCursos(
   const itemsPorCurso = useMemo(() => {
     const map = new Map<number, VentaPosItem[]>();
     for (const it of items) {
+      // Anulados NO van en el pedido activo (ensucian la lista). El total ya
+      // los excluye y el registro queda en el historial (Opciones → historial).
+      if (it.estado === 'anulado') continue;
       const c = it.curso ?? 1;
       if (!map.has(c)) map.set(c, []);
       map.get(c)!.push(it);
