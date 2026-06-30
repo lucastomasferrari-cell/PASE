@@ -374,9 +374,15 @@ export class Printer {
     tipo?: 'cocina';
     estacion: string;
     mesa?: string;
-    items: Array<{ cantidad: number; nombre: string; notas?: string | null; modificadores?: string[] | null }>;
+    items: Array<{ cantidad: number; nombre: string; notas?: string | null; modificadores?: string[] | null; subtotal?: number }>;
     curso: number;
     fechaHora: string;
+    // Fallback para el print-agent VIEJO (sin printKitchen): si recibe estos
+    // campos, su template de cliente renderiza sin NaN. El agent nuevo usa
+    // tipo:'cocina' y los ignora.
+    titulo?: string;
+    venta_id?: string | number;
+    total?: number;
   }): Promise<void> {
     const tb = new TicketBuilder();
     tb.init();

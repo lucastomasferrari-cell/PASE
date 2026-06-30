@@ -425,7 +425,7 @@ export async function imprimirCocinaSiCorresponde(
     // Se usa al aprobar pedidos del marketplace donde los items van directo
     // a 'enviado' sin pasar por mandar-curso manual.
     let q = db.from('ventas_pos_items')
-      .select('item_id, cantidad, curso, modificadores, notas, items(nombre, estacion)')
+      .select('item_id, cantidad, curso, subtotal, modificadores, notas, items(nombre, estacion)')
       .eq('venta_id', ventaId)
       .eq('estado', 'enviado')
       .is('deleted_at', null);
@@ -439,13 +439,14 @@ export async function imprimirCocinaSiCorresponde(
       item_id: number;
       cantidad: number;
       curso: number;
+      subtotal: number | null;
       modificadores: Array<{ nombre: string }> | null;
       notas: string | null;
       items: { nombre: string; estacion: string | null } | { nombre: string; estacion: string | null }[] | null;
     };
     const porEstacionCurso = new Map<
       string,
-      { estacion: string; curso: number; items: Array<{ cantidad: number; nombre: string; notas: string | null; modificadores: string[] | null }> }
+      { estacion: string; curso: number; items: Array<{ cantidad: number; nombre: string; notas: string | null; modificadores: string[] | null; subtotal: number }> }
     >();
     for (const it of items as unknown as ItemRowJoined[]) {
       const linked = Array.isArray(it.items) ? it.items[0] : it.items;
@@ -460,6 +461,7 @@ export async function imprimirCocinaSiCorresponde(
         nombre: linked?.nombre ?? `Item ${it.item_id}`,
         notas: it.notas,
         modificadores: it.modificadores ? it.modificadores.map((m) => m.nombre) : null,
+        subtotal: Number(it.subtotal) || 0,
       });
     }
 
@@ -473,6 +475,7 @@ export async function imprimirCocinaSiCorresponde(
     // Imprimir en paralelo a cada (estación, curso)
     const resultados = await Promise.all(Array.from(porEstacionCurso.values()).map(async ({ estacion, curso: c, items: itemList }) => {
       const idempotencyKey = `cocina-${ventaId}-c${c}-${estacion}${retrySuffix}`;
+      const totalGrupo = itemList.reduce((s, i) => s + (i.subtotal ?? 0), 0);
       const r = await imprimirPorEstacion(estacion, {
         tipo: 'cocina',
         estacion,
@@ -480,6 +483,11 @@ export async function imprimirCocinaSiCorresponde(
         items: itemList,
         curso: c,
         fechaHora: new Date().toLocaleString('es-AR'),
+        // Fallback para el print-agent viejo (template de cliente): sin estos
+        // campos salía "Ticket #undefined" + "$NaN". El agent nuevo los ignora.
+        titulo: mesaStr ? `COCINA · Mesa ${mesaStr}` : `COCINA · Curso ${c}`,
+        venta_id: venta?.numero_local ?? ventaId,
+        total: totalGrupo,
       }, idempotencyKey);
       if (!r.ok) {
         console.warn(`[print kitchen] estación ${estacion} curso ${c} falló: ${r.error}`);
