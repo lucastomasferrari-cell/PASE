@@ -576,6 +576,13 @@ export function VentaScreen() {
           onDividirComensal={() => setShowComensalSplit(true)}
           onAnular={() => setShowAnular(true)}
           onOpenHistorial={() => setHistorialOpen(true)}
+          onReimprimir={async () => {
+            const { reimprimirComanda } = await import('@/services/ventasService');
+            toast.message('Reimprimiendo comanda…');
+            const r = await reimprimirComanda(ventaId);
+            if (r.error) toast.error(r.error);
+            else toast.success('Comanda reenviada a cocina');
+          }}
           tiempoEstimadoMin={tiempoEstimadoMin}
           coursingAuto={venta.coursing_auto ?? false}
           onToggleCoursingAuto={toggleCoursingAuto}

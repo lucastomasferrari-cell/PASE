@@ -25,6 +25,7 @@ export interface VentaHeaderProps {
   onDividirComensal: () => void;
   onAnular: () => void;
   onOpenHistorial: () => void;
+  onReimprimir: () => void;
   tiempoEstimadoMin: number;
   coursingAuto: boolean;
   onToggleCoursingAuto: () => void;
@@ -47,6 +48,7 @@ export const VentaHeader = React.memo(function VentaHeader({
   onDividirComensal,
   onAnular,
   onOpenHistorial,
+  onReimprimir,
   tiempoEstimadoMin,
   coursingAuto,
   onToggleCoursingAuto,
@@ -107,6 +109,9 @@ export const VentaHeader = React.memo(function VentaHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onDividirComensal}>
                 Dividir por comensal
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onReimprimir}>
+                Reimprimir comanda
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onOpenHistorial}>
                 Ver historial de cambios
