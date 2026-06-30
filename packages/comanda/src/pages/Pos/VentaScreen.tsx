@@ -907,101 +907,97 @@ export function VentaScreen() {
         </DialogContent>
       </Dialog>
 
-      {/* Control de mesa — acciones rápidas sobre la mesa sin salir de la venta */}
+      {/* Control de mesa — pre-cuenta para mostrar al cliente */}
       <Dialog open={showMesaControl} onOpenChange={setShowMesaControl}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Control de mesa</DialogTitle>
-            <DialogDescription>
-              Venta #{venta.numero_local} · {venta.modo === 'salon' ? 'Salón' : 'Mostrador'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-1">
-            {editable && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { setShowMesaControl(false); setShowDescuento(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
-                >
-                  <span className="text-lg">💰</span>
-                  <div>
-                    <div className="font-medium text-sm">Aplicar descuento</div>
-                    <div className="text-xs text-muted-foreground">Porcentaje o monto fijo</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowMesaControl(false); setShowTransfer(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
-                >
-                  <span className="text-lg">🔀</span>
-                  <div>
-                    <div className="font-medium text-sm">Transferir mesa</div>
-                    <div className="text-xs text-muted-foreground">Mover la cuenta a otra mesa</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowMesaControl(false); setShowMerge(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
-                >
-                  <span className="text-lg">🔗</span>
-                  <div>
-                    <div className="font-medium text-sm">Unir mesas</div>
-                    <div className="text-xs text-muted-foreground">Fusionar otra mesa a esta</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowMesaControl(false); setShowSplit(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
-                >
-                  <span className="text-lg">✂️</span>
-                  <div>
-                    <div className="font-medium text-sm">Partir cuenta</div>
-                    <div className="text-xs text-muted-foreground">Dividir en cuentas separadas</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowMesaControl(false); setShowComensalSplit(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
-                >
-                  <span className="text-lg">👥</span>
-                  <div>
-                    <div className="font-medium text-sm">Dividir por comensal</div>
-                    <div className="text-xs text-muted-foreground">Cobrar a cada uno por separado</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowMesaControl(false); setShowAnular(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-destructive/30 hover:bg-destructive/5 text-left transition-colors"
-                >
-                  <span className="text-lg">❌</span>
-                  <div>
-                    <div className="font-medium text-sm text-destructive">Anular venta</div>
-                    <div className="text-xs text-muted-foreground">Requiere autorización</div>
-                  </div>
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => { setShowMesaControl(false); navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
-            >
-              <span className="text-lg">🗺️</span>
-              <div>
-                <div className="font-medium text-sm">Ver plano del salón</div>
-                <div className="text-xs text-muted-foreground">Mapa de todas las mesas</div>
+        <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+          {/* Ticket — zona imprimible */}
+          <div id="control-mesa-ticket" className="bg-white text-black font-mono text-sm">
+            {/* Encabezado */}
+            <div className="px-5 pt-5 pb-3 text-center border-b border-dashed border-gray-300">
+              <div className="text-xs text-gray-500 uppercase tracking-widest mb-0.5">Control de mesa</div>
+              <div className="font-bold text-base">
+                {venta.modo === 'salon' ? `Mesa · Venta #${venta.numero_local}` : `Mostrador · Venta #${venta.numero_local}`}
               </div>
-            </button>
+              <div className="text-xs text-gray-400 mt-0.5">
+                {new Date().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="px-5 py-3 space-y-1 border-b border-dashed border-gray-300">
+              {Array.from(itemsPorCurso.entries()).map(([curso, itemsCurso]) => {
+                const visibles = itemsCurso.filter((i) => i.estado !== 'anulado');
+                if (visibles.length === 0) return null;
+                return (
+                  <div key={curso}>
+                    {itemsPorCurso.size > 1 && (
+                      <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-2 mb-0.5">
+                        — Curso {curso} —
+                      </div>
+                    )}
+                    {visibles.map((it) => {
+                      const nombre = it.nombre_display ?? catalogo.find((c) => c.id === it.item_id)?.nombre ?? `Item #${it.item_id}`;
+                      return (
+                        <div key={it.id} className="flex justify-between gap-2 leading-5">
+                          <span className="flex-1 truncate">
+                            <span className="text-gray-500">{it.cantidad}×</span> {nombre}
+                            {it.es_cortesia && <span className="text-[10px] ml-1 text-gray-400">(cortesía)</span>}
+                          </span>
+                          <span className="tabular-nums shrink-0">
+                            {it.es_cortesia ? '—' : formatARS(it.subtotal)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Totales */}
+            <div className="px-5 py-3 space-y-1">
+              {venta.subtotal !== venta.total && (
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">{formatARS(venta.subtotal)}</span>
+                </div>
+              )}
+              {Number(venta.descuento_total) > 0 && (
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Descuento</span>
+                  <span className="tabular-nums">−{formatARS(venta.descuento_total)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-1 mt-1">
+                <span>TOTAL</span>
+                <span className="tabular-nums">{formatARS(venta.total)}</span>
+              </div>
+            </div>
+
+            <div className="px-5 pb-4 text-center text-[10px] text-gray-400">
+              Este es un resumen no oficial. La factura se emite al cobrar.
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMesaControl(false)}>Cerrar</Button>
-          </DialogFooter>
+
+          {/* Acciones — fuera del área imprimible */}
+          <div className="flex gap-2 p-3 border-t bg-muted/30 print:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => window.print()}
+            >
+              Imprimir
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => setShowMesaControl(false)}
+            >
+              Cerrar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
