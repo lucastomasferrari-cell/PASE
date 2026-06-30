@@ -37,7 +37,7 @@ import { db } from "./supabase";
 // dispara (fetch falla en dev por 404 y se ignora).
 declare const __BUILD_VERSION__: string;
 
-const POLL_MS = 5 * 60_000;   // 5 minutos
+const POLL_MS = 2 * 60_000;   // 2 minutos (antes 5) — detección más rápida
 const VERSION_URL = "/version.json";
 
 async function fetchServerVersion(): Promise<string | null> {
@@ -138,15 +138,26 @@ export function useVersionPolling(): void {
     // Polling cada 5 min
     intervalId = setInterval(() => { void check(); }, POLL_MS);
 
-    // On focus: chequear al volver a la pestaña
+    // Chequear al volver a la app. En desktop alcanza con `focus`, pero en
+    // mobile/tablet (PWA de los cajeros) `focus` muchas veces NO se dispara al
+    // volver de otra app o de pantalla bloqueada — el que sí se dispara es
+    // `visibilitychange` (tab/app vuelve a visible) y `pageshow` (restaurada
+    // desde el bfcache). Sin estos, el cajero quedaba con la versión vieja
+    // hasta el siguiente poll. Escuchamos los tres.
     const onFocus = () => { void check(); };
+    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
+    const onPageShow = () => { void check(); };
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
 
     return () => {
       cancelado = true;
       clearTimeout(firstCheckTimer);
       if (intervalId) clearInterval(intervalId);
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, []);
 }
