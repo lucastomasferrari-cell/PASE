@@ -79,44 +79,44 @@ input[type="number"] {
   }
 
   .dark {
-    /* ===== DARK MODE — UNIFICADO CON PASE (graphite-blue) ===== */
-    --background: 217 47% 10%;         /* #0E1726 (--pase-bg dark) */
-    --foreground: 210 25% 96%;         /* #F0F4F8 (--pase-text dark) */
+    /* ===== DARK MODE — POS palette (variación 2, jun-2026) ===== */
+    --background: 222 17% 8%;          /* #111318 — fondo base más oscuro/neutro */
+    --foreground: 210 20% 90%;         /* #DDE4ED */
 
-    --card: 221 42% 18%;               /* #1A2540 (--pase-bg-soft dark) */
-    --card-foreground: 210 25% 96%;
+    --card: 221 27% 12%;               /* #161b26 — superficie de cards */
+    --card-foreground: 210 20% 90%;
 
-    --popover: 221 42% 18%;
-    --popover-foreground: 210 25% 96%;
+    --popover: 221 27% 12%;
+    --popover-foreground: 210 20% 90%;
 
-    --primary: 207 58% 66%;            /* celeste se mantiene — ancla de marca */
-    --primary-foreground: 217 47% 10%;
-    --primary-hover: 207 58% 58%;
+    --primary: 239 84% 67%;            /* #6366f1 — índigo como acento */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 239 84% 60%;
 
-    --secondary: 221 42% 18%;
-    --secondary-foreground: 210 25% 96%;
+    --secondary: 221 27% 12%;
+    --secondary-foreground: 210 20% 90%;
 
-    --muted: 222 32% 24%;              /* #2A3550 (--pase-bg-out dark) */
-    --muted-foreground: 213 28% 67%;   /* #93A8C2 (--pase-text-muted dark) */
+    --muted: 222 18% 15%;              /* #1d2335 */
+    --muted-foreground: 215 14% 48%;   /* #697799 */
 
-    --accent: 220 49% 23%;             /* #1E3155 (--pase-celeste-100 dark) */
-    --accent-foreground: 210 25% 96%;
+    --accent: 239 40% 20%;             /* índigo oscuro para hover/selected */
+    --accent-foreground: 210 20% 90%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 207 58% 66%;            /* celeste */
-    --success-foreground: 217 47% 10%;
-    --warning: 38 92% 50%;             /* warning amarillo se mantiene para mesas */
-    --warning-foreground: 217 47% 10%;
+    --success: 142 71% 45%;            /* verde funcional — pagado, enviado */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 17% 8%;
     --kitchen-hot: 0 84% 65%;
     --table-occupied: 38 92% 50%;
-    --table-ready: 207 58% 66%;
+    --table-ready: 239 84% 67%;
 
-    --border: 222 32% 24%;
-    --border-strong: 224 28% 34%;      /* #3F4D6E */
-    --input: 222 32% 24%;
-    --ring: 207 58% 66%;
+    --border: 222 18% 17%;             /* borde muy sutil */
+    --border-strong: 222 15% 25%;
+    --input: 222 18% 17%;
+    --ring: 239 84% 67%;
   }
 
   /* Override opcional para superficies customer-facing (tienda pública /

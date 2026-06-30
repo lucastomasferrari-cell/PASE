@@ -52,7 +52,7 @@ export const VentaHeader = React.memo(function VentaHeader({
   onToggleCoursingAuto,
 }: VentaHeaderProps) {
   return (
-    <div className="px-2 py-1.5 border-b border-border bg-card space-y-1">
+    <div className="px-2 py-1.5 border-b border-border/40 bg-card space-y-1">
       {/* Barra compacta: volver · # · estado · tiempo · Opciones */}
       <div className="flex items-center gap-1.5">
         <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={onBack} title="Volver">

@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Star } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { SearchInput } from '../../../components/SearchInput';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
@@ -23,25 +22,25 @@ interface CatalogoDensityConfig {
 
 const CATALOGO_DENSITY_CONFIG: Record<CatalogoDensity, CatalogoDensityConfig> = {
   compact: {
-    itemPaddingY: 'py-1',
+    itemPaddingY: 'p-2',
     itemText: 'text-xs',
-    priceText: 'text-xs',
+    priceText: 'text-[11px]',
     agotadoText: 'text-[9px]',
-    gridCols: 'grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-3',
+    gridCols: 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-1.5',
   },
   normal: {
-    itemPaddingY: 'py-1.5',
+    itemPaddingY: 'p-3',
     itemText: 'text-sm',
-    priceText: 'text-sm',
+    priceText: 'text-xs',
     agotadoText: 'text-[10px]',
-    gridCols: 'grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4',
+    gridCols: 'grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2',
   },
   large: {
-    itemPaddingY: 'py-2.5',
+    itemPaddingY: 'p-4',
     itemText: 'text-base',
-    priceText: 'text-base',
+    priceText: 'text-sm',
     agotadoText: 'text-xs',
-    gridCols: 'grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-x-5',
+    gridCols: 'grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3',
   },
 };
 
@@ -73,8 +72,10 @@ function GrupoTab({ active, onClick, children }: GrupoTabProps) {
       type="button"
       onClick={onClick}
       className={cn(
-        'px-3 h-9 rounded-md text-xs font-medium transition-colors',
-        active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        'px-3 h-7 rounded-full text-xs font-medium transition-all border shrink-0',
+        active
+          ? 'bg-primary/15 text-primary border-primary/30'
+          : 'text-muted-foreground border-border/40 hover:text-foreground hover:border-border',
       )}
     >
       {children}
@@ -133,7 +134,7 @@ function ProductTile({ item, disabled, flashed, favorito, density = 'normal', on
   })();
 
   return (
-    <div className="group relative border-b border-border/40">
+    <div className="group relative">
       <button
         type="button"
         onClick={handleClick}
@@ -146,23 +147,24 @@ function ProductTile({ item, disabled, flashed, favorito, density = 'normal', on
         }}
         disabled={disabled || (agotado && !onLongPress)}
         className={cn(
-          'w-full flex items-baseline justify-between gap-3 pl-1 pr-7 text-left rounded-md',
+          'w-full flex flex-col items-start text-left rounded-lg border border-border/40',
+          'bg-card transition-all duration-150',
+          'hover:border-primary/30 hover:bg-accent/20 active:scale-[0.98]',
+          'disabled:cursor-not-allowed',
           densityCfg.itemPaddingY,
-          'transition-colors hover:bg-accent active:bg-accent',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
-          flashed && 'bg-success/15',
-          agotado && 'opacity-50',
+          flashed && 'border-success/30 bg-success/10',
+          agotado && 'opacity-35',
         )}
         title={agotado ? 'AGOTADO — mantené presionado para reponer' : 'Tocá para agregar · mantené presionado para marcar agotado'}
       >
-        <span className={cn('min-w-0 flex-1 truncate', densityCfg.itemText)}>
+        <span className={cn('min-w-0 w-full leading-snug font-medium text-foreground', densityCfg.itemText)}>
           {item.nombre}
-          {agotadoLabel && (
-            <span className={cn('ml-2 uppercase tracking-wide text-destructive font-medium', densityCfg.agotadoText)}>{agotadoLabel}</span>
-          )}
         </span>
-        <span className={cn('shrink-0 tabular-nums text-muted-foreground', densityCfg.priceText)}>
-          {formatARS(item.precio_madre)}
+        <span className={cn('mt-1 tabular-nums text-muted-foreground leading-none', densityCfg.priceText)}>
+          {agotadoLabel
+            ? <span className={cn('text-destructive/70 font-medium uppercase tracking-wide', densityCfg.agotadoText)}>{agotadoLabel}</span>
+            : formatARS(item.precio_madre)
+          }
         </span>
       </button>
       {onToggleFavorito && (
@@ -171,14 +173,14 @@ function ProductTile({ item, disabled, flashed, favorito, density = 'normal', on
           onClick={(e) => { e.stopPropagation(); onToggleFavorito(); }}
           aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
           className={cn(
-            'absolute top-1/2 -translate-y-1/2 right-1 z-10 h-6 w-6 inline-flex items-center justify-center rounded-full transition-all',
+            'absolute top-1.5 right-1.5 z-10 h-5 w-5 inline-flex items-center justify-center rounded-full transition-all',
             favorito
-              ? 'text-amber-500'
-              : 'text-muted-foreground/40 hover:text-amber-500 opacity-0 group-hover:opacity-100 focus:opacity-100',
+              ? 'text-amber-400'
+              : 'text-muted-foreground/30 hover:text-amber-400 opacity-0 group-hover:opacity-100 focus:opacity-100',
           )}
           title={favorito ? 'Quitar de favoritos' : 'Agregar a Quick Items'}
         >
-          <Star className={cn('h-3.5 w-3.5', favorito && 'fill-current')} />
+          <Star className={cn('h-3 w-3', favorito && 'fill-current')} />
         </button>
       )}
     </div>
@@ -232,26 +234,33 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
   const [density, setDensity] = useCatalogoDensity();
   const densityCfg = CATALOGO_DENSITY_CONFIG[density];
   return (
-    <div className="p-4 overflow-y-auto border-r border-border bg-card min-h-0">
+    <div className="p-3 overflow-y-auto border-r border-border/40 bg-background min-h-0">
       {/* Selector de curso — solo si el local usa cursos. Si no, ocultamos
           toda la franja y los items van todos al curso 1 implícito. */}
       {editable && usarCursos && (
-        <div className="mb-3 flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cargando en:</span>
+        <div className="mb-3 flex items-center gap-1.5 flex-wrap">
           {Array.from({ length: maxCurso }, (_, i) => i + 1).map((c) => (
-            <Button
+            <button
               key={c}
               type="button"
-              variant={cursoActivo === c ? 'default' : 'outline'}
-              size="sm"
               onClick={() => setCursoActivo(c)}
+              className={cn(
+                'h-7 px-3 rounded-full text-xs font-medium transition-all border',
+                cursoActivo === c
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border/40 text-muted-foreground hover:border-border hover:text-foreground',
+              )}
             >
               Curso {c}
-            </Button>
+            </button>
           ))}
-          <Button type="button" variant="ghost" size="sm" onClick={() => setCursoActivo(maxCurso + 1)}>
+          <button
+            type="button"
+            onClick={() => setCursoActivo(maxCurso + 1)}
+            className="h-7 px-3 rounded-full text-xs font-medium border border-dashed border-primary/30 text-primary/70 hover:border-primary/60 hover:text-primary transition-all"
+          >
             + Curso {maxCurso + 1}
-          </Button>
+          </button>
         </div>
       )}
 
@@ -266,8 +275,8 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
             onKeyDown={onSearchKeyDown}
           />
         </div>
-        {/* Toggle density del catálogo (S/M/L) — persiste en localStorage */}
-        <div className="inline-flex rounded-md border border-border bg-background p-0.5 shrink-0" role="group" aria-label="Tamaño de items">
+        {/* Toggle density del catálogo (S/M/L) */}
+        <div className="inline-flex rounded-full border border-border/40 bg-card p-0.5 shrink-0" role="group" aria-label="Tamaño de items">
           {(['compact', 'normal', 'large'] as const).map((d) => {
             const label = d === 'compact' ? 'Compacto' : d === 'normal' ? 'Normal' : 'Grande';
             const letra = d === 'compact' ? 'S' : d === 'normal' ? 'M' : 'L';
@@ -280,10 +289,10 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
                 aria-label={`Items ${label.toLowerCase()}`}
                 title={`Items ${label.toLowerCase()}`}
                 className={cn(
-                  'px-2.5 h-9 text-xs font-medium rounded transition-colors min-w-[28px]',
+                  'px-2.5 h-7 text-xs font-medium rounded-full transition-all min-w-[28px]',
                   density === d
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {letra}

@@ -27,7 +27,7 @@ export const VentaFooter = React.memo(function VentaFooter({
   onCobrar,
 }: VentaFooterProps) {
   return (
-    <div className="shrink-0 border-t border-border bg-card">
+    <div className="shrink-0 border-t border-border/40 bg-card">
       {/* Resumen de totales */}
       <div className="px-3 pt-2.5 pb-2 space-y-0.5">
         <div className="flex justify-between text-sm text-muted-foreground">
@@ -103,7 +103,7 @@ export const VentaFooter = React.memo(function VentaFooter({
 
         {/* Cobrar — abrir pantalla de pago */}
         <Button
-          variant="success"
+          variant="default"
           size="sm"
           onClick={onCobrar}
           disabled={!editable || venta.total <= 0}

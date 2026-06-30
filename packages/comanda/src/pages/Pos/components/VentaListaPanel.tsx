@@ -44,7 +44,7 @@ function CheckRow({
   return (
     <div
       className={cn(
-        'py-2 px-2 border-b border-border transition-colors duration-700',
+        'py-2 px-2 border-b border-border/40 transition-colors duration-700',
         anulado && 'opacity-40',
         flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
       )}
