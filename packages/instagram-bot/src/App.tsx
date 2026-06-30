@@ -27,6 +27,12 @@ export function App() {
       if (data.session?.user?.email) setSesion({ email: data.session.user.email });
       setCargando(false);
     })();
+    // Mantener la sesión en sync con refrescos de token / cambios. Sin esto, la
+    // app solo miraba la sesión una vez y "se cerraba" sola al expirar el token.
+    const { data: sub } = db().auth.onAuthStateChange((_event, session) => {
+      setSesion(session?.user?.email ? { email: session.user.email } : null);
+    });
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {

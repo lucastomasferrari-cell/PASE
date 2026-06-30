@@ -18,7 +18,17 @@ export function db(): SupabaseClient {
     if (!anonKey) {
       throw new Error('Bot sin configurar: falta VITE_SUPABASE_ANON_KEY');
     }
-    _client = createClient(SUPABASE_URL, anonKey);
+    _client = createClient(SUPABASE_URL, anonKey, {
+      auth: {
+        // Mantener la sesión abierta: guardarla en localStorage y refrescar el
+        // token solo automáticamente. storageKey propio del bot para no pisarse
+        // con otras apps del ecosistema (misma project ref) abiertas en el navegador.
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'cocina-ig-bot-auth',
+      },
+    });
   }
   return _client;
 }

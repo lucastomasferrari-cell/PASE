@@ -128,21 +128,22 @@ export function Mensajeria({ userId }: { userId: number }) {
 
   return (
     <div className="space-y-3">
-      {/* Selector de cuenta IG + acciones */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {cuentas.map((c) => (
-          <button key={c.id} onClick={() => setCuentaSel(c.id)}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium border ${cuentaSel === c.id ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 bg-white hover:border-brand-300'}`}>
-            @{c.ig_username ?? `cuenta ${c.id}`}
-          </button>
-        ))}
-        {cuentas.length === 0 && (
+      {/* Selector de cuenta IG (desplegable) + config (engranaje), en una línea */}
+      <div className="flex items-center gap-2">
+        {cuentas.length === 0 ? (
           <span className="text-sm text-ink-muted">Todavía no hay cuentas de Instagram conectadas.</span>
+        ) : (
+          <select value={cuentaSel ?? ''} onChange={(e) => setCuentaSel(Number(e.target.value))}
+                  className="rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-sm font-medium text-ink focus:outline-none focus:border-brand-400">
+            {cuentas.map((c) => (
+              <option key={c.id} value={c.id}>@{c.ig_username ?? `cuenta ${c.id}`}</option>
+            ))}
+          </select>
         )}
         {cuentaSel && (
-          <button onClick={() => setConfigOpen(true)}
-                  className="ml-auto rounded-lg border border-ink/15 bg-white hover:bg-ink/5 px-3 py-1.5 text-sm font-medium inline-flex items-center gap-1.5">
-            <Settings className="h-4 w-4" /> Config del bot
+          <button onClick={() => setConfigOpen(true)} title="Configuración" aria-label="Configuración"
+                  className="ml-auto rounded-lg border border-ink/15 bg-white hover:bg-ink/5 p-2 inline-flex items-center justify-center">
+            <Settings className="h-4 w-4" />
           </button>
         )}
       </div>
@@ -231,9 +232,9 @@ export function Mensajeria({ userId }: { userId: number }) {
                     <div className="font-medium text-sm">{nombre(sel)}</div>
                     <div className="text-[11px] text-ink-muted">{sel.ig_username ? `@${sel.ig_username}` : `@${sel.igsid.slice(0, 16)}`} · {sel.mensajes_count} mensajes</div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {sel.estado === 'bot' && (
-                      <BtnQ tono="brand" icon={<Hand className="h-3.5 w-3.5" />} label="Tomar como humano"
+                      <BtnQ tono="brand" icon={<Hand className="h-3.5 w-3.5" />} label="Humano"
                             onClick={() => void accion(setEstado(sel.id, 'humano', userId), 'Tomaste la conversación')} />
                     )}
                     {sel.estado === 'humano' && (
@@ -285,7 +286,7 @@ export function Mensajeria({ userId }: { userId: number }) {
                 <div className="p-3 border-t border-ink/5 bg-white">
                   {sel.estado !== 'humano' && (
                     <div className="text-[11px] text-ink-muted mb-2 inline-flex items-center gap-1">
-                      <ChevronRight className="h-3 w-3" /> Para responder como humano, primero tocá "Tomar como humano".
+                      <ChevronRight className="h-3 w-3" /> Para responder como humano, primero tocá "Humano".
                     </div>
                   )}
                   <div className="flex gap-2">
@@ -320,7 +321,7 @@ function BtnQ({ tono, icon, label, onClick }: { tono: 'brand' | 'red' | 'ghost';
     ghost: 'bg-white hover:bg-ink/5 text-ink-soft border-ink/15',
   }[tono];
   return (
-    <button onClick={onClick} className={`text-xs px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1 font-medium ${cls}`}>
+    <button onClick={onClick} className={`text-xs px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1 font-medium shrink-0 whitespace-nowrap ${cls}`}>
       {icon}{label}
     </button>
   );
