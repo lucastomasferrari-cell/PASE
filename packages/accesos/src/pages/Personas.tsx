@@ -8,25 +8,35 @@ import {
   listUsuarios, crearUsuario, actualizarUsuario, setPermisos, setLocales,
   resetPassword, listLocales, type Usuario,
 } from '@/lib/usuariosService';
+import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, type AppKey } from '@/lib/apps';
 import { CATEGORIAS } from '@/lib/permisos';
 
 const ROLES_BASE = ['dueno', 'admin', 'encargado', 'cajero', 'compras'];
+
+interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
 
 function nombre(u: Usuario) { return u.nombre || u.email; }
 
 export function Personas() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [locales, setLocs] = useState<{ id: number; nombre: string }[]>([]);
+  const [marcas, setMarcas] = useState<MarcaConLocales[]>([]);
   const [search, setSearch] = useState('');
   const [cargando, setCargando] = useState(true);
   const [editando, setEditando] = useState<Usuario | 'nuevo' | null>(null);
 
   const reload = useCallback(async () => {
     setCargando(true);
-    const [u, l] = await Promise.all([listUsuarios(), listLocales()]);
+    const [u, l, m, lcm] = await Promise.all([listUsuarios(), listLocales(), listMarcas(), listLocalesConMarca()]);
     if (u.error) toast.error('No se pudieron cargar usuarios: ' + u.error);
     setUsuarios(u.data); setLocs(l.data);
+    // Marca → locales que le pertenecen (para el atajo "asignar por marca").
+    setMarcas(m.data.map((mk) => ({
+      id: mk.id,
+      nombre: mk.nombre,
+      localIds: lcm.data.filter((x) => x.marca_id === mk.id).map((x) => x.id),
+    })).filter((mk) => mk.localIds.length > 0));
     setCargando(false);
   }, []);
 
@@ -88,6 +98,7 @@ export function Personas() {
         <FormUsuario
           usuario={editando === 'nuevo' ? null : editando}
           locales={locales}
+          marcas={marcas}
           onClose={() => setEditando(null)}
           onSaved={() => { setEditando(null); void reload(); }}
         />
@@ -147,9 +158,10 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   );
 }
 
-function FormUsuario({ usuario, locales, onClose, onSaved }: {
+function FormUsuario({ usuario, locales, marcas, onClose, onSaved }: {
   usuario: Usuario | null;
   locales: { id: number; nombre: string }[];
+  marcas: MarcaConLocales[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -165,6 +177,11 @@ function FormUsuario({ usuario, locales, onClose, onSaved }: {
 
   function toggleApp(k: string) { setApps((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k]); }
   function toggleLocal(id: number) { setLocs((l) => l.includes(id) ? l.filter((x) => x !== id) : [...l, id]); }
+  // Atajo: tildar una marca = asignar/quitar TODOS sus locales de una.
+  function toggleMarca(localIds: number[]) {
+    const todos = localIds.every((id) => locs.includes(id));
+    setLocs((l) => todos ? l.filter((id) => !localIds.includes(id)) : [...new Set([...l, ...localIds])]);
+  }
   function togglePerm(slug: string) { setPermisosState((p) => p.includes(slug) ? p.filter((x) => x !== slug) : [...p, slug]); }
 
   async function guardar() {
@@ -253,6 +270,20 @@ function FormUsuario({ usuario, locales, onClose, onSaved }: {
         {locales.length > 0 && (
           <section className="space-y-2">
             <p className="text-xs normal-case tracking-wide text-ink-muted">Locales asignados (vacío = todos)</p>
+            {marcas.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pb-1">
+                <span className="text-[11px] text-ink-muted self-center">Por marca:</span>
+                {marcas.map((m) => {
+                  const todos = m.localIds.every((id) => locs.includes(id));
+                  return (
+                    <button key={m.id} type="button" onClick={() => toggleMarca(m.localIds)}
+                            className={`text-xs px-3 py-1.5 rounded-full border font-medium ${todos ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white border-ink/15 text-ink-soft hover:bg-ink/5'}`}>
+                      {m.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {locales.map((l) => (
                 <button key={l.id} onClick={() => toggleLocal(l.id)} type="button"
