@@ -228,12 +228,8 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
               <>
                 {groups.map((g) => {
                   const count = seleccion[g.id]?.size ?? 0;
-                  const faltante = g.requerido && count === 0;
                   return (
-                    <div key={g.id} className={cn(
-                      'space-y-2 rounded-md p-2.5 -mx-1 border transition-colors',
-                      faltante ? 'border-border bg-muted/30' : 'border-transparent',
-                    )}>
+                    <div key={g.id} className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-sm font-medium flex items-center gap-1.5">
                           {g.nombre}
@@ -254,33 +250,41 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
                            `${count} elegidas`}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
                         {g.opciones.map((op) => {
                           const selected = seleccion[g.id]?.has(op.id) ?? false;
+                          const extra = Number(op.precio_extra);
                           return (
                             <button
                               key={op.id}
                               type="button"
                               onClick={() => toggle(g.id, op.id, g)}
                               className={cn(
-                                'p-2.5 rounded-md border text-sm text-left transition-all touch-target-lg',
-                                'active:scale-[0.97]',
-                                selected
-                                  ? 'border-primary bg-primary/10 text-primary font-medium'
-                                  : 'border-input hover:bg-accent',
+                                'w-full flex items-center justify-between gap-3 px-3 py-3 text-left transition-colors',
+                                selected ? 'bg-primary/5' : 'hover:bg-accent/40 active:bg-accent/60',
                               )}
                             >
-                              <div className="flex justify-between items-center gap-2">
-                                <span className="truncate flex items-center gap-1">
-                                  {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                              <span className="flex items-center gap-3 min-w-0">
+                                <span className={cn(
+                                  'h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
+                                  selected ? 'border-primary' : 'border-border',
+                                )}>
+                                  {selected && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                                </span>
+                                <span className={cn('text-sm truncate text-foreground', selected ? 'font-semibold' : 'font-medium')}>
                                   {op.nombre}
                                 </span>
-                                {Number(op.precio_extra) > 0 && (
-                                  <span className="text-xs text-success tabular-nums shrink-0">
-                                    +{formatARS(op.precio_extra)}
-                                  </span>
-                                )}
-                              </div>
+                              </span>
+                              <span className={cn(
+                                'text-xs tabular-nums shrink-0',
+                                extra > 0 ? 'text-success font-medium'
+                                  : extra < 0 ? 'text-muted-foreground'
+                                  : selected ? 'text-primary font-medium' : 'text-muted-foreground',
+                              )}>
+                                {extra > 0 ? `+${formatARS(extra)}`
+                                  : extra < 0 ? `−${formatARS(Math.abs(extra))}`
+                                  : 'Incluido'}
+                              </span>
                             </button>
                           );
                         })}
