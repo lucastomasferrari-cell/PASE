@@ -222,7 +222,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
 }: VentaListaPanelProps) {
   const totalItems = Array.from(itemsPorCurso.values()).reduce((s, a) => s + a.length, 0);
   return (
-    <div className="flex-1 overflow-y-auto p-2 space-y-3">
+    <div className="flex-1 overflow-y-auto p-2 space-y-2">
       {totalItems === 0 ? (
         <div className="py-8 text-center text-muted-foreground text-sm">
           Sin items. Tocá productos del catálogo para agregar.
