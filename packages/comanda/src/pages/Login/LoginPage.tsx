@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock } from 'lucide-react';
 import { db } from '../../lib/supabase';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 // Permite email completo (con @) o solo username (concatena @pase.local).
-// Mismo comportamiento que PASE — si el user es "dueno", lo expandimos a
-// "dueno@pase.local" antes de pasarle a Supabase Auth. Si ya tiene @, no
-// toca nada.
 const EMAIL_O_USER_RE = /^[^\s@]+(@[^\s@]+\.[^\s@]+)?$/;
 
 function normalizarEmail(input: string): string {
   const s = input.trim();
   return s.includes('@') ? s : `${s}@pase.local`;
 }
+
+// Login unificado del ecosistema Cocina (celeste PASE + toggle dark/light).
+const labelCls = 'block text-sm font-medium text-[#1A3A5E] dark:text-[#F0F4F8] mb-1.5';
+const inputCls =
+  'w-full h-11 rounded-lg border border-[#D0DCEA] dark:border-[#3F4D6E] '
+  + 'bg-white dark:bg-[#0C1220] px-3.5 text-sm text-[#1A3A5E] dark:text-[#F0F4F8] '
+  + 'placeholder:text-[#9DB2CC] dark:placeholder:text-[#6E8CAB] outline-none '
+  + 'focus:border-[#75AADB] focus:ring-2 focus:ring-[#75AADB]/25 transition';
+const btnCls =
+  'w-full h-11 rounded-lg bg-[#75AADB] hover:bg-[#5f97cc] active:bg-[#5589bd] '
+  + 'text-white text-sm font-medium transition-colors disabled:opacity-60';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -51,64 +54,62 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6 relative">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen grid place-items-center px-4 bg-[#EFF3F8] dark:bg-[#0C1220]">
+      <div className="relative w-full max-w-[400px] rounded-2xl border border-[#E0EAF4] dark:border-[#2A3550] bg-white dark:bg-[#1A2540] shadow-[0_2px_4px_rgba(26,58,94,0.04),0_4px_16px_rgba(26,58,94,0.08)] p-8">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
 
-      <Card className="w-full max-w-md shadow-lg">
-        <CardContent className="p-8">
-          <div className="text-center mb-7">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 mb-3">
-              <Lock className="h-6 w-6 text-primary" />
-            </div>
-            <h1 className="text-2xl font-medium tracking-tight">COMANDA</h1>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Iniciá sesión con tu usuario y contraseña
-            </p>
+        <div className="mb-6">
+          <div className="text-[26px] leading-none font-medium tracking-tight text-[#1A3A5E] dark:text-[#F0F4F8]">
+            comanda<span className="text-[#F5C518]">.</span>
+          </div>
+          <p className="mt-2 text-xs text-[#6E8CAB] dark:text-[#93A8C2]">
+            Iniciá sesión con tu usuario y contraseña.
+          </p>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className={labelCls}>Usuario o email</label>
+            <input
+              id="email"
+              type="text"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+              autoComplete="username"
+              required
+              placeholder="dueno (o tu@email.com)"
+              className={inputCls}
+            />
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Usuario o email</Label>
-              <Input
-                id="email"
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
-                autoComplete="username"
-                required
-                placeholder="dueno (o tu@email.com)"
-                className="h-11"
-              />
+          <div>
+            <label htmlFor="password" className={labelCls}>Contraseña</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              placeholder="••••••••"
+              className={inputCls}
+            />
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-[#FDECEC] dark:bg-[#3A1A1A] text-[#C0392B] text-sm">
+              {error}
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-                className="h-11"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-                {error}
-              </div>
-            )}
-
-            <Button type="submit" disabled={loading} className="w-full h-11" size="lg">
-              {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          <button type="submit" disabled={loading} className={btnCls}>
+            {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

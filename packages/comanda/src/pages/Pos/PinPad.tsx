@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Lock, Delete } from 'lucide-react';
+import { Delete } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
+
+// Login unificado del ecosistema Cocina (celeste PASE + toggle dark/light).
+// Mismos tamaños/caja/tipografía que PASE/MESA/Habitué; el POS por detrás
+// conserva su índigo/navy — sólo esta pantalla de entrada usa el celeste.
+const labelCls = 'block text-sm font-medium text-[#1A3A5E] dark:text-[#F0F4F8] mb-1.5';
+const keyCls =
+  'h-14 rounded-lg border border-[#D0DCEA] dark:border-[#3F4D6E] '
+  + 'text-xl font-medium text-[#1A3A5E] dark:text-[#F0F4F8] '
+  + 'hover:bg-[#EAF3FB] dark:hover:bg-[#1E3155] active:scale-[0.97] '
+  + 'transition disabled:opacity-50 grid place-items-center select-none';
 
 export function PinPad() {
   const { user } = useAuth();
@@ -84,122 +91,93 @@ export function PinPad() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen grid place-items-center px-4 bg-[#EFF3F8] dark:bg-[#0C1220]">
+      <div className="relative w-full max-w-[400px] rounded-2xl border border-[#E0EAF4] dark:border-[#2A3550] bg-white dark:bg-[#1A2540] shadow-[0_2px_4px_rgba(26,58,94,0.04),0_4px_16px_rgba(26,58,94,0.08)] p-8">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
 
-      <Card className="w-full max-w-md shadow-lg">
-        <CardContent className="p-8">
-          {/* Header con marca */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-              <Lock className="h-8 w-8 text-primary" />
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">COMANDA</h1>
-            <p className="text-sm text-muted-foreground mt-2">
-              Ingresá tu PIN de 4 dígitos
-            </p>
+        {/* Marca */}
+        <div className="mb-6">
+          <div className="text-[26px] leading-none font-medium tracking-tight text-[#1A3A5E] dark:text-[#F0F4F8]">
+            comanda<span className="text-[#F5C518]">.</span>
           </div>
-
-          {/* Selector de local */}
-          {locales.length > 1 && (
-            <div className="mb-6">
-              <Label className="text-sm font-medium mb-2 block">Local</Label>
-              <Select
-                value={localId !== null ? String(localId) : ''}
-                onValueChange={(v) => setLocalActivo(Number(v))}
-              >
-                <SelectTrigger className="h-12 text-base">
-                  <SelectValue placeholder="Elegir local…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locales.map((local) => (
-                    <SelectItem
-                      key={local.id}
-                      value={String(local.id)}
-                      className="text-base"
-                    >
-                      {local.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* PIN dots */}
-          <div className="flex justify-center gap-3 mb-8" aria-live="polite">
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className={cn(
-                  'h-4 w-4 rounded-full border-2 transition-colors',
-                  pin.length > i
-                    ? 'bg-primary border-primary'
-                    : 'border-border-strong bg-transparent',
-                )}
-              />
-            ))}
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="mb-4 text-center text-sm text-destructive font-medium">
-              {error}
-            </div>
-          )}
-
-          {/* Keypad */}
-          <div className="grid grid-cols-3 gap-3">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-              <Button
-                key={digit}
-                variant="outline"
-                size="xl"
-                className="h-16 text-2xl font-medium"
-                disabled={trying}
-                onClick={() => handleDigit(digit)}
-              >
-                {digit}
-              </Button>
-            ))}
-            <Button
-              variant="ghost"
-              size="xl"
-              className="h-16 text-sm font-medium text-muted-foreground"
-              disabled={trying}
-              onClick={handleClear}
-            >
-              Borrar
-            </Button>
-            <Button
-              variant="outline"
-              size="xl"
-              className="h-16 text-2xl font-medium"
-              disabled={trying}
-              onClick={() => handleDigit('0')}
-            >
-              0
-            </Button>
-            <Button
-              variant="ghost"
-              size="xl"
-              className="h-16"
-              disabled={trying}
-              onClick={handleDelete}
-            >
-              <Delete className="h-6 w-6" />
-              <span className="sr-only">Borrar último dígito</span>
-            </Button>
-          </div>
-
-          {/* Helper text */}
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Si no tenés PIN, andá a Settings → Empleados POS desde otro dispositivo.
+          <p className="mt-2 text-xs text-[#6E8CAB] dark:text-[#93A8C2]">
+            Ingresá tu PIN de 4 dígitos.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Selector de local */}
+        {locales.length > 1 && (
+          <div className="mb-5">
+            <label className={labelCls}>Local</label>
+            <Select
+              value={localId !== null ? String(localId) : ''}
+              onValueChange={(v) => setLocalActivo(Number(v))}
+            >
+              <SelectTrigger className="h-11 text-sm rounded-lg border-[#D0DCEA] dark:border-[#3F4D6E] bg-white dark:bg-[#0C1220]">
+                <SelectValue placeholder="Elegir local…" />
+              </SelectTrigger>
+              <SelectContent>
+                {locales.map((local) => (
+                  <SelectItem key={local.id} value={String(local.id)} className="text-sm">
+                    {local.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* PIN dots */}
+        <div className="flex justify-center gap-3 my-7" aria-live="polite">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={cn(
+                'h-4 w-4 rounded-full border-2 transition-colors',
+                pin.length > i
+                  ? 'bg-[#75AADB] border-[#75AADB]'
+                  : 'border-[#D0DCEA] dark:border-[#3F4D6E] bg-transparent',
+              )}
+            />
+          ))}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="mb-4 text-center text-sm text-[#C0392B] font-medium">
+            {error}
+          </div>
+        )}
+
+        {/* Keypad */}
+        <div className="grid grid-cols-3 gap-2.5">
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+            <button key={digit} type="button" className={keyCls} disabled={trying}
+              onClick={() => handleDigit(digit)}>
+              {digit}
+            </button>
+          ))}
+          <button type="button" disabled={trying} onClick={handleClear}
+            className={cn(keyCls, 'text-sm text-[#6E8CAB] dark:text-[#93A8C2]')}>
+            Borrar
+          </button>
+          <button type="button" className={keyCls} disabled={trying}
+            onClick={() => handleDigit('0')}>
+            0
+          </button>
+          <button type="button" disabled={trying} onClick={handleDelete}
+            className={cn(keyCls, 'text-[#6E8CAB] dark:text-[#93A8C2]')}>
+            <Delete className="h-6 w-6" />
+            <span className="sr-only">Borrar último dígito</span>
+          </button>
+        </div>
+
+        <p className="text-xs text-[#6E8CAB] dark:text-[#93A8C2] text-center mt-6">
+          Si no tenés PIN, andá a Settings → Empleados POS desde otro dispositivo.
+        </p>
+      </div>
     </div>
   );
 }
