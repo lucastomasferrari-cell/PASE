@@ -3,7 +3,7 @@
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "vite build",
   "outputDirectory": "dist",
-  "ignoreCommand": "exit 1",
+  "ignoreCommand": "npx turbo-ignore @pase/instagram-bot",
   "functions": {
     "api/webhook.js": {
       "maxDuration": 30

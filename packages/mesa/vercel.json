@@ -1,6 +1,6 @@
 {
   "outputDirectory": "dist",
-  "ignoreCommand": "exit 1",
+  "ignoreCommand": "npx turbo-ignore mesa",
   "rewrites": [
     {
       "source": "/api/:path*",

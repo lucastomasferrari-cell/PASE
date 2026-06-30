@@ -1,7 +1,7 @@
 {
   "outputDirectory": "dist",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "ignoreCommand": "exit 1",
+  "ignoreCommand": "npx turbo-ignore pase",
   "redirects": [
     {
       "source": "/comanda-app",
