@@ -44,6 +44,8 @@ export type GrupoDraft = Pick<
 > & {
   tenant_id: string;
   local_id: number | null;
+  /** Marca a la que pertenece el grupo. null = compartido entre marcas. */
+  marca_id?: number | null;
 };
 
 export async function createGrupo(draft: GrupoDraft): Promise<{ id: number | null; error: string | null }> {

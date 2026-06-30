@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, FolderClosed } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { ItemGrupo, TaxRate, Estacion } from '../../types/database';
 import { listGrupos, createGrupo, updateGrupo, softDeleteGrupo, countItemsPorGrupo } from '../../services/gruposService';
+import { listMarcas, type MarcaLite } from '../../services/marcasService';
 import { listTaxRates } from '../../services/taxRatesService';
 import { tienePermiso } from '../../lib/auth';
 // useRealtimeTable sacado sprint optim egress 2026-05-16
@@ -30,17 +31,21 @@ export function GruposTab({ user }: Props) {
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
+  const [marcas, setMarcas] = useState<MarcaLite[]>([]);
+  const [marcaFilter, setMarcaFilter] = useState<string>('todas');
   const [editing, setEditing] = useState<ItemGrupo | 'new' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ItemGrupo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
+  const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
 
   const reload = useCallback(async () => {
     setLoading(true);
+    const marcaIdNum = marcaFilter === 'todas' ? null : Number(marcaFilter);
     const [gr, tr, ct] = await Promise.all([
-      listGrupos(user.tenant_id),
+      listGrupos(user.tenant_id, marcaIdNum),
       listTaxRates(user.tenant_id),
       countItemsPorGrupo(user.tenant_id),
     ]);
@@ -48,9 +53,13 @@ export function GruposTab({ user }: Props) {
     setTaxRates(tr.data);
     setCounts(ct);
     setLoading(false);
-  }, [user.tenant_id]);
+  }, [user.tenant_id, marcaFilter]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useEffect(() => {
+    listMarcas(user.tenant_id).then((r) => setMarcas(r.data));
+  }, [user.tenant_id]);
 
   // Realtime SACADO sprint optimización egress 2026-05-16. Grupos rara vez
   // cambian, no vale el costo de subscription abierta. F5 si hace falta.
@@ -64,12 +73,25 @@ export function GruposTab({ user }: Props) {
             {grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'} · agrupan los items del catálogo por categoría (Rolls, Bebidas, etc.)
           </p>
         </div>
-        {puedeEditar && (
-          <Button onClick={() => setEditing('new')}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nuevo grupo
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {marcas.length > 0 && (
+            <Select value={marcaFilter} onValueChange={setMarcaFilter}>
+              <SelectTrigger className="w-[180px] h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las marcas</SelectItem>
+                {marcas.map((m) => (
+                  <SelectItem key={m.id} value={String(m.id)}>{m.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {puedeEditar && (
+            <Button onClick={() => setEditing('new')}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nuevo grupo
+            </Button>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -162,6 +184,8 @@ export function GruposTab({ user }: Props) {
         <GrupoFormDialog
           user={user}
           taxRates={taxRates}
+          marcas={marcas}
+          defaultMarcaId={marcaIdFiltro}
           grupo={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); reload(); }}
@@ -189,12 +213,17 @@ export function GruposTab({ user }: Props) {
 interface GrupoFormProps {
   user: Usuario;
   taxRates: TaxRate[];
+  marcas: MarcaLite[];
+  defaultMarcaId: number | null;
   grupo: ItemGrupo | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormProps) {
+function GrupoFormDialog({ user, taxRates, marcas, defaultMarcaId, grupo, onClose, onSaved }: GrupoFormProps) {
+  const [marcaId, setMarcaId] = useState<number | null>(
+    grupo ? ((grupo as { marca_id?: number | null }).marca_id ?? null) : (defaultMarcaId ?? marcas[0]?.id ?? null),
+  );
   const [nombre, setNombre] = useState(grupo?.nombre ?? '');
   const [emoji, setEmoji] = useState<string | null>(grupo?.emoji ?? null);
   const [color, setColor] = useState(grupo?.color ?? DEFAULT_PICKER_COLOR);
@@ -224,6 +253,7 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
         nombre: nombre.trim(), emoji, color, orden,
         tax_rate_id: taxRateId, estacion_default: estacion || null,
         tenant_id: user.tenant_id, local_id: null,
+        marca_id: marcaId,
         color_ramp: colorRamp,
       };
       const { error: err } = grupo ? await updateGrupo(grupo.id, draft) : await createGrupo(draft);
@@ -255,6 +285,24 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
               required autoFocus className="h-11"
             />
           </div>
+
+          {marcas.length > 0 && (
+            <div className="space-y-2">
+              <Label>Marca</Label>
+              <Select
+                value={marcaId === null ? '_shared' : String(marcaId)}
+                onValueChange={(v) => setMarcaId(v === '_shared' ? null : Number(v))}
+              >
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {marcas.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.nombre}</SelectItem>
+                  ))}
+                  <SelectItem value="_shared">Compartido (todas las marcas)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
