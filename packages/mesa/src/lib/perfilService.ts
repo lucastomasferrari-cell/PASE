@@ -59,6 +59,21 @@ export async function checkDisponibilidad(slug: string, fechaHora: string, perso
   return { disponible: Boolean(row?.disponible), motivo: (row?.motivo as string) ?? null };
 }
 
+export interface SlotDisponibilidad { hora: string; disponible: boolean; restantes: number }
+
+// Disponibilidad por horario para un día (para los chips del widget).
+export async function getSlotsDisponibilidad(
+  slug: string, fecha: string, personas: number, zona?: string | null,
+): Promise<SlotDisponibilidad[]> {
+  const { data, error } = await db().rpc('fn_slots_disponibilidad_publico', {
+    p_local_slug: slug, p_fecha: fecha, p_personas: personas, p_zona: zona ?? null,
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (data as SlotDisponibilidad[]).map((s) => ({
+    hora: s.hora, disponible: Boolean(s.disponible), restantes: Number(s.restantes ?? 0),
+  }));
+}
+
 // Sectores (Barra/Salón/Terraza/Privado) que el local ofrece para reservar.
 export async function getZonasReservables(slug: string): Promise<string[]> {
   const { data, error } = await db().rpc('fn_zonas_reservables_publico', { p_local_slug: slug });

@@ -14,9 +14,9 @@ import {
 } from 'lucide-react';
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
-  getPerfil, checkDisponibilidad, crearReservaPublica, notificarConfirmacionReserva,
-  getZonasReservables, inscribirEventoYPagar, comprarGiftcardYPagar,
-  type PerfilLocalData,
+  getPerfil, crearReservaPublica, notificarConfirmacionReserva,
+  getZonasReservables, getSlotsDisponibilidad, inscribirEventoYPagar, comprarGiftcardYPagar,
+  type PerfilLocalData, type SlotDisponibilidad,
 } from '@/lib/perfilService';
 
 const fmtARS = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -268,8 +268,8 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [zonas, setZonas] = useState<string[]>([]);
   const [zona, setZona] = useState<string | null>(null); // null = cualquier sector
   const [paso, setPaso] = useState<'buscar' | 'datos' | 'lista'>('buscar');
-  const [motivo, setMotivo] = useState<string | null>(null);
-  const [buscando, setBuscando] = useState(false);
+  const [slots, setSlots] = useState<SlotDisponibilidad[]>([]);
+  const [cargandoSlots, setCargandoSlots] = useState(false);
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
@@ -283,6 +283,34 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     void getZonasReservables(slug).then((z) => { if (vivo) setZonas(z); });
     return () => { vivo = false; };
   }, [slug]);
+
+  // Próximos 14 días para el scroller de fecha.
+  const dias = useMemo(() => {
+    const out: { iso: string; dow: string; num: string }[] = [];
+    const base = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      out.push({
+        iso,
+        dow: d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', ''),
+        num: String(d.getDate()),
+      });
+    }
+    return out;
+  }, []);
+
+  // Traer los horarios disponibles cada vez que cambia fecha/personas/sector.
+  useEffect(() => {
+    if (paso !== 'buscar') return;
+    let vivo = true;
+    setCargandoSlots(true);
+    void getSlotsDisponibilidad(slug, fecha, personas, zona).then((s) => {
+      if (vivo) { setSlots(s); setCargandoSlots(false); }
+    });
+    return () => { vivo = false; };
+  }, [slug, fecha, personas, zona, paso]);
 
   if (!perfil.reservas.activas) {
     return (
@@ -298,15 +326,10 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
 
   const fechaHoraISO = () => new Date(`${fecha}T${hora}:00`).toISOString();
 
-  async function buscar() {
-    setBuscando(true);
-    setMotivo(null);
-    try {
-      const r = await checkDisponibilidad(slug, fechaHoraISO(), personas, zona);
-      if (r.disponible) setPaso('datos');
-      else setMotivo(traducirMotivoReserva(r.motivo));
-    } finally { setBuscando(false); }
-  }
+  function elegirSlot(h: string) { setHora(h); setPaso('datos'); }
+
+  const slotsLibres = slots.filter((s) => s.disponible);
+  const ultimoLibre = slotsLibres[slotsLibres.length - 1]?.hora ?? null;
 
   async function confirmar(e: React.FormEvent) {
     e.preventDefault();
@@ -345,62 +368,110 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   }
 
   return (
-    <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
-      <p className="font-medium">Configurá tu reserva</p>
+    <div className="rounded-3xl bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden">
+      {/* Header */}
+      <div className="p-5 pb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-lg font-bold text-slate-900 tracking-tight">Reservá tu mesa</p>
+          <p className="text-xs text-slate-500 mt-0.5">{perfil.local.nombre}</p>
+        </div>
+        {paso === 'buscar' && slotsLibres.length > 0 && (
+          <div className="bg-brand-50 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-brand-500/20 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+            <span className="text-[10px] font-semibold text-brand-600 uppercase tracking-wide whitespace-nowrap">{slotsLibres.length} con lugar</span>
+          </div>
+        )}
+      </div>
 
       {paso === 'buscar' && (
-        <div className="mt-4 space-y-3">
+        <div className="px-5 pb-5 space-y-6">
+          {/* Comensales */}
           <div>
-            <label className="text-xs text-ink-muted">¿Cuántas personas?</label>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {Array.from({ length: 8 }, (_, i) => i + 1).map((n) => (
-                <button key={n} onClick={() => setPersonas(n)}
-                        className={`h-9 w-9 rounded-full text-sm font-medium border transition-colors ${
-                          personas === n ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 hover:border-brand-300'
-                        }`}>{n}</button>
+            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Comensales</label>
+            <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+              <button type="button" onClick={() => setPersonas((p) => Math.max(1, p - 1))}
+                      className="w-10 h-10 grid place-items-center rounded-xl bg-white shadow-sm border border-slate-200 text-slate-600 text-lg hover:bg-slate-50">−</button>
+              <div className="flex flex-col items-center">
+                <span className="text-lg font-bold text-slate-800">{personas}</span>
+                <span className="text-[9px] text-slate-400 font-medium uppercase">{personas === 1 ? 'persona' : 'personas'}</span>
+              </div>
+              <button type="button" onClick={() => setPersonas((p) => Math.min(20, p + 1))}
+                      className="w-10 h-10 grid place-items-center rounded-xl bg-white shadow-sm border border-slate-200 text-slate-600 text-lg hover:bg-slate-50">+</button>
+            </div>
+          </div>
+
+          {/* Fecha */}
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Fecha</label>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {dias.map((d) => (
+                <button key={d.iso} type="button" onClick={() => setFecha(d.iso)}
+                        className={`flex-shrink-0 w-14 py-2.5 rounded-2xl border-2 flex flex-col items-center transition-all ${
+                          fecha === d.iso ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-transparent bg-slate-50 text-slate-700 hover:bg-slate-100'
+                        }`}>
+                  <span className="text-[10px] font-bold uppercase">{d.dow}</span>
+                  <span className="text-base font-bold">{d.num}</span>
+                </button>
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label htmlFor="rw-fecha" className="text-xs text-ink-muted">Fecha</label>
-              <input id="rw-fecha" type="date" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)}
-                     className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor="rw-hora" className="text-xs text-ink-muted">Hora</label>
-              <input id="rw-hora" type="time" value={hora} onChange={(e) => setHora(e.target.value)}
-                     className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
-            </div>
-          </div>
 
+          {/* Sector */}
           {zonas.length > 0 && (
             <div>
-              <label className="text-xs text-ink-muted">¿Dónde te gustaría sentarte?</label>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <button onClick={() => setZona(null)}
-                        className={`px-3 h-8 rounded-full text-sm font-medium border transition-colors ${
-                          zona === null ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 hover:border-brand-300'
+              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Sector</label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setZona(null)}
+                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                          zona === null ? 'border-2 border-brand-500 text-brand-600 bg-brand-50' : 'border border-slate-200 text-slate-600 bg-white hover:border-brand-300'
                         }`}>Cualquier lugar</button>
                 {zonas.map((z) => (
-                  <button key={z} onClick={() => setZona(z)}
-                          className={`px-3 h-8 rounded-full text-sm font-medium border transition-colors ${
-                            zona === z ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 hover:border-brand-300'
+                  <button key={z} type="button" onClick={() => setZona(z)}
+                          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                            zona === z ? 'border-2 border-brand-500 text-brand-600 bg-brand-50' : 'border border-slate-200 text-slate-600 bg-white hover:border-brand-300'
                           }`}>{z}</button>
                 ))}
               </div>
             </div>
           )}
-          {motivo && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{motivo}</p>}
-          <button onClick={() => void buscar()} disabled={buscando}
-                  className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
-            {buscando ? 'Buscando…' : 'Buscar mesa'}
-          </button>
+
+          {/* Horarios */}
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Horarios disponibles</label>
+            {cargandoSlots ? (
+              <p className="text-sm text-slate-400 py-6 text-center">Buscando horarios…</p>
+            ) : slots.length === 0 ? (
+              <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-3 py-5 text-center">
+                No hay horarios ese día. Probá otra fecha{zona ? ' u otro sector' : ''}.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {slots.map((s) => {
+                  const pocos = s.disponible && s.restantes >= 1 && s.restantes <= 3;
+                  const ultimo = s.disponible && s.hora === ultimoLibre && slotsLibres.length > 1;
+                  return (
+                    <button key={s.hora} type="button" disabled={!s.disponible}
+                            onClick={() => elegirSlot(s.hora)}
+                            className={`relative flex flex-col items-center justify-center py-3 rounded-2xl border text-sm font-bold transition-all overflow-hidden ${
+                              !s.disponible
+                                ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                                : 'border-slate-200 bg-white text-slate-800 hover:border-brand-500 hover:bg-brand-50'
+                            }`}>
+                      <span className={!s.disponible ? 'line-through' : ''}>{s.hora}</span>
+                      {!s.disponible && <span className="text-[8px] font-bold text-red-400 uppercase mt-0.5">Lleno</span>}
+                      {ultimo && <span className="absolute top-0 right-0 bg-red-500 text-[7px] text-white px-1 py-0.5 rounded-bl-lg font-bold uppercase">Último</span>}
+                      {!ultimo && pocos && <span className="absolute top-0 right-0 bg-amber-500 text-[7px] text-white px-1 py-0.5 rounded-bl-lg font-bold uppercase">Quedan {s.restantes}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {paso === 'datos' && (
-        <form onSubmit={confirmar} className="mt-4 space-y-3">
+        <form onSubmit={confirmar} className="px-5 pb-5 pt-1 space-y-3">
           <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5" /> ¡Hay lugar! {personas}p · {fecha.split('-').reverse().slice(0, 2).join('/')} {hora}
           </p>
