@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid, Gift } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { AdminTablero } from './AdminTablero';
@@ -25,8 +25,9 @@ import { AdminStats } from './AdminStats';
 import { AdminPerfil, type LocalPerfil } from './AdminPerfil';
 import { AdminReservasConfig } from './AdminReservasConfig';
 import { AdminMesas } from './AdminMesas';
+import { AdminExperiencias } from './AdminExperiencias';
 
-type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'mesas' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'perfil' | 'config';
+type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'mesas' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'experiencias' | 'perfil' | 'config';
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -171,6 +172,7 @@ export function AdminHome() {
     { key: 'comensales', label: 'Comensales',       icon: <Users className="h-[18px] w-[18px]" /> },
     { key: 'resenas',    label: 'Reseñas',          icon: <Star className="h-[18px] w-[18px]" /> },
     { key: 'stats',      label: 'Informes',         icon: <BarChart3 className="h-[18px] w-[18px]" /> },
+    { key: 'experiencias', label: 'Experiencias',   icon: <Gift className="h-[18px] w-[18px]" /> },
     { key: 'perfil',     label: 'Perfil del local', icon: <Store className="h-[18px] w-[18px]" /> },
     { key: 'config',     label: 'Configuración',    icon: <SlidersHorizontal className="h-[18px] w-[18px]" /> },
   ];
@@ -246,6 +248,8 @@ export function AdminHome() {
               <AdminResenas localSlug={localSel.slug} />
             ) : seccion === 'stats' ? (
               <AdminStats localId={localSel.local_id} />
+            ) : seccion === 'experiencias' ? (
+              <AdminExperiencias localId={localSel.local_id} tenantId={localSel.tenant_id} />
             ) : seccion === 'config' ? (
               <AdminReservasConfig settingsId={localSel.settings_id} />
             ) : (
