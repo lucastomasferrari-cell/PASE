@@ -80,6 +80,8 @@ interface NovDB {
   // F6 02-jun: plan de pago. NULL si no se cargó.
   monto_efectivo: number | null;
   monto_mp: number | null;
+  // 01-jul: tildado de "Ya pagado" persistido (ids de rrhh_adelantos a descontar).
+  adelantos_seleccionados: string[] | null;
 }
 interface LiqEstado {
   empleado_id: string;
@@ -316,11 +318,23 @@ export function TabSueldos({
   const recargar = useCallback(async () => {
     if (!localId) return;
     setLoading(true);
-    const { data: emps } = await db.from("rrhh_empleados")
-      .select("id, nombre, apellido, puesto, sueldo_mensual, modo_pago, local_id, activo, alias_mp, cuil, fecha_inicio")
-      .eq("activo", true)
-      .eq("local_id", localId)
-      .order("apellido");
+    // La nómina de un local incluye sus empleados PRINCIPALES + los CEDIDOS
+    // desde otro local (tabla m:n rrhh_empleado_locales). Antes filtraba solo
+    // por local principal (`.eq("local_id", localId)`) y los cesionados no
+    // figuraban en los sueldos del local destino (Anto 01-jul: Jenifer y
+    // Alejandro cesionados no aparecían). Mismo patrón que RRHH.tsx/loadEmpleados
+    // (fix 22-jun). El RLS de rrhh_empleados ya permite ver cesionados (política
+    // rrhh_empleados_sel_cesion, 22-jun); acá replicamos el scope en el query.
+    const { data: asign } = await db.from("rrhh_empleado_locales")
+      .select("empleado_id").eq("local_id", localId).is("deleted_at", null);
+    const empScopeIds = [...new Set((asign ?? []).map(a => a.empleado_id as string))];
+    const { data: emps } = empScopeIds.length === 0
+      ? { data: [] }
+      : await db.from("rrhh_empleados")
+          .select("id, nombre, apellido, puesto, sueldo_mensual, modo_pago, local_id, activo, alias_mp, cuil, fecha_inicio")
+          .eq("activo", true)
+          .in("id", empScopeIds)
+          .order("apellido");
     const empList = (emps || []) as Emp[];
     const empIds = empList.map(e => e.id);
 
@@ -343,7 +357,7 @@ export function TabSueldos({
 
       // Novedades existentes del mes (+ liquidación para el resumen de pago).
       const { data: novs } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, bono, bono_motivo, observaciones, estado, monto_efectivo, monto_mp, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, bono, bono_motivo, observaciones, estado, monto_efectivo, monto_mp, adelantos_seleccionados, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
         .in("empleado_id", empIds)
         .eq("mes", mes).eq("anio", anio);
       type NovRow = NovDB & { rrhh_liquidaciones: { id: string; estado: string; total_a_pagar: number; pagos_realizados: number }[] | null };
@@ -501,6 +515,15 @@ export function TabSueldos({
   // y al cambiar mes/local (keys nuevas). Es un ref: no dispara renders.
   const touchedRef = useRef<Set<string>>(new Set());
 
+  // Tildado de "Ya pagado" por slot (ids de rrhh_adelantos a descontar).
+  // Declarado acá arriba porque persistirNovedad (más abajo) lo persiste.
+  // La hidratación desde DB y el toggle viven más abajo, cerca de adelantosDelSlot.
+  const [tildados, setTildados] = useState<Record<string, Set<string>>>({});
+  // Slots cuyo tildado el user está editando en esta sesión (mismo patrón que
+  // touchedRef): los NO tocados se re-sincronizan desde la DB; los tocados se
+  // preservan. Se limpia al confirmar y al cambiar mes/local.
+  const tildTouchedRef = useRef<Set<string>>(new Set());
+
   // Sincronizar novEdits con la DB. Los slots NO editados por el user reflejan
   // siempre novedadesDB; los que está editando se preservan. Esto impide que
   // un slot quede "pegado" en 0 cuando el init corre con la DB no cargada.
@@ -562,6 +585,12 @@ export function TabSueldos({
       bono: Math.max(0, nov.bono || 0),
       observaciones: nov.obs || null,
       estado: estadoFinal,
+      // 01-jul: persistir el tildado de "Ya pagado" (qué adelantos se descuentan).
+      // Si el slot no tiene tildado en memoria (no se hidrató o no se tocó),
+      // conservar lo ya guardado en vez de pisarlo con vacío.
+      adelantos_seleccionados: tildados[key]
+        ? Array.from(tildados[key])
+        : (existente?.adelantos_seleccionados ?? []),
     };
     if (existente) {
       const { error } = await db.from("rrhh_novedades").update(payload).eq("id", existente.id);
@@ -577,7 +606,7 @@ export function TabSueldos({
       return nuevaFila.id;
     }
     return null;
-  }, [slots, novEdits, novedadesDB, mes, anio, showError]);
+  }, [slots, novEdits, novedadesDB, tildados, mes, anio, showError]);
 
   const updateNov = (key: string, field: keyof NovEdit, value: number | boolean | string) => {
     // SOLO state local. NO toca DB. La persistencia es al Confirmar/Pagar.
@@ -683,6 +712,7 @@ export function TabSueldos({
       // estado=confirmado). Sin destildar touched, el slot quedaría preservado
       // con el state viejo y no reflejaría lo confirmado.
       touchedRef.current.delete(key);
+      tildTouchedRef.current.delete(key);
       setNovEdits(prev => {
         const next = { ...prev };
         delete next[key];
@@ -756,25 +786,38 @@ export function TabSueldos({
       ...a, _entraPeriodo: a.fecha >= ini && a.fecha <= fin,
     }));
   }
-  const [tildados, setTildados] = useState<Record<string, Set<string>>>({});
+  // Al cambiar mes/local, resetear "tocado" para que el tildado se re-hidrate
+  // desde la novedad del período nuevo (slot.key = empId__cuota NO incluye mes).
+  useEffect(() => { tildTouchedRef.current.clear(); }, [mes, anio, localId]);
   useEffect(() => {
-    const next: Record<string, Set<string>> = {};
-    for (const s of slots) {
-      // Cambio Lucas 31-may noche: los adelantos NUNCA se pre-tildan
-      // automáticamente. El user los tilda manual desde la card o el modal
-      // de pago. Esto elimina el comportamiento "auto_aplicar" y deja todos
-      // los adelantos como saldo flotante hasta que el dueño decida cuándo
-      // aplicarlos. La columna `auto_aplicar` queda en DB sin uso desde el
-      // frontend (no se elimina por compat con historial viejo).
-      const _adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
-      void _adels;
-      next[s.key] = new Set<string>();
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar set de tildados al recargar adelantos
-    setTildados(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots.length, adelantos.length, mes, anio]);
+    // 01-jul (Lucas): el tildado de "Ya pagado" AHORA se persiste en
+    // rrhh_novedades.adelantos_seleccionados (se guarda al Confirmar/Pagar).
+    // Acá re-hidratamos desde esa columna. Reemplaza el comportamiento viejo
+    // (31-may) que arrancaba SIEMPRE desmarcado y se perdía al recargar.
+    // Preservamos los slots que el user está tocando (tildTouchedRef) para no
+    // pisar su edición en curso. Construimos `next` solo con los slots
+    // actuales → no arrastra keys de otros meses.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync tildado ↔ DB
+    setTildados(prev => {
+      const next: Record<string, Set<string>> = {};
+      for (const s of slots) {
+        const enCurso = prev[s.key];
+        if (tildTouchedRef.current.has(s.key) && enCurso) {
+          next[s.key] = enCurso;
+          continue;
+        }
+        const n = novedadesDB.find(x =>
+          x.empleado_id === s.emp.id &&
+          (x.cuota_num ?? 1) === s.cuota &&
+          (x.cuotas_total ?? 1) === s.cuotasTotal
+        );
+        next[s.key] = new Set<string>(n?.adelantos_seleccionados ?? []);
+      }
+      return next;
+    });
+  }, [novedadesDB, slots]);
   const toggleAdelanto = (slotKey: string, adelId: string) => {
+    tildTouchedRef.current.add(slotKey);
     setTildados(prev => {
       const cur = new Set(prev[slotKey] || []);
       if (cur.has(adelId)) cur.delete(adelId); else cur.add(adelId);
