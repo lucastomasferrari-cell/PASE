@@ -115,8 +115,8 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
         </button>
         <p className="text-xs text-ink-muted flex items-start gap-1.5">
           <CalendarCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          Los horarios, la capacidad de reservas y el catálogo se configuran en
-          COMANDA → Configuración; eventos y giftcards en COMANDA → Marketing.
+          Los horarios, la capacidad y las reglas de reserva se configuran en la
+          sección <span className="font-medium">Configuración</span>.
         </p>
       </div>
     </div>
