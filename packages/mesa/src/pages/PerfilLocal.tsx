@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
-  getPerfil, checkDisponibilidad, crearReservaPublica,
+  getPerfil, checkDisponibilidad, crearReservaPublica, notificarConfirmacionReserva,
   inscribirEventoYPagar, comprarGiftcardYPagar,
   type PerfilLocalData,
 } from '@/lib/perfilService';
@@ -237,6 +237,26 @@ export function PerfilLocal() {
 
 // ─── Widget de reserva ───────────────────────────────────────────────────────
 
+// Traduce los códigos de la RPC de reservas a texto amable para el cliente.
+const MOTIVOS_RESERVA: Record<string, string> = {
+  LOCAL_NO_ENCONTRADO: 'No encontramos el local.',
+  RESERVAS_DESACTIVADAS: 'Este local no está tomando reservas online.',
+  PERSONAS_INVALIDAS: 'Revisá la cantidad de personas.',
+  ANTICIPACION_INSUFICIENTE: 'Necesitás reservar con un poco más de anticipación.',
+  FECHA_DEMASIADO_LEJANA: 'Esa fecha es demasiado lejana para reservar.',
+  CERRADO_ESE_DIA: 'El local está cerrado ese día.',
+  FUERA_DE_HORARIO: 'Ese horario está fuera del horario de atención.',
+  SIN_CUPO: 'No hay lugar en ese horario. Probá otro.',
+  TELEFONO_REQUERIDO: 'El teléfono es obligatorio.',
+  NOMBRE_REQUERIDO: 'Ingresá tu nombre.',
+  DEMASIADAS_RESERVAS: 'Ya tenés varias reservas activas con ese teléfono.',
+  DEMASIADO_RAPIDO: 'Estamos recibiendo muchas reservas. Probá en un momento.',
+};
+function traducirMotivoReserva(codigo?: string | null): string {
+  if (!codigo) return 'No se pudo completar la reserva. Probá otro horario.';
+  return MOTIVOS_RESERVA[codigo.trim()] ?? codigo;
+}
+
 function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData }) {
   const hoy = useMemo(() => {
     const d = new Date();
@@ -275,7 +295,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     try {
       const r = await checkDisponibilidad(slug, fechaHoraISO(), personas);
       if (r.disponible) setPaso('datos');
-      else setMotivo(r.motivo || 'No hay lugar en ese horario. Probá otro.');
+      else setMotivo(traducirMotivoReserva(r.motivo));
     } finally { setBuscando(false); }
   }
 
@@ -290,7 +310,9 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
         email: email.trim() || undefined,
         fechaHora: fechaHoraISO(), personas, notas: notas || undefined,
       });
-      if (!r.ok) { toast.error(r.error || 'No se pudo crear la reserva'); return; }
+      if (!r.ok) { toast.error(traducirMotivoReserva(r.error)); return; }
+      // Confirmación automática al cliente (email). Fire-and-forget.
+      if (r.id && email.trim()) void notificarConfirmacionReserva(r.id);
       setEstadoFinal(r.estado ?? 'pendiente');
       setPaso('lista');
     } finally { setConfirmando(false); }

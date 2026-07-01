@@ -62,7 +62,7 @@ export async function checkDisponibilidad(slug: string, fechaHora: string, perso
 export async function crearReservaPublica(args: {
   slug: string; nombre: string; telefono: string; email?: string;
   fechaHora: string; personas: number; notas?: string;
-}): Promise<{ ok: boolean; estado?: string; error?: string }> {
+}): Promise<{ ok: boolean; estado?: string; id?: number; error?: string }> {
   const { data, error } = await db().rpc('fn_crear_reserva_publica', {
     p_local_slug: args.slug,
     p_cliente_nombre: args.nombre,
@@ -79,7 +79,19 @@ export async function crearReservaPublica(args: {
   });
   if (error) return { ok: false, error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
-  return { ok: true, estado: (row?.estado as string) ?? 'pendiente' };
+  return { ok: true, estado: (row?.estado as string) ?? 'pendiente', id: row?.id as number | undefined };
+}
+
+// Dispara la confirmación automática al cliente (email vía Resend; WA cuando
+// esté la plantilla Meta). Fire-and-forget: si falla, no rompe la reserva.
+export async function notificarConfirmacionReserva(reservaId: number): Promise<void> {
+  try {
+    await fetch('/api/reserva-notificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reservaId }),
+    });
+  } catch { /* best-effort */ }
 }
 
 // ─── Eventos: inscripción + checkout MP ────────────────────────────────────
