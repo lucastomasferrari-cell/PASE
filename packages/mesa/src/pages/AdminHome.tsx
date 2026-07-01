@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { AdminTablero } from './AdminTablero';
@@ -24,8 +24,9 @@ import { AdminResenas } from './AdminResenas';
 import { AdminStats } from './AdminStats';
 import { AdminPerfil, type LocalPerfil } from './AdminPerfil';
 import { AdminReservasConfig } from './AdminReservasConfig';
+import { AdminMesas } from './AdminMesas';
 
-type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'perfil' | 'config';
+type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'mesas' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'perfil' | 'config';
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -164,6 +165,7 @@ export function AdminHome() {
     { key: 'diario',     label: 'Diario',           icon: <GanttChartSquare className="h-[18px] w-[18px]" /> },
     { key: 'reservas',   label: 'Reservas',         icon: <CalendarDays className="h-[18px] w-[18px]" /> },
     { key: 'mapa',       label: 'Mapa de mesas',    icon: <Map className="h-[18px] w-[18px]" /> },
+    { key: 'mesas',      label: 'Mesas',            icon: <LayoutGrid className="h-[18px] w-[18px]" /> },
     { key: 'espera',     label: 'Lista de espera',  icon: <Hourglass className="h-[18px] w-[18px]" /> },
     { key: 'recordatorios', label: 'Recordatorios', icon: <BellRing className="h-[18px] w-[18px]" /> },
     { key: 'comensales', label: 'Comensales',       icon: <Users className="h-[18px] w-[18px]" /> },
@@ -232,6 +234,8 @@ export function AdminHome() {
               <AdminReservas localId={localSel.local_id} localNombre={localSel.nombre} />
             ) : seccion === 'mapa' ? (
               <AdminMapa localId={localSel.local_id} />
+            ) : seccion === 'mesas' ? (
+              <AdminMesas localId={localSel.local_id} tenantId={localSel.tenant_id} />
             ) : seccion === 'espera' ? (
               <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
             ) : seccion === 'recordatorios' ? (
