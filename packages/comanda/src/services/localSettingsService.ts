@@ -51,6 +51,8 @@ export interface LocalSettingsPatch {
   reservas_telefono_obligatorio?: boolean;
   reservas_requiere_confirmacion?: boolean;
   reservas_notas_visibles_cliente?: string | null;
+  reservas_permite_combinar?: boolean;
+  reservas_pacing_max_por_franja?: number | null;
 }
 
 export async function updateLocalSettings(

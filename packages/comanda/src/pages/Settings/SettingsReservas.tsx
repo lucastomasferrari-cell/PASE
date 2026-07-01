@@ -31,6 +31,8 @@ interface FormState {
   anticipacion_max_dias: string;
   duracion_estimada_min: string;
   notas_visibles: string;
+  permite_combinar: boolean;
+  pacing_max: string;
   horarios: { dia: number; activo: boolean; abre: string; cierra: string }[];
 }
 
@@ -45,6 +47,8 @@ function settingsToForm(s: ComandaLocalSettings): FormState {
     anticipacion_max_dias: String(s.reservas_anticipacion_max_dias ?? 30),
     duracion_estimada_min: String(s.reservas_duracion_estimada_min ?? 90),
     notas_visibles: s.reservas_notas_visibles_cliente ?? '',
+    permite_combinar: s.reservas_permite_combinar ?? true,
+    pacing_max: s.reservas_pacing_max_por_franja != null ? String(s.reservas_pacing_max_por_franja) : '',
     horarios: DIAS.map(({ dia }) => {
       const h = horarioMap.get(dia);
       return {
@@ -91,6 +95,8 @@ export function SettingsReservas() {
       reservas_anticipacion_max_dias: Number(form.anticipacion_max_dias) || 30,
       reservas_duracion_estimada_min: Number(form.duracion_estimada_min) || 90,
       reservas_notas_visibles_cliente: form.notas_visibles.trim() || null,
+      reservas_permite_combinar: form.permite_combinar,
+      reservas_pacing_max_por_franja: form.pacing_max ? Number(form.pacing_max) : null,
       reservas_horarios: horarios,
     });
     setSaving(false);
@@ -319,6 +325,46 @@ export function SettingsReservas() {
                 </div>
               );
             })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Motor / asignación de mesas */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4 text-primary" />
+            Asignación de mesas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground -mt-1">
+            Las reservas se asignan automáticamente a una mesa real del salón según
+            la capacidad. (Las mesas se cargan en Configuración → Mesas.)
+          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm">Combinar mesas</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Si un grupo no entra en una sola mesa, junta dos (ej. dos mesas de 4 para un grupo de 6).
+              </p>
+            </div>
+            <Switch
+              checked={form.permite_combinar}
+              onCheckedChange={(v) => setF({ permite_combinar: v })}
+            />
+          </div>
+          <div>
+            <Label className="text-sm">Máximo de reservas por franja de 15 min (pacing)</Label>
+            <Input
+              type="number" min={0} className="w-28 h-8 mt-1"
+              value={form.pacing_max}
+              onChange={(e) => setF({ pacing_max: e.target.value })}
+              placeholder="sin límite"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Limita cuántas reservas pueden empezar juntas para no saturar la cocina. Vacío = sin límite.
+            </p>
           </div>
         </CardContent>
       </Card>

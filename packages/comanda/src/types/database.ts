@@ -467,6 +467,9 @@ export interface ComandaLocalSettings extends HorariosLocal {
   reservas_telefono_obligatorio: boolean;
   reservas_requiere_confirmacion: boolean;
   reservas_notas_visibles_cliente: string | null;
+  // Motor por mesa real (estilo OpenTable)
+  reservas_permite_combinar: boolean;
+  reservas_pacing_max_por_franja: number | null;
 }
 
 // ─── F1.2 CRM (auditoría estructural 2026-05-15) ───────────────────────────
