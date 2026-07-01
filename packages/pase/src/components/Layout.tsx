@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ui/ThemeToggle";
 import { BandejaEntradaBoton } from "./BandejaEntradaBoton";
 import { useTenantFeatures } from "../lib/useTenantFeatures";
 import { tenantTieneFeature } from "../lib/features";
+import { limpiarCacheYRecargar } from "../lib/forceRefresh";
 import polishCss from "../styles/polish.css?raw";
 
 // Mapa de slug del sidebar → feature flag del catálogo (src/lib/features.ts).
@@ -211,7 +212,29 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
             )}
           </div>
           {!collapsed && (
+            <button
+              className="sb-actualizar"
+              onClick={() => {
+                if (confirm("Recargar con la última versión y limpiar la caché. Guardá lo que estés cargando (tocá Confirmar) antes de seguir. ¿Continuar?")) {
+                  void limpiarCacheYRecargar();
+                }
+              }}
+              title="Traer la última versión y limpiar la caché del navegador"
+            >
+              ↻ Actualizar app
+            </button>
+          )}
+          {!collapsed && (
             <button className="sb-logout" onClick={onLogout}>Cerrar sesión</button>
+          )}
+          {collapsed && (
+            <button
+              className="sb-logout-icon"
+              onClick={() => { if (confirm("Recargar con la última versión y limpiar la caché. ¿Continuar?")) void limpiarCacheYRecargar(); }}
+              title="Actualizar app (limpiar caché)"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7A6 6 0 1 1 7 1a6 6 0 0 1 5 2.5"/><polyline points="12,1 12,4 9,4"/></svg>
+            </button>
           )}
           {collapsed && (
             <button className="sb-logout-icon" onClick={onLogout} title="Cerrar sesión">
@@ -352,6 +375,8 @@ body{
 .sb-foot-actions{display:flex;align-items:center;gap:2px;flex-shrink:0}
 .sb-logout{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
 .sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
+.sb-actualizar{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
+.sb-actualizar:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
 .sb-logout-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:8px auto 0;border:none;background:transparent;color:var(--pase-text-muted);cursor:pointer;border-radius:8px;transition:all 0.15s}
 .sb-logout-icon:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
 .sb.sb-rail .sb-avatar{margin:0 auto}
