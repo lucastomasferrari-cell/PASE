@@ -93,11 +93,12 @@ export function AdminReservas({ localId, localNombre }: Props) {
   // página (antes solo el mapa refrescaba; el dueño no se enteraba de una
   // reserva entrante hasta recargar). Cada 25s; avisa si entró alguna nueva.
   useEffect(() => {
+    let cancelado = false; // descartar un fetch en vuelo si cambió el filtro/local
     const id = setInterval(async () => {
       if (document.visibilityState !== 'visible') return;
       const { desde, hasta } = rangoFechas(rango);
       const r = await listReservas({ localId, desde, hasta, estado: estadoFiltro, limit: 500 });
-      if (r.error) return;
+      if (cancelado || r.error) return; // el efecto ya se limpió → no pisar con datos viejos
       const nuevas = r.data.filter((x) => !vistasRef.current.has(x.id));
       vistasRef.current = new Set(r.data.map((x) => x.id));
       setReservas(r.data);
@@ -105,7 +106,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
         toast.success(`${nuevas.length} reserva${nuevas.length > 1 ? 's' : ''} nueva${nuevas.length > 1 ? 's' : ''}`);
       }
     }, 25_000);
-    return () => clearInterval(id);
+    return () => { cancelado = true; clearInterval(id); };
   }, [localId, rango, estadoFiltro]);
 
   const filtradas = useMemo(() => {

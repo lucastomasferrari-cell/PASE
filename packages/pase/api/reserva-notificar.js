@@ -44,13 +44,15 @@ export default async function handler(req, res) {
     .select('id, cliente_nombre, cliente_email, fecha_hora, personas, estado, local_id, created_at, notif_confirmacion_at')
     .eq('id', reservaId)
     .maybeSingle();
-  if (error || !r) return res.status(200).json({ ok: false, error: 'Reserva no encontrada' });
-
-  // Guardas anti-abuso.
-  if (r.notif_confirmacion_at) return res.status(200).json({ ok: true, already: true });
-  if (!r.cliente_email) return res.status(200).json({ ok: false, error: 'Sin email' });
+  // Respuesta genérica para TODOS los casos de "no envío": no revelar si la
+  // reserva existe / tiene email / es reciente → evita usar el endpoint como
+  // oráculo de enumeración de reservas (auditoría I2).
+  const OK = { ok: true };
+  if (error || !r) return res.status(200).json(OK);
+  if (r.notif_confirmacion_at) return res.status(200).json(OK);
+  if (!r.cliente_email) return res.status(200).json(OK);
   const edadMin = (Date.now() - new Date(r.created_at).getTime()) / 60000;
-  if (edadMin > 15) return res.status(200).json({ ok: false, error: 'Reserva no reciente' });
+  if (edadMin > 15) return res.status(200).json(OK);
 
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;

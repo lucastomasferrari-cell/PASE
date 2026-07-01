@@ -343,7 +343,10 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     );
   }
 
-  const fechaHoraISO = () => new Date(`${fecha}T${hora}:00`).toISOString();
+  // Forzar hora Argentina (-03) en vez de la TZ del navegador: si no, un
+  // cliente con el reloj en otra zona (turista/roaming) reservaba una hora
+  // distinta a la del chip que tocó. AR no tiene horario de verano → -03 fijo.
+  const fechaHoraISO = () => new Date(`${fecha}T${hora}:00-03:00`).toISOString();
 
   function elegirSlot(h: string) { setHora(h); setPaso('datos'); }
 
