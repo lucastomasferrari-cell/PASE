@@ -250,6 +250,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [buscando, setBuscando] = useState(false);
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [email, setEmail] = useState('');
   const [notas, setNotas] = useState('');
   const [confirmando, setConfirmando] = useState(false);
   const [estadoFinal, setEstadoFinal] = useState<string>('pendiente');
@@ -286,6 +287,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     try {
       const r = await crearReservaPublica({
         slug, nombre: nombre.trim(), telefono: telefono.trim(),
+        email: email.trim() || undefined,
         fechaHora: fechaHoraISO(), personas, notas: notas || undefined,
       });
       if (!r.ok) { toast.error(r.error || 'No se pudo crear la reserva'); return; }
@@ -361,6 +363,11 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
           <div>
             <label htmlFor="rw-tel" className="text-xs text-ink-muted">Teléfono {perfil.reservas.telefono_obligatorio ? '*' : ''}</label>
             <input id="rw-tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)}
+                   className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
+          </div>
+          <div>
+            <label htmlFor="rw-email" className="text-xs text-ink-muted">Email (para enviarte la confirmación)</label>
+            <input id="rw-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)}
                    className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
           </div>
           <div>

@@ -3,7 +3,7 @@
 // no-show, cancelar) + asignación de mesa. La vista timeline de un día está en
 // "Diario"; acá es la lista cross-fecha tipo "Reservas" de OpenTable/Tableo.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Plus, Users, Pencil, Search, Printer,
@@ -70,6 +70,9 @@ export function AdminReservas({ localId, localNombre }: Props) {
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoReserva | 'todas'>('todas');
   const [search, setSearch] = useState('');
 
+  // IDs ya vistos, para detectar reservas nuevas en el auto-refresco.
+  const vistasRef = useRef<Set<number>>(new Set());
+
   const reload = useCallback(async () => {
     setCargando(true);
     const { desde, hasta } = rangoFechas(rango);
@@ -80,10 +83,30 @@ export function AdminReservas({ localId, localNombre }: Props) {
     if (r.error) toast.error('No se pudieron cargar las reservas: ' + r.error);
     setReservas(r.data);
     setMesas(m.data);
+    vistasRef.current = new Set(r.data.map((x) => x.id)); // resetear baseline
     setCargando(false);
   }, [localId, rango, estadoFiltro]);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  // Auto-refresco silencioso: las reservas nuevas aparecen sin recargar la
+  // página (antes solo el mapa refrescaba; el dueño no se enteraba de una
+  // reserva entrante hasta recargar). Cada 25s; avisa si entró alguna nueva.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      const { desde, hasta } = rangoFechas(rango);
+      const r = await listReservas({ localId, desde, hasta, estado: estadoFiltro, limit: 500 });
+      if (r.error) return;
+      const nuevas = r.data.filter((x) => !vistasRef.current.has(x.id));
+      vistasRef.current = new Set(r.data.map((x) => x.id));
+      setReservas(r.data);
+      if (nuevas.length > 0) {
+        toast.success(`${nuevas.length} reserva${nuevas.length > 1 ? 's' : ''} nueva${nuevas.length > 1 ? 's' : ''}`);
+      }
+    }, 25_000);
+    return () => clearInterval(id);
+  }, [localId, rango, estadoFiltro]);
 
   const filtradas = useMemo(() => {
     const q = search.trim().toLowerCase();

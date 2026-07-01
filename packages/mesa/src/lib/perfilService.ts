@@ -71,7 +71,11 @@ export async function crearReservaPublica(args: {
     p_fecha_hora: args.fechaHora,
     p_personas: args.personas,
     p_notas: args.notas ?? null,
-    p_idempotency_key: `mesa-${args.slug}-${args.nombre}-${args.fechaHora}`,
+    // Incluye teléfono: antes era slug-nombre-fechaHora → dos personas
+    // distintas con el mismo nombre y horario colisionaban (la 2ª "heredaba"
+    // la reserva de la 1ª). Con el teléfono, mismo cliente que re-envía =
+    // idempotente; clientes distintos = reservas separadas.
+    p_idempotency_key: `mesa-${args.slug}-${args.nombre}-${args.telefono}-${args.fechaHora}`,
   });
   if (error) return { ok: false, error: error.message };
   const row = Array.isArray(data) ? data[0] : data;

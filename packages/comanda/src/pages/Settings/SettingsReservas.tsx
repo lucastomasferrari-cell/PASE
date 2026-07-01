@@ -128,8 +128,11 @@ export function SettingsReservas() {
     });
   }
 
+  // La página pública de reservas vive en la app MESA (mesa-orpin.vercel.app/:slug),
+  // NO en el dominio de COMANDA ni bajo /reservar. Antes se armaba mal
+  // (`${origin}/reservar/${slug}`) → link roto para el cliente.
   const publicUrl = settings.slug
-    ? `${window.location.origin}/reservar/${settings.slug}`
+    ? `https://mesa-orpin.vercel.app/${settings.slug}`
     : null;
 
   return (
