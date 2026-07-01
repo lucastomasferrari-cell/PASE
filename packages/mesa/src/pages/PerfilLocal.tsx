@@ -78,7 +78,6 @@ export function PerfilLocal() {
       <div className="container mb-8">
         <div className="border-b-2 border-neutral-900 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-neutral-500 mb-3">Gastronomía &amp; Experiencia — Vol. 01</p>
             <h1 className="leading-[0.82]">
               <span className="block font-display uppercase tracking-tighter text-6xl md:text-8xl text-neutral-900">
                 {local.nombre.split(' ')[0]}
