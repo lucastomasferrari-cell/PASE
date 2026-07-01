@@ -393,7 +393,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                    className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
           </div>
           <div>
-            <label htmlFor="rw-notas" className="text-xs text-ink-muted">Notas (alergias, cochecito, cumpleaños…)</label>
+            <label htmlFor="rw-notas" className="text-xs text-ink-muted">¿Alguna alergia o intolerancia? (opcional)</label>
             <textarea id="rw-notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
           </div>
