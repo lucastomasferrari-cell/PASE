@@ -42,22 +42,15 @@ export interface PerfilLocalData {
   hermanos: Array<{ slug: string; nombre: string; direccion: string | null }>;
 }
 
-export async function getPerfil(slug: string): Promise<PerfilLocalData | null> {
+// error=true → problema de red/backend (mostrar "reintentá"); data=null sin
+// error → el local no existe. Antes ambos casos se veían como "no existe".
+export async function getPerfil(slug: string): Promise<{ data: PerfilLocalData | null; error: boolean }> {
   const { data, error } = await db().rpc('fn_get_perfil_publico_local', { p_local_slug: slug });
-  if (error || !data) return null;
-  return data as PerfilLocalData;
+  if (error) return { data: null, error: true };
+  return { data: (data as PerfilLocalData | null) ?? null, error: false };
 }
 
 // ─── Reservas ──────────────────────────────────────────────────────────────
-
-export async function checkDisponibilidad(slug: string, fechaHora: string, personas: number, zona?: string | null): Promise<{ disponible: boolean; motivo: string | null }> {
-  const { data, error } = await db().rpc('fn_check_disponibilidad_reserva', {
-    p_local_slug: slug, p_fecha_hora: fechaHora, p_personas: personas, p_zona: zona ?? null,
-  });
-  if (error) return { disponible: false, motivo: error.message };
-  const row = Array.isArray(data) ? data[0] : data;
-  return { disponible: Boolean(row?.disponible), motivo: (row?.motivo as string) ?? null };
-}
 
 export interface SlotDisponibilidad { hora: string; disponible: boolean; restantes: number }
 

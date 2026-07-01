@@ -30,14 +30,15 @@ const DIAS: Array<[keyof PerfilLocalData['local']['horarios'], string]> = [
 export function PerfilLocal() {
   const { slug } = useParams<{ slug: string }>();
   const [perfil, setPerfil] = useState<PerfilLocalData | null>(null);
-  const [estado, setEstado] = useState<'cargando' | 'ok' | 'no-existe'>('cargando');
+  const [estado, setEstado] = useState<'cargando' | 'ok' | 'no-existe' | 'error'>('cargando');
 
   useEffect(() => {
     if (!supabaseConfigurado || !slug) return;
     let cancel = false;
     void (async () => {
-      const p = await getPerfil(slug);
+      const { data: p, error } = await getPerfil(slug);
       if (cancel) return;
+      if (error) { setEstado('error'); return; }
       if (!p) { setEstado('no-existe'); return; }
       setPerfil(p);
       setEstado('ok');
@@ -50,6 +51,14 @@ export function PerfilLocal() {
     return <Centro>MESA sin configurar (env vars).</Centro>;
   }
   if (estado === 'cargando') return <Centro>Cargando…</Centro>;
+  if (estado === 'error') {
+    return (
+      <Centro>
+        <p className="text-3xl">Hubo un problema</p>
+        <p className="mt-2 text-ink-muted">No pudimos cargar la página. Reintentá en un momento.</p>
+      </Centro>
+    );
+  }
   if (!slug || estado === 'no-existe' || !perfil) {
     return (
       <Centro>
@@ -107,7 +116,7 @@ export function PerfilLocal() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 overflow-hidden h-64 md:h-80">
             <img src={fotos[0]} alt={local.nombre} className="col-span-2 row-span-2 h-full w-full object-cover grayscale hover:grayscale-0 transition-all duration-700" />
             {fotos.slice(1, 5).map((f, i) => (
-              <img key={i} src={f} alt="" className="h-full w-full object-cover hidden md:block grayscale hover:grayscale-0 transition-all duration-700" />
+              <img key={i} src={f} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover hidden md:block grayscale hover:grayscale-0 transition-all duration-700" />
             ))}
           </div>
         </div>
@@ -144,7 +153,7 @@ export function PerfilLocal() {
                 {populares.map((p) => (
                   <div key={p.nombre} className="rounded-xl bg-white border border-ink/5 overflow-hidden shadow-card">
                     {p.foto_url
-                      ? <img src={p.foto_url} alt={p.nombre} className="h-28 w-full object-cover grayscale hover:grayscale-0 transition-all duration-500" />
+                      ? <img src={p.foto_url} alt={p.nombre} loading="lazy" decoding="async" className="h-28 w-full object-cover grayscale hover:grayscale-0 transition-all duration-500" />
                       : <div className="h-28 bg-gradient-to-br from-crema to-brand-100" />}
                     <div className="p-3">
                       <p className="text-sm font-medium leading-tight">{p.nombre}</p>
@@ -374,16 +383,15 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
 
   if (paso === 'lista') {
     return (
-      <div className="rounded-2xl bg-white border border-green-200 shadow-card p-6 text-center">
-        <CalendarCheck className="h-10 w-10 text-green-600 mx-auto" />
-        <p className="mt-3 text-2xl">¡Listo, {nombre.split(' ')[0]}!</p>
-        <p className="mt-2 text-sm text-ink-soft">
-          {personas} personas · {new Date(`${fecha}T${hora}:00`).toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+      <div className="bg-white border-2 border-neutral-900 p-8 text-center">
+        <CalendarCheck className="h-10 w-10 text-neutral-900 mx-auto" />
+        <p className="mt-4 font-display uppercase tracking-tight text-3xl text-neutral-900">¡Listo!</p>
+        <p className="font-serif italic text-neutral-400 text-lg">{nombre.split(' ')[0]}</p>
+        <p className="mt-4 text-sm text-neutral-600 font-medium">
+          {personas} {personas === 1 ? 'persona' : 'personas'} · {new Date(`${fecha}T${hora}:00`).toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
         </p>
-        <p className="mt-2 text-xs text-ink-muted">
-          {estadoFinal === 'pendiente'
-            ? 'El restaurante va a confirmar tu reserva en breve.'
-            : 'Tu reserva quedó confirmada.'}
+        <p className="mt-3 text-xs text-neutral-400 uppercase tracking-widest">
+          {estadoFinal === 'pendiente' ? 'El restaurante confirma en breve' : 'Reserva confirmada'}
         </p>
       </div>
     );
@@ -494,24 +502,24 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
             <Users className="h-3.5 w-3.5" /> {personas} {personas === 1 ? 'persona' : 'personas'} · {fecha.split('-').reverse().slice(0, 2).join('/')} · {hora}
           </p>
           <div>
-            <label htmlFor="rw-nombre" className="text-xs text-ink-muted">Tu nombre *</label>
+            <label htmlFor="rw-nombre" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Tu nombre *</label>
             <input id="rw-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus
-                   className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
+                   className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-tel" className="text-xs text-ink-muted">Teléfono {perfil.reservas.telefono_obligatorio ? '*' : ''}</label>
+            <label htmlFor="rw-tel" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Teléfono{perfil.reservas.telefono_obligatorio ? '*' : ''}</label>
             <input id="rw-tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)}
-                   className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
+                   className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-email" className="text-xs text-ink-muted">Email (para enviarte la confirmación)</label>
+            <label htmlFor="rw-email" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Email (para la confirmación)</label>
             <input id="rw-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                   className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
+                   className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-notas" className="text-xs text-ink-muted">¿Alguna alergia o intolerancia? (opcional)</label>
+            <label htmlFor="rw-notas" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Alergias o intolerancias (opcional)</label>
             <textarea id="rw-notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
+                      className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setPaso('buscar')}
@@ -555,7 +563,7 @@ function EventoCard({ evento: e, slug }: { evento: PerfilLocalData['eventos'][nu
   return (
     <div className="rounded-xl bg-white border border-ink/5 shadow-card overflow-hidden">
       <div className="flex">
-        {e.foto_url && <img src={e.foto_url} alt={e.titulo} className="w-32 object-cover hidden sm:block" />}
+        {e.foto_url && <img src={e.foto_url} alt={e.titulo} loading="lazy" decoding="async" className="w-32 object-cover hidden sm:block" />}
         <div className="p-4 flex-1 min-w-0">
           <p className="text-[11px] normal-case tracking-wide text-brand-600 font-medium">Evento</p>
           <p className="text-lg font-medium leading-snug">{e.titulo}</p>
@@ -621,7 +629,7 @@ function GiftcardCard({ gift: g, slug }: { gift: PerfilLocalData['giftcards'][nu
   return (
     <div className="rounded-xl bg-white border border-ink/5 shadow-card overflow-hidden">
       <div className="flex">
-        {g.foto_url && <img src={g.foto_url} alt={g.nombre} className="w-32 object-cover hidden sm:block" />}
+        {g.foto_url && <img src={g.foto_url} alt={g.nombre} loading="lazy" decoding="async" className="w-32 object-cover hidden sm:block" />}
         <div className="p-4 flex-1 min-w-0">
           <p className="text-lg font-medium leading-snug">{g.nombre}</p>
           {g.descripcion && <p className="mt-1 text-sm text-ink-soft">{g.descripcion}</p>}
