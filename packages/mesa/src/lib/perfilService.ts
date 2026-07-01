@@ -50,18 +50,25 @@ export async function getPerfil(slug: string): Promise<PerfilLocalData | null> {
 
 // ─── Reservas ──────────────────────────────────────────────────────────────
 
-export async function checkDisponibilidad(slug: string, fechaHora: string, personas: number): Promise<{ disponible: boolean; motivo: string | null }> {
+export async function checkDisponibilidad(slug: string, fechaHora: string, personas: number, zona?: string | null): Promise<{ disponible: boolean; motivo: string | null }> {
   const { data, error } = await db().rpc('fn_check_disponibilidad_reserva', {
-    p_local_slug: slug, p_fecha_hora: fechaHora, p_personas: personas,
+    p_local_slug: slug, p_fecha_hora: fechaHora, p_personas: personas, p_zona: zona ?? null,
   });
   if (error) return { disponible: false, motivo: error.message };
   const row = Array.isArray(data) ? data[0] : data;
   return { disponible: Boolean(row?.disponible), motivo: (row?.motivo as string) ?? null };
 }
 
+// Sectores (Barra/Salón/Terraza/Privado) que el local ofrece para reservar.
+export async function getZonasReservables(slug: string): Promise<string[]> {
+  const { data, error } = await db().rpc('fn_zonas_reservables_publico', { p_local_slug: slug });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<{ zona: string }>).map((r) => r.zona).filter(Boolean);
+}
+
 export async function crearReservaPublica(args: {
   slug: string; nombre: string; telefono: string; email?: string;
-  fechaHora: string; personas: number; notas?: string;
+  fechaHora: string; personas: number; notas?: string; zona?: string | null;
 }): Promise<{ ok: boolean; estado?: string; id?: number; error?: string }> {
   const { data, error } = await db().rpc('fn_crear_reserva_publica', {
     p_local_slug: args.slug,
@@ -71,6 +78,7 @@ export async function crearReservaPublica(args: {
     p_fecha_hora: args.fechaHora,
     p_personas: args.personas,
     p_notas: args.notas ?? null,
+    p_zona: args.zona ?? null,
     // Incluye teléfono: antes era slug-nombre-fechaHora → dos personas
     // distintas con el mismo nombre y horario colisionaban (la 2ª "heredaba"
     // la reserva de la 1ª). Con el teléfono, mismo cliente que re-envía =

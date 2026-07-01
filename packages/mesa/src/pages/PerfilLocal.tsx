@@ -15,7 +15,7 @@ import {
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
   getPerfil, checkDisponibilidad, crearReservaPublica, notificarConfirmacionReserva,
-  inscribirEventoYPagar, comprarGiftcardYPagar,
+  getZonasReservables, inscribirEventoYPagar, comprarGiftcardYPagar,
   type PerfilLocalData,
 } from '@/lib/perfilService';
 
@@ -265,6 +265,8 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [personas, setPersonas] = useState(2);
   const [fecha, setFecha] = useState(hoy);
   const [hora, setHora] = useState('21:00');
+  const [zonas, setZonas] = useState<string[]>([]);
+  const [zona, setZona] = useState<string | null>(null); // null = cualquier sector
   const [paso, setPaso] = useState<'buscar' | 'datos' | 'lista'>('buscar');
   const [motivo, setMotivo] = useState<string | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -274,6 +276,13 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [notas, setNotas] = useState('');
   const [confirmando, setConfirmando] = useState(false);
   const [estadoFinal, setEstadoFinal] = useState<string>('pendiente');
+
+  // Cargar los sectores reservables (Barra/Salón/Terraza/…) del local.
+  useEffect(() => {
+    let vivo = true;
+    void getZonasReservables(slug).then((z) => { if (vivo) setZonas(z); });
+    return () => { vivo = false; };
+  }, [slug]);
 
   if (!perfil.reservas.activas) {
     return (
@@ -293,7 +302,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     setBuscando(true);
     setMotivo(null);
     try {
-      const r = await checkDisponibilidad(slug, fechaHoraISO(), personas);
+      const r = await checkDisponibilidad(slug, fechaHoraISO(), personas, zona);
       if (r.disponible) setPaso('datos');
       else setMotivo(traducirMotivoReserva(r.motivo));
     } finally { setBuscando(false); }
@@ -308,7 +317,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
       const r = await crearReservaPublica({
         slug, nombre: nombre.trim(), telefono: telefono.trim(),
         email: email.trim() || undefined,
-        fechaHora: fechaHoraISO(), personas, notas: notas || undefined,
+        fechaHora: fechaHoraISO(), personas, notas: notas || undefined, zona,
       });
       if (!r.ok) { toast.error(traducirMotivoReserva(r.error)); return; }
       // Confirmación automática al cliente (email). Fire-and-forget.
@@ -364,6 +373,24 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                      className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
             </div>
           </div>
+
+          {zonas.length > 0 && (
+            <div>
+              <label className="text-xs text-ink-muted">¿Dónde te gustaría sentarte?</label>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <button onClick={() => setZona(null)}
+                        className={`px-3 h-8 rounded-full text-sm font-medium border transition-colors ${
+                          zona === null ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 hover:border-brand-300'
+                        }`}>Cualquier lugar</button>
+                {zonas.map((z) => (
+                  <button key={z} onClick={() => setZona(z)}
+                          className={`px-3 h-8 rounded-full text-sm font-medium border transition-colors ${
+                            zona === z ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 hover:border-brand-300'
+                          }`}>{z}</button>
+                ))}
+              </div>
+            </div>
+          )}
           {motivo && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{motivo}</p>}
           <button onClick={() => void buscar()} disabled={buscando}
                   className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
