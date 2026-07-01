@@ -94,8 +94,18 @@ export function PerfilLocal() {
         {/* ── Columna principal ─────────────────────────────────────────── */}
         <div className="space-y-12 min-w-0">
           <section>
-            <h1 className="text-4xl md:text-5xl font-medium">{local.nombre}</h1>
-            <div className="mt-3 flex items-center gap-4 flex-wrap text-sm text-ink-soft">
+            <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-ink-muted mb-3">Gastronomía & Experiencia</p>
+            <h1 className="leading-[0.9]">
+              <span className="block font-display uppercase tracking-tight text-5xl md:text-7xl text-ink">
+                {local.nombre.split(' ')[0]}
+              </span>
+              {local.nombre.split(' ').slice(1).join(' ') && (
+                <span className="block font-serif italic font-light text-3xl md:text-4xl text-ink-muted mt-1">
+                  {local.nombre.split(' ').slice(1).join(' ')}
+                </span>
+              )}
+            </h1>
+            <div className="mt-4 flex items-center gap-4 flex-wrap text-sm text-ink-soft">
               {reviews.resumen?.total ? (
                 <span className="inline-flex items-center gap-1 font-medium text-ink">
                   <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
@@ -368,49 +378,45 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   }
 
   return (
-    <div className="rounded-3xl bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden">
-      {/* Header */}
-      <div className="p-5 pb-3 flex items-start justify-between gap-2">
+    <div className="rounded-xl bg-white border-2 border-ink overflow-hidden">
+      {/* Header editorial */}
+      <div className="p-6 pb-4 flex items-start justify-between gap-2 border-b border-ink/15">
         <div>
-          <p className="text-lg font-bold text-slate-900 tracking-tight">Reservá tu mesa</p>
-          <p className="text-xs text-slate-500 mt-0.5">{perfil.local.nombre}</p>
+          <h2 className="font-display uppercase tracking-tight text-3xl text-ink leading-none">Reserva</h2>
+          <p className="font-serif italic text-ink-muted text-base mt-1">tu mesa</p>
         </div>
         {paso === 'buscar' && slotsLibres.length > 0 && (
-          <div className="bg-brand-50 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-brand-500/20 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-            <span className="text-[10px] font-semibold text-brand-600 uppercase tracking-wide whitespace-nowrap">{slotsLibres.length} con lugar</span>
+          <div className="bg-brand-400 text-white px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest shrink-0">
+            {slotsLibres.length} libres
           </div>
         )}
       </div>
 
       {paso === 'buscar' && (
-        <div className="px-5 pb-5 space-y-6">
+        <div className="p-6 space-y-8">
           {/* Comensales */}
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Comensales</label>
-            <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-              <button type="button" onClick={() => setPersonas((p) => Math.max(1, p - 1))}
-                      className="w-10 h-10 grid place-items-center rounded-xl bg-white shadow-sm border border-slate-200 text-slate-600 text-lg hover:bg-slate-50">−</button>
-              <div className="flex flex-col items-center">
-                <span className="text-lg font-bold text-slate-800">{personas}</span>
-                <span className="text-[9px] text-slate-400 font-medium uppercase">{personas === 1 ? 'persona' : 'personas'}</span>
-              </div>
-              <button type="button" onClick={() => setPersonas((p) => Math.min(20, p + 1))}
-                      className="w-10 h-10 grid place-items-center rounded-xl bg-white shadow-sm border border-slate-200 text-slate-600 text-lg hover:bg-slate-50">+</button>
+            <label className="font-display text-[10px] text-ink-muted uppercase tracking-widest block mb-4">N.º de comensales</label>
+            <div className="flex items-center justify-between border-b-2 border-ink pb-3">
+              <button type="button" aria-label="menos" onClick={() => setPersonas((p) => Math.max(1, p - 1))}
+                      className="text-2xl text-ink hover:opacity-40 transition-opacity w-8">−</button>
+              <span className="font-display text-4xl text-ink tabular-nums">{String(personas).padStart(2, '0')}</span>
+              <button type="button" aria-label="más" onClick={() => setPersonas((p) => Math.min(20, p + 1))}
+                      className="text-2xl text-ink hover:opacity-40 transition-opacity w-8">+</button>
             </div>
           </div>
 
           {/* Fecha */}
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Fecha</label>
+            <label className="font-display text-[10px] text-ink-muted uppercase tracking-widest block mb-4">Seleccionar fecha</label>
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
               {dias.map((d) => (
                 <button key={d.iso} type="button" onClick={() => setFecha(d.iso)}
-                        className={`flex-shrink-0 w-14 py-2.5 rounded-2xl border-2 flex flex-col items-center transition-all ${
-                          fecha === d.iso ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-transparent bg-slate-50 text-slate-700 hover:bg-slate-100'
+                        className={`flex-shrink-0 w-14 h-16 flex flex-col items-center justify-center border transition-all ${
+                          fecha === d.iso ? 'bg-brand-400 text-white border-brand-400' : 'border-ink/25 text-ink hover:border-ink'
                         }`}>
                   <span className="text-[10px] font-bold uppercase">{d.dow}</span>
-                  <span className="text-base font-bold">{d.num}</span>
+                  <span className="font-display text-lg leading-none mt-0.5">{d.num}</span>
                 </button>
               ))}
             </div>
@@ -419,16 +425,16 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
           {/* Sector */}
           {zonas.length > 0 && (
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Sector</label>
+              <label className="font-display text-[10px] text-ink-muted uppercase tracking-widest block mb-3">Ubicación</label>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setZona(null)}
-                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                          zona === null ? 'border-2 border-brand-500 text-brand-600 bg-brand-50' : 'border border-slate-200 text-slate-600 bg-white hover:border-brand-300'
+                        className={`px-4 py-2 border text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          zona === null ? 'bg-brand-400 text-white border-brand-400' : 'border-ink/30 text-ink hover:border-ink'
                         }`}>Cualquier lugar</button>
                 {zonas.map((z) => (
                   <button key={z} type="button" onClick={() => setZona(z)}
-                          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                            zona === z ? 'border-2 border-brand-500 text-brand-600 bg-brand-50' : 'border border-slate-200 text-slate-600 bg-white hover:border-brand-300'
+                          className={`px-4 py-2 border text-[10px] font-bold uppercase tracking-widest transition-all ${
+                            zona === z ? 'bg-brand-400 text-white border-brand-400' : 'border-ink/30 text-ink hover:border-ink'
                           }`}>{z}</button>
                 ))}
               </div>
@@ -437,12 +443,12 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
 
           {/* Horarios */}
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Horarios disponibles</label>
+            <label className="font-display text-[10px] text-ink-muted uppercase tracking-widest block mb-3">Turnos disponibles</label>
             {cargandoSlots ? (
-              <p className="text-sm text-slate-400 py-6 text-center">Buscando horarios…</p>
+              <p className="text-sm text-ink-muted py-6 text-center">Buscando turnos…</p>
             ) : slots.length === 0 ? (
-              <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-3 py-5 text-center">
-                No hay horarios ese día. Probá otra fecha{zona ? ' u otro sector' : ''}.
+              <p className="text-sm text-ink-soft border border-ink/15 px-3 py-5 text-center">
+                No hay turnos ese día. Probá otra fecha{zona ? ' u otro sector' : ''}.
               </p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
@@ -452,15 +458,15 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                   return (
                     <button key={s.hora} type="button" disabled={!s.disponible}
                             onClick={() => elegirSlot(s.hora)}
-                            className={`relative flex flex-col items-center justify-center py-3 rounded-2xl border text-sm font-bold transition-all overflow-hidden ${
+                            className={`relative flex flex-col items-center justify-center py-3 border text-sm font-bold transition-all overflow-hidden ${
                               !s.disponible
-                                ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
-                                : 'border-slate-200 bg-white text-slate-800 hover:border-brand-500 hover:bg-brand-50'
+                                ? 'border-ink/10 text-ink/30 cursor-not-allowed'
+                                : 'border-ink/25 text-ink hover:bg-brand-400 hover:text-white hover:border-brand-400'
                             }`}>
                       <span className={!s.disponible ? 'line-through' : ''}>{s.hora}</span>
-                      {!s.disponible && <span className="text-[8px] font-bold text-red-400 uppercase mt-0.5">Lleno</span>}
-                      {ultimo && <span className="absolute top-0 right-0 bg-red-500 text-[7px] text-white px-1 py-0.5 rounded-bl-lg font-bold uppercase">Último</span>}
-                      {!ultimo && pocos && <span className="absolute top-0 right-0 bg-amber-500 text-[7px] text-white px-1 py-0.5 rounded-bl-lg font-bold uppercase">Quedan {s.restantes}</span>}
+                      {!s.disponible && <span className="text-[8px] font-bold text-red-400/70 uppercase mt-0.5 no-underline">Lleno</span>}
+                      {ultimo && <span className="absolute top-0 right-0 bg-ink text-[7px] text-white px-1 py-0.5 font-bold uppercase">Último</span>}
+                      {!ultimo && pocos && <span className="absolute top-0 right-0 bg-brand-400 text-[7px] text-white px-1 py-0.5 font-bold uppercase">Quedan {s.restantes}</span>}
                     </button>
                   );
                 })}
@@ -471,9 +477,9 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
       )}
 
       {paso === 'datos' && (
-        <form onSubmit={confirmar} className="px-5 pb-5 pt-1 space-y-3">
-          <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5" /> ¡Hay lugar! {personas}p · {fecha.split('-').reverse().slice(0, 2).join('/')} {hora}
+        <form onSubmit={confirmar} className="p-6 pt-2 space-y-3">
+          <p className="text-[11px] uppercase tracking-widest font-bold text-ink border border-ink/20 px-3 py-2 flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" /> {personas} {personas === 1 ? 'persona' : 'personas'} · {fecha.split('-').reverse().slice(0, 2).join('/')} · {hora}
           </p>
           <div>
             <label htmlFor="rw-nombre" className="text-xs text-ink-muted">Tu nombre *</label>
@@ -495,11 +501,11 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
             <textarea id="rw-notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm" />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setPaso('buscar')}
-                    className="rounded-lg border border-ink/15 px-3 py-2.5 text-sm">Volver</button>
+                    className="border border-ink/25 text-ink px-4 py-3.5 text-[11px] font-bold uppercase tracking-widest hover:bg-ink/5">Volver</button>
             <button type="submit" disabled={confirmando}
-                    className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                    className="flex-1 bg-ink hover:bg-ink/90 text-white py-3.5 text-[11px] font-bold uppercase tracking-[0.2em] disabled:opacity-60">
               {confirmando ? 'Reservando…' : 'Confirmar reserva'}
             </button>
           </div>
@@ -641,7 +647,11 @@ function Centro({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen grid place-items-center text-ink-muted text-center px-6"><div>{children}</div></div>;
 }
 function Titulo({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return <h2 className="text-2xl font-medium mb-4 flex items-center gap-2">{icon}{children}</h2>;
+  return (
+    <h2 className="font-display uppercase tracking-tight text-xl md:text-2xl text-ink mb-5 pb-3 border-b border-ink/80 flex items-center gap-2">
+      {icon}{children}
+    </h2>
+  );
 }
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return <p className="flex items-center gap-2 text-ink-soft">{icon}{children}</p>;
