@@ -92,10 +92,11 @@ interface ProductTileProps {
   onToggleFavorito?: () => void;
   onClick: () => void;
   onLongPress?: () => void;
+  onEditItem?: () => void;
 }
 
 // Fila plana tipo menú: nombre … precio. Sin caja, sin monograma, sin emoji.
-function ProductTile({ item, disabled, flashed, favorito, density = 'normal', onToggleFavorito, onClick, onLongPress }: ProductTileProps) {
+function ProductTile({ item, disabled, flashed, favorito, density = 'normal', onToggleFavorito, onClick, onLongPress, onEditItem }: ProductTileProps) {
   const agotado = item.estado === 'agotado';
   const densityCfg = CATALOGO_DENSITY_CONFIG[density];
   const longPressRef = useRef<{ timer: number | null; fired: boolean }>({ timer: null, fired: false });
@@ -143,7 +144,8 @@ function ProductTile({ item, disabled, flashed, favorito, density = 'normal', on
         onPointerLeave={clearLongPress}
         onPointerCancel={clearLongPress}
         onContextMenu={(e) => {
-          if (onLongPress) e.preventDefault();
+          e.preventDefault();
+          if (onEditItem) onEditItem();
         }}
         disabled={disabled || (agotado && !onLongPress)}
         className={cn(
@@ -209,6 +211,7 @@ export interface VentaCatalogoPanelProps {
   onAddItem: (item: ItemConGrupo) => void;
   onLongPress: (item: ItemConGrupo) => void;
   onToggleFav: (item: ItemConGrupo) => void;
+  onEditItem?: (item: ItemConGrupo) => void;
 }
 
 export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
@@ -230,6 +233,7 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
   onAddItem,
   onLongPress,
   onToggleFav,
+  onEditItem,
 }: VentaCatalogoPanelProps) {
   const [density, setDensity] = useCatalogoDensity();
   const densityCfg = CATALOGO_DENSITY_CONFIG[density];
@@ -327,6 +331,7 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
             onToggleFavorito={() => onToggleFav(it)}
             onClick={() => onAddItem(it)}
             onLongPress={() => onLongPress(it)}
+            onEditItem={onEditItem ? () => onEditItem(it) : undefined}
           />
         ))}
         {catalogoFiltrado.length === 0 && grupoSel === 'favoritos' && !search.trim() && (

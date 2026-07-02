@@ -23,6 +23,8 @@ import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialo
 import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem } from '@/services/overridesService';
 import { marcarDisponible } from '@/services/itemsService';
 import { AgotarDialog } from '@/pages/Catalogo/AgotarDialog';
+import { ItemForm } from '@/pages/Catalogo/ItemForm';
+import { listMarcas, type MarcaLite } from '@/services/marcasService';
 import { MoneyInput } from '@/components/MoneyInput';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -130,10 +132,19 @@ export function VentaScreen() {
   // Item seleccionado para agotar (abre AgotarDialog)
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
 
+  // Editar ficha de producto desde el POS (click derecho)
+  const [editCatalogoItem, setEditCatalogoItem] = useState<ItemConGrupo | null>(null);
+  const [marcas, setMarcas] = useState<MarcaLite[]>([]);
+
   // Editor inline de nombre/precio (doble click en la lista)
   const [editandoItem, setEditandoItem] = useState<VentaPosItem | null>(null);
   const [editNombreDraft, setEditNombreDraft] = useState('');
   const [editPrecioDraft, setEditPrecioDraft] = useState(0);
+
+  useEffect(() => {
+    if (!editCatalogoItem || !user?.tenant_id) return;
+    listMarcas(user.tenant_id).then(({ data }) => setMarcas(data));
+  }, [editCatalogoItem, user?.tenant_id]);
 
   useEffect(() => {
     if (lastAddedItemId == null) return;
@@ -555,6 +566,7 @@ export function VentaScreen() {
         onAddItem={clickItem}
         onLongPress={longPressItem}
         onToggleFav={onToggleFavorito}
+        onEditItem={editable ? setEditCatalogoItem : undefined}
       />
 
       {/* CHECK DER — column con header fijo, items scrolleables, footer pinned */}
@@ -792,6 +804,21 @@ export function VentaScreen() {
             // item. Sin esto el ProductTile seguía mostrándolo disponible.
             void reloadFull();
             toast.success(`${agotarItem.nombre} marcado agotado`);
+          }}
+        />
+      )}
+
+      {editCatalogoItem && user && (
+        <ItemForm
+          user={user}
+          grupos={grupos}
+          marcas={marcas}
+          defaultMarcaId={null}
+          item={editCatalogoItem}
+          onClose={() => setEditCatalogoItem(null)}
+          onSaved={() => {
+            setEditCatalogoItem(null);
+            void reloadFull();
           }}
         />
       )}
