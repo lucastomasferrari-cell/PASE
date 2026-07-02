@@ -73,6 +73,33 @@ export async function listMesasDelLocal(localId: number): Promise<{ data: MesaSi
   return { data: (data ?? []) as MesaSimple[], error: null };
 }
 
+// ─── Traducción de códigos de error RPC a español legible ─────────────
+// Las RPCs hacen RAISE EXCEPTION 'CODIGO_UPPER_SNAKE'; PostgREST devuelve ese
+// texto en error.message. Lo mapeamos a un mensaje amable para el toast del admin.
+const ERR_RESERVAS: Array<[string, string]> = [
+  ['NO_AUTH', 'Tu sesión expiró. Volvé a iniciar sesión.'],
+  ['PERMISO_DENEGADO', 'No tenés permiso para esta acción.'],
+  ['RESERVA_NO_ENCONTRADA', 'No se encontró la reserva.'],
+  ['RESERVA_NO_EDITABLE', 'Esta reserva ya no se puede editar (está finalizada o cancelada).'],
+  ['RESERVA_TRANSICION_INVALIDA', 'No se puede cambiar a ese estado desde el actual.'],
+  ['RESERVA_NO_ASIGNABLE', 'No se puede asignar mesa a esta reserva en su estado actual.'],
+  ['ESTADO_INVALIDO', 'Estado de reserva inválido.'],
+  ['MESA_SOLO_AL_SENTAR', 'La mesa solo se asigna al sentar a la reserva.'],
+  ['MESA_NO_ENCONTRADA', 'No se encontró la mesa.'],
+  ['MESA_OTRO_LOCAL', 'Esa mesa pertenece a otro local.'],
+  ['MESA_OCUPADA', 'Esa mesa ya está ocupada en ese horario.'],
+  ['NOMBRE_REQUERIDO', 'Falta el nombre del cliente.'],
+  ['PERSONAS_INVALIDAS', 'La cantidad de personas es inválida (1 a 50).'],
+  ['FECHA_REQUERIDA', 'Falta la fecha y hora.'],
+  ['FECHA_PASADA', 'Esa fecha y hora ya pasó.'],
+  ['LOCAL_NO_ENCONTRADO', 'No se encontró el local.'],
+];
+function traducirError(msg?: string | null): string {
+  if (!msg) return 'Ocurrió un error.';
+  for (const [code, es] of ERR_RESERVAS) if (msg.includes(code)) return es;
+  return msg;
+}
+
 // ─── Escritura (RPCs atómicas con validación server-side) ─────────────
 export async function crearReserva(args: {
   localId: number;
@@ -94,7 +121,7 @@ export async function crearReserva(args: {
     p_notas: args.notas ?? null,
     p_idempotency_key: args.idempotencyKey ?? null,
   });
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: traducirError(error.message) };
   return { id: Number(data), error: null };
 }
 
@@ -118,7 +145,7 @@ export async function editarReserva(args: {
     p_personas: args.personas ?? null,
     p_notas: args.notas ?? null,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: traducirError(error.message) };
   return { error: null };
 }
 
@@ -134,7 +161,7 @@ export async function cambiarEstadoReserva(args: {
     p_motivo: args.motivo ?? null,
     p_mesa_id: args.mesaId ?? null,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: traducirError(error.message) };
   return { error: null };
 }
 
@@ -146,7 +173,7 @@ export async function asignarMesaReserva(args: {
     p_reserva_id: args.reservaId,
     p_mesa_id: args.mesaId,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: traducirError(error.message) };
   return { error: null };
 }
 
