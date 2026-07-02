@@ -1,4 +1,5 @@
 // Limpieza total de caché + recarga con código fresco.
+// (deploy 01-jul: fuerza build de pase-yndx para publicar recibos + botón.)
 //
 // Motivo (01-jul, Anto): tras un deploy, un navegador puede quedar sirviendo
 // el bundle viejo (HTTP cache / SW / Cache Storage). Síntoma: cambios que YA
