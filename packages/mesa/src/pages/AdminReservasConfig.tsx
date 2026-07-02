@@ -14,7 +14,18 @@ const DIAS: { dia: number; label: string }[] = [
   { dia: 0, label: 'Domingo' },
 ];
 
-interface Horario { dia: number; abre: string; cierra: string }
+// Los horarios son los del NEGOCIO (columnas horario_dom..sab, formato
+// "HH:MM – HH:MM" o null=cerrado). Es el único origen: la página pública los
+// muestra y el motor de reservas los deriva (trigger sync_reservas_horarios).
+const HCOL: Record<number, string> = {
+  0: 'horario_dom', 1: 'horario_lun', 2: 'horario_mar', 3: 'horario_mie',
+  4: 'horario_jue', 5: 'horario_vie', 6: 'horario_sab',
+};
+function parseHorario(txt: string | null | undefined): { activo: boolean; abre: string; cierra: string } {
+  const parts = txt ? txt.split(/\s*[–-]\s*/) : [];
+  if (parts.length >= 2 && parts[0] && parts[1]) return { activo: true, abre: parts[0].trim(), cierra: parts[1].trim() };
+  return { activo: false, abre: '20:00', cierra: '00:00' };
+}
 interface Form {
   activas: boolean;
   requiere_confirmacion: boolean;
@@ -38,8 +49,6 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
     setCargando(true);
     const { data } = await db().from('comanda_local_settings').select('*').eq('id', settingsId).maybeSingle();
     const s = (data ?? {}) as Record<string, unknown>;
-    const hs = (s.reservas_horarios as Horario[] | null) ?? [];
-    const map = new Map(hs.map((h) => [h.dia, h]));
     setForm({
       activas: Boolean(s.reservas_activas),
       requiere_confirmacion: Boolean(s.reservas_requiere_confirmacion),
@@ -52,8 +61,8 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       pacing_max: s.reservas_pacing_max_por_franja != null ? String(s.reservas_pacing_max_por_franja) : '',
       notas_visibles: (s.reservas_notas_visibles_cliente as string | null) ?? '',
       horarios: DIAS.map(({ dia }) => {
-        const h = map.get(dia);
-        return { dia, activo: !!h, abre: h?.abre ?? '20:00', cierra: h?.cierra ?? '00:00' };
+        const p = parseHorario(s[HCOL[dia]!] as string | null);
+        return { dia, activo: p.activo, abre: p.abre, cierra: p.cierra };
       }),
     });
     setCargando(false);
@@ -65,7 +74,11 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
     if (!form) return;
     setGuardando(true);
     try {
-      const horarios: Horario[] = form.horarios.filter((h) => h.activo).map(({ dia, abre, cierra }) => ({ dia, abre, cierra }));
+      // Escribimos las columnas de negocio horario_* (única fuente); el trigger
+      // deriva reservas_horarios para el motor. Así la página pública y las
+      // reservas quedan siempre en sync con lo que se edita acá.
+      const horariosCols: Record<string, string | null> = {};
+      for (const h of form.horarios) horariosCols[HCOL[h.dia]!] = h.activo ? `${h.abre} – ${h.cierra}` : null;
       const { error } = await db().from('comanda_local_settings').update({
         reservas_activas: form.activas,
         reservas_requiere_confirmacion: form.requiere_confirmacion,
@@ -77,7 +90,7 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         reservas_duracion_estimada_min: Number(form.duracion_estimada_min) || 90,
         reservas_pacing_max_por_franja: form.pacing_max ? Number(form.pacing_max) : null,
         reservas_notas_visibles_cliente: form.notas_visibles.trim() || null,
-        reservas_horarios: horarios,
+        ...horariosCols,
         updated_at: new Date().toISOString(),
       }).eq('id', settingsId);
       if (error) { toast.error('No se pudo guardar: ' + error.message); return; }
@@ -135,7 +148,7 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
 
       {/* Horarios */}
       <Card icon={<Clock className="h-4 w-4 text-brand-500" />} title="Horarios de atención">
-        <p className="text-xs text-ink-muted -mt-1">Activá los días y franjas en que se aceptan reservas. Si no hay ningún día activo, se acepta cualquier horario.</p>
+        <p className="text-xs text-ink-muted -mt-1">Los días y franjas en que abre el local. Es lo que se muestra en la página pública y lo que habilita las reservas online (un solo lugar para editarlo).</p>
         <div className="space-y-2">
           {form.horarios.map((h) => (
             <div key={h.dia} className="flex items-center gap-3 flex-wrap">
