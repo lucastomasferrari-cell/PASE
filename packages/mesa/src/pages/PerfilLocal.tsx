@@ -15,7 +15,7 @@ import {
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
-  getPerfil, crearReservaPublica, notificarConfirmacionReserva,
+  getPerfil, crearReservaPublica, notificarConfirmacionReserva, getCancelToken,
   getZonasReservables, getSlotsDisponibilidad, inscribirEventoYPagar, comprarGiftcardYPagar,
   type PerfilLocalData, type SlotDisponibilidad,
 } from '@/lib/perfilService';
@@ -293,6 +293,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [confirmando, setConfirmando] = useState(false);
   const [estadoFinal, setEstadoFinal] = useState<string>('pendiente');
   const [reservaId, setReservaId] = useState<number | null>(null);
+  const [cancelToken, setCancelToken] = useState<string | null>(null);
 
   // Cargar los sectores reservables (Barra/Salón/Terraza/…) del local.
   useEffect(() => {
@@ -381,6 +382,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
       if (r.id && email.trim()) void notificarConfirmacionReserva(r.id);
       setEstadoFinal(r.estado ?? 'pendiente');
       setReservaId(r.id ?? null);
+      if (r.id) void getCancelToken(r.id, telefono.trim()).then(setCancelToken);
       setPaso('lista');
     } finally { setConfirmando(false); }
   }
@@ -410,7 +412,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
         })()}
         <p className="mt-3 text-[10px] text-neutral-400">Para cambios o consultas, escribinos por WhatsApp.</p>
         {reservaId && (
-          <Link to={`/r/cancelar/${reservaId}`} className="mt-2 inline-block text-[11px] text-neutral-500 underline hover:text-neutral-900">
+          <Link to={`/r/cancelar/${reservaId}${cancelToken ? `?t=${cancelToken}` : ''}`} className="mt-2 inline-block text-[11px] text-neutral-500 underline hover:text-neutral-900">
             Cancelar mi reserva
           </Link>
         )}

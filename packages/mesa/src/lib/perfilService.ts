@@ -110,6 +110,41 @@ export async function notificarConfirmacionReserva(reservaId: number): Promise<v
   } catch { /* best-effort */ }
 }
 
+// Token de cancelación de una reserva recién creada (verifica por teléfono).
+// Lo usa la pantalla de confirmación para armar el link sin pedir teléfono después.
+export async function getCancelToken(reservaId: number, telefono: string): Promise<string | null> {
+  const { data, error } = await db().rpc('fn_reserva_token_por_tel', {
+    p_reserva_id: reservaId, p_telefono: telefono.trim(),
+  });
+  if (error || !data) return null;
+  return data as string;
+}
+
+export interface ReservaResumen {
+  cliente_nombre: string; fecha_hora: string; personas: number;
+  estado: string; local_nombre: string; cancelable: boolean;
+}
+// Resumen de la reserva para la página de cancelación (id + token).
+export async function getReservaResumen(reservaId: number, token: string): Promise<ReservaResumen | null> {
+  const { data, error } = await db().rpc('fn_reserva_publica_token', {
+    p_reserva_id: reservaId, p_token: token,
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as ReservaResumen) ?? null;
+}
+
+// Cancelar con el token del link (sin teléfono). true = cancelada.
+export async function cancelarReservaPorToken(
+  reservaId: number, token: string, motivo?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await db().rpc('fn_cancelar_reserva_token', {
+    p_reserva_id: reservaId, p_token: token, p_motivo: motivo ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: data === true };
+}
+
 // Cancelación por el propio cliente (verifica por teléfono). true = cancelada.
 export async function cancelarReservaPublica(
   reservaId: number, telefono: string, motivo?: string,

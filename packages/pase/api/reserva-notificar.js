@@ -41,7 +41,7 @@ export default async function handler(req, res) {
   // Cargar la reserva.
   const { data: r, error } = await db
     .from('reservas')
-    .select('id, cliente_nombre, cliente_email, fecha_hora, personas, estado, local_id, created_at, notif_confirmacion_at')
+    .select('id, cliente_nombre, cliente_email, fecha_hora, personas, estado, local_id, created_at, notif_confirmacion_at, cancel_token')
     .eq('id', reservaId)
     .maybeSingle();
   // Respuesta genérica para TODOS los casos de "no envío": no revelar si la
@@ -74,7 +74,7 @@ export default async function handler(req, res) {
   // Link de autocancelación (página pública de MESA). Configurable por si
   // cambia el dominio; default al canónico de prod.
   const mesaBase = (process.env.MESA_PUBLIC_BASE || 'https://mesa-orpin.vercel.app').replace(/\/$/, '');
-  const cancelUrl = `${mesaBase}/r/cancelar/${r.id}`;
+  const cancelUrl = `${mesaBase}/r/cancelar/${r.id}${r.cancel_token ? `?t=${r.cancel_token}` : ''}`;
 
   const asunto = `Reserva en ${localNombre} — ${cuando}`;
   const html = `
