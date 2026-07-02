@@ -14,7 +14,7 @@ export function ReciboSueldo({ recibo }: { recibo: ReciboSueldoModel }) {
       border: "1px solid #d4dae2", borderRadius: 4, overflow: "hidden",
     }}>
       {/* Encabezado negocio */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 20px", borderBottom: "2px solid #1a2230" }}>
+      <div className="recibo-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 20px", borderBottom: "2px solid #1a2230" }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>{r.negocio.razonSocial}</div>
           <div style={{ color: "#566", fontSize: 11 }}>
@@ -30,7 +30,7 @@ export function ReciboSueldo({ recibo }: { recibo: ReciboSueldoModel }) {
       </div>
 
       {/* Datos empleado */}
-      <div style={{ padding: "12px 20px", background: "#f6f8fb", fontSize: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
+      <div className="recibo-employee" style={{ padding: "12px 20px", background: "#f6f8fb", fontSize: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
         <div><span style={{ color: "#889" }}>Empleado:</span> <b>{r.empleado.nombre}</b></div>
         {r.empleado.cuil && <div><span style={{ color: "#889" }}>CUIL:</span> {r.empleado.cuil}</div>}
         {r.empleado.puesto && <div><span style={{ color: "#889" }}>Puesto:</span> {r.empleado.puesto}</div>}
@@ -38,7 +38,7 @@ export function ReciboSueldo({ recibo }: { recibo: ReciboSueldoModel }) {
       </div>
 
       {/* Desglose */}
-      <div style={{ padding: "14px 20px" }}>
+      <div className="recibo-detail" style={{ padding: "14px 20px" }}>
         <div style={{ fontSize: 10, color: "#889", textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>Detalle de haberes y descuentos</div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
           <tbody>
@@ -58,7 +58,7 @@ export function ReciboSueldo({ recibo }: { recibo: ReciboSueldoModel }) {
 
       {/* Forma de pago */}
       {r.pagos.length > 0 && (
-        <div style={{ padding: "0 20px 14px" }}>
+        <div className="recibo-payments" style={{ padding: "0 20px 14px" }}>
           <div style={{ fontSize: 10, color: "#889", textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>Forma de pago</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {r.pagos.map((p, i) => (
@@ -72,10 +72,10 @@ export function ReciboSueldo({ recibo }: { recibo: ReciboSueldoModel }) {
       )}
 
       {/* Firma */}
-      <div style={{ padding: "14px 20px 20px", borderTop: "1px dashed #b8c2cf", fontSize: 11.5, color: "#445" }}>
+      <div className="recibo-signature" style={{ padding: "14px 20px 20px", borderTop: "1px dashed #b8c2cf", fontSize: 11.5, color: "#445" }}>
         Recibí conforme la suma de <b>{fmt_$(r.total)}</b> ({r.totalEnLetras}) en concepto de
         {r.tipo === "final" ? " liquidación final" : " sueldo"} correspondiente a <b>{r.periodo}</b>.
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 36, gap: 20 }}>
+        <div className="recibo-sig-lines" style={{ display: "flex", justifyContent: "space-between", marginTop: 36, gap: 20 }}>
           <div style={{ flex: 1, borderTop: "1px solid #1a2230", paddingTop: 4, textAlign: "center", fontSize: 10, color: "#889" }}>Firma</div>
           <div style={{ flex: 1, borderTop: "1px solid #1a2230", paddingTop: 4, textAlign: "center", fontSize: 10, color: "#889" }}>Aclaración</div>
           <div style={{ flex: 1, borderTop: "1px solid #1a2230", paddingTop: 4, textAlign: "center", fontSize: 10, color: "#889" }}>DNI · Fecha</div>

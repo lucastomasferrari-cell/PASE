@@ -301,6 +301,8 @@ export function TabSueldos({
   const [negocioModal, setNegocioModal] = useState(false);
   const [negocioForm, setNegocioForm] = useState({ razon_social: "", cuit: "", direccion: "" });
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [selRecibosModal, setSelRecibosModal] = useState(false);
+  const [selRecibosChecked, setSelRecibosChecked] = useState<Set<string>>(new Set());
 
   // Recargar todo (después de cualquier mutación)
   //
@@ -447,11 +449,19 @@ export function TabSueldos({
     } finally { setImprimiendo(false); }
   };
 
-  const imprimirTodosDelMes = async () => {
-    const liqIds = liqs.filter(l => l.estado === "pagado" && l.liq_id).map(l => l.liq_id as string);
-    if (liqIds.length === 0) { showError("No hay sueldos pagados este mes para imprimir."); return; }
+  const abrirSelRecibos = () => {
+    const pagados = liqs.filter(l => l.estado === "pagado" && l.liq_id);
+    if (pagados.length === 0) { showError("No hay sueldos pagados este mes para imprimir."); return; }
+    setSelRecibosChecked(new Set(pagados.map(l => l.liq_id as string)));
+    setSelRecibosModal(true);
+  };
+
+  const imprimirSeleccionados = async () => {
+    const ids = Array.from(selRecibosChecked);
+    if (ids.length === 0) { showError("Seleccioná al menos un recibo."); return; }
     setImprimiendo(true);
-    try { setReciboPrint(await construirRecibosDeLiqs(liqIds)); }
+    setSelRecibosModal(false);
+    try { setReciboPrint(await construirRecibosDeLiqs(ids)); }
     finally { setImprimiendo(false); }
   };
 
@@ -1198,10 +1208,10 @@ export function TabSueldos({
         <div style={{ width: 1, height: 24, background: "var(--bd)", margin: "0 4px" }} />
         <button
           className="btn btn-ghost btn-sm"
-          onClick={() => void imprimirTodosDelMes()}
+          onClick={abrirSelRecibos}
           disabled={imprimiendo || !localId}
           style={{ padding: "4px 12px", fontSize: 11 }}
-          title="Imprimir un recibo por cada sueldo pagado este mes"
+          title="Elegir qué recibos imprimir"
         >
           🖨 Recibos del mes
         </button>
@@ -2030,7 +2040,75 @@ export function TabSueldos({
         )}
       </Modal>
 
-      {/* Vista de impresión de recibos (Lucas 04-jun) */}
+      {/* Modal selección de recibos */}
+      <Modal
+        isOpen={selRecibosModal}
+        onClose={() => setSelRecibosModal(false)}
+        title="Seleccionar recibos para imprimir"
+        maxWidth={420}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setSelRecibosModal(false)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={() => void imprimirSeleccionados()} disabled={selRecibosChecked.size === 0}>
+              🖨 Imprimir {selRecibosChecked.size > 0 ? `(${selRecibosChecked.size})` : ""}
+            </button>
+          </>
+        }
+      >
+        <div style={{ marginBottom: 10, display: "flex", gap: 8 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 11, padding: "3px 10px" }}
+            onClick={() => {
+              const pagados = liqs.filter(l => l.estado === "pagado" && l.liq_id);
+              setSelRecibosChecked(selRecibosChecked.size === pagados.length ? new Set() : new Set(pagados.map(l => l.liq_id as string)));
+            }}
+          >
+            {selRecibosChecked.size === liqs.filter(l => l.estado === "pagado" && l.liq_id).length ? "Deseleccionar todos" : "Seleccionar todos"}
+          </button>
+          <span style={{ fontSize: 11, color: "var(--muted2)", alignSelf: "center" }}>
+            {selRecibosChecked.size} de {liqs.filter(l => l.estado === "pagado" && l.liq_id).length}
+          </span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 400, overflow: "auto" }}>
+          {liqs.filter(l => l.estado === "pagado" && l.liq_id).map(l => {
+            const emp = empleados.find(e => e.id === l.empleado_id);
+            if (!emp) return null;
+            const checked = selRecibosChecked.has(l.liq_id as string);
+            return (
+              <label
+                key={l.liq_id}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+                  borderRadius: 6, cursor: "pointer",
+                  background: checked ? "var(--brand-50, #eff8ff)" : "transparent",
+                  border: `1px solid ${checked ? "var(--brand-200, #b8d4f0)" : "var(--bd, #e0e0e0)"}`,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    const next = new Set(selRecibosChecked);
+                    if (checked) next.delete(l.liq_id as string);
+                    else next.add(l.liq_id as string);
+                    setSelRecibosChecked(next);
+                  }}
+                  style={{ width: 16, height: 16, accentColor: "var(--brand-500, #3b82f6)" }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.apellido} {emp.nombre}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted2)" }}>
+                    {l.cuotas_total > 1 ? `Cuota ${l.cuota_num}/${l.cuotas_total}` : "Mensual"} · {fmt_$(l.pagos_realizados)}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </Modal>
+
+      {/* Vista de impresión de recibos */}
       {reciboPrint && (
         <PrintRecibos recibos={reciboPrint} onClose={() => setReciboPrint(null)} />
       )}

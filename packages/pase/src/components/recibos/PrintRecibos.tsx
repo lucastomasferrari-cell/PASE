@@ -1,17 +1,5 @@
-// Vista de impresión de recibos (Lucas 04-jun). Overlay full-screen con una
-// barra (Imprimir / Cerrar) + 1..N recibos.
-//
-// FIX 01-jul (Anto: "el PDF de recibos de Devoto salió con solo 2 empleados"):
-// el approach viejo ponía el overlay en `position:fixed; inset:0; overflow:auto`
-// y los recibos en `position:absolute` dentro. Al imprimir, ese contenedor de
-// alto fijo con overflow RECORTABA el contenido a lo que entraba en pantalla
-// (~2 recibos) y Chrome descartaba el resto → el PDF salía truncado. Patrón de
-// impresión roto conocido.
-//
-// Ahora: el overlay se monta en un PORTAL como hijo directo de <body>. En
-// impresión ocultamos TODO menos ese portal (así no arrastra la altura de la
-// app oculta) y lo pasamos a flujo normal (position:static, sin overflow, alto
-// automático) → el navegador pagina los N recibos completos, uno por hoja.
+// Vista de impresión de recibos. Portal directo en <body>; en print se oculta
+// todo menos el portal y se pagina 2 recibos por hoja A4 con línea de corte.
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ReciboSueldo } from "./ReciboSueldo";
@@ -19,9 +7,6 @@ import type { ReciboSueldoModel } from "../../lib/recibos";
 
 const PRINT_CSS = `
 @media print {
-  /* Ocultar toda la app (y cualquier otro nodo de body) menos el portal de
-     recibos. Sin esto, el #root oculto seguía ocupando alto y metía hojas en
-     blanco / desplazaba los recibos. */
   body > *:not(.recibo-print-portal) { display: none !important; }
   .recibo-print-portal {
     position: static !important; inset: auto !important;
@@ -30,13 +15,46 @@ const PRINT_CSS = `
   }
   .recibo-print-root { padding: 0 !important; }
   .recibo-no-print { display: none !important; }
-  .recibo-page {
+  .recibo-pair {
     page-break-after: always; break-after: page;
-    border: none !important; box-shadow: none !important; margin: 0 auto !important;
+    display: flex; flex-direction: column;
+    justify-content: flex-start;
+    height: 100vh;
+    box-sizing: border-box;
   }
-  .recibo-page:last-child { page-break-after: auto; break-after: auto; }
+  .recibo-pair:last-child { page-break-after: auto; break-after: auto; }
+  .recibo-page {
+    border: none !important; box-shadow: none !important;
+    margin: 0 auto !important; width: 100% !important;
+    max-width: 540px !important;
+  }
+  .recibo-cut-line {
+    border-top: 1px dashed #999 !important;
+    margin: 6px 40px !important;
+    position: relative;
+  }
+  .recibo-cut-line::after {
+    content: "✂";
+    position: absolute; top: -9px; left: -20px;
+    font-size: 14px; color: #999;
+  }
+  .recibo-page { font-size: 11px !important; }
+  .recibo-page .recibo-header { padding: 10px 16px !important; }
+  .recibo-page .recibo-employee { padding: 8px 16px !important; }
+  .recibo-page .recibo-detail { padding: 8px 16px !important; }
+  .recibo-page .recibo-payments { padding: 0 16px 8px !important; }
+  .recibo-page .recibo-signature { padding: 8px 16px 12px !important; }
+  .recibo-page .recibo-sig-lines { margin-top: 18px !important; }
 }
 `;
+
+function groupPairs(recibos: ReciboSueldoModel[]): ReciboSueldoModel[][] {
+  const pairs: ReciboSueldoModel[][] = [];
+  for (let i = 0; i < recibos.length; i += 2) {
+    pairs.push(recibos.slice(i, i + 2));
+  }
+  return pairs;
+}
 
 export function PrintRecibos({ recibos, onClose }: { recibos: ReciboSueldoModel[]; onClose: () => void }) {
   useEffect(() => {
@@ -45,6 +63,9 @@ export function PrintRecibos({ recibos, onClose }: { recibos: ReciboSueldoModel[
     return () => window.removeEventListener("keydown", onEsc);
   }, [onClose]);
 
+  const pairs = groupPairs(recibos);
+  const hojas = pairs.length;
+
   return createPortal(
     <div className="recibo-print-portal" style={{
       position: "fixed", inset: 0, zIndex: 9000, background: "rgba(15,20,30,0.55)",
@@ -52,21 +73,31 @@ export function PrintRecibos({ recibos, onClose }: { recibos: ReciboSueldoModel[
     }}>
       <style>{PRINT_CSS}</style>
 
-      {/* Barra de acciones (no se imprime) */}
       <div className="recibo-no-print" style={{
         position: "sticky", top: 0, zIndex: 1, display: "flex", justifyContent: "center",
         gap: 10, padding: "12px", background: "var(--s2, #16202e)", borderBottom: "1px solid var(--bd,#26344a)",
       }}>
         <span style={{ alignSelf: "center", color: "var(--muted2,#9fb0c4)", fontSize: 12, marginRight: 8 }}>
-          {recibos.length} recibo{recibos.length !== 1 ? "s" : ""}
+          {recibos.length} recibo{recibos.length !== 1 ? "s" : ""} · {hojas} hoja{hojas !== 1 ? "s" : ""}
         </span>
         <button className="btn btn-acc" onClick={() => window.print()}>🖨 Imprimir</button>
         <button className="btn btn-sec" onClick={onClose}>Cerrar</button>
       </div>
 
-      {/* Recibos */}
       <div className="recibo-print-root" style={{ padding: "20px 0" }}>
-        {recibos.map((r, i) => <ReciboSueldo key={i} recibo={r} />)}
+        {pairs.map((pair, pi) => (
+          <div className="recibo-pair" key={pi}>
+            <ReciboSueldo recibo={pair[0]!} />
+            {pair.length === 2 && (
+              <>
+                <div className="recibo-cut-line" style={{
+                  borderTop: "1px dashed #ccc", margin: "8px 60px",
+                }} />
+                <ReciboSueldo recibo={pair[1]!} />
+              </>
+            )}
+          </div>
+        ))}
       </div>
     </div>,
     document.body,
