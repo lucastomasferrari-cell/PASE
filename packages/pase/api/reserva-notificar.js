@@ -1,54 +1,159 @@
-// Confirmación automática al cliente tras crear una reserva pública (MESA).
+// Mails de reservas (MESA) vía Resend. Dos modos:
 //
-// Lo llama (fire-and-forget) el widget público apenas se crea la reserva.
-// Manda un email de confirmación vía Resend. Público pero acotado:
-//   - Solo envía a la dirección guardada EN la reserva (no a un mail arbitrario).
-//   - Solo una vez (columna notif_confirmacion_at), idempotente.
-//   - Solo reservas recién creadas (< 15 min) → no sirve para spamear históricas.
+//  1) PÚBLICO (lo llama el widget al reservar): POST { reservaId, tipo }
+//     - tipo 'confirmacion' (default): confirma la reserva recién creada (<15min).
+//     Solo envía a la dirección guardada EN la reserva, una vez (idempotente).
 //
-// Requiere en el proyecto Vercel de PASE:
-//   SUPABASE_URL, SUPABASE_SERVICE_KEY  (ya están)
-//   RESEND_API_KEY, RESEND_FROM         (setear para que envíe; sin esto no-op)
+//  2) CRON (GitHub Actions diario): POST con Authorization: Bearer <SERVICE_KEY>.
+//     - Recordatorios: reservas de HOY (con email, sin recordatorio enviado).
+//     - Reseñas: reservas de AYER que no se cancelaron / no fueron no-show.
 //
-// El WhatsApp automático se enchufa acá también cuando esté la plantilla Meta.
+// Requiere en Vercel pase-yndx: SUPABASE_URL, SUPABASE_SERVICE_KEY (ya están),
+// RESEND_API_KEY, RESEND_FROM. Opcional MESA_PUBLIC_BASE (URL pública de MESA).
 
 import { createClient } from '@supabase/supabase-js';
 
 function fmtFechaHora(iso) {
   try {
-    const d = new Date(iso);
-    return d.toLocaleString('es-AR', {
+    return new Date(iso).toLocaleString('es-AR', {
       weekday: 'long', day: 'numeric', month: 'long',
       hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires',
     });
   } catch { return iso; }
 }
+function fmtHora(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' });
+  } catch { return iso; }
+}
+// Fecha AR (YYYY-MM-DD) con offset de días.
+function arDate(offDays) {
+  return new Date(Date.now() + offDays * 86400000)
+    .toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+const box = (inner) => `<div style="font-family:system-ui,Arial,sans-serif;max-width:480px;margin:auto;color:#1a1a1a">${inner}</div>`;
+const btn = (href, label) => `<a href="${href}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">${label}</a>`;
+
+function tplConfirmacion(r, localNombre, cancelUrl) {
+  const cuando = fmtFechaHora(r.fecha_hora);
+  const estadoTxt = r.estado === 'confirmada'
+    ? 'Tu reserva quedó <strong>confirmada</strong>.'
+    : 'Recibimos tu solicitud. El restaurante la va a <strong>confirmar en breve</strong>.';
+  return {
+    asunto: `Reserva en ${localNombre} — ${cuando}`,
+    html: box(`
+      <h2 style="margin:0 0 8px">¡Hola ${r.cliente_nombre}!</h2>
+      <p style="margin:0 0 16px;color:#555">${estadoTxt}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:15px">
+        <tr><td style="padding:6px 0;color:#888">Lugar</td><td style="padding:6px 0;text-align:right"><strong>${localNombre}</strong></td></tr>
+        <tr><td style="padding:6px 0;color:#888">Fecha y hora</td><td style="padding:6px 0;text-align:right"><strong>${cuando}</strong></td></tr>
+        <tr><td style="padding:6px 0;color:#888">Personas</td><td style="padding:6px 0;text-align:right"><strong>${r.personas}</strong></td></tr>
+      </table>
+      <p style="margin:20px 0 8px;color:#555;font-size:14px">¿No podés asistir? Cancelá así liberamos la mesa:</p>
+      ${btn(cancelUrl, 'Cancelar mi reserva')}
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos quien reservó, ignorá este mail.</p>`),
+  };
+}
+function tplRecordatorio(r, localNombre, cancelUrl) {
+  return {
+    asunto: `Hoy te esperamos en ${localNombre} 🍽️`,
+    html: box(`
+      <h2 style="margin:0 0 8px">¡Hola ${r.cliente_nombre}!</h2>
+      <p style="margin:0 0 16px;color:#555">Te recordamos tu reserva de <strong>hoy a las ${fmtHora(r.fecha_hora)}</strong> en <strong>${localNombre}</strong> para <strong>${r.personas}</strong> ${r.personas === 1 ? 'persona' : 'personas'}. ¡Te esperamos!</p>
+      <p style="margin:0 0 8px;color:#555;font-size:14px">Si no vas a poder venir, avisanos:</p>
+      ${btn(cancelUrl, 'Cancelar mi reserva')}`),
+  };
+}
+function tplResena(r, localNombre, url) {
+  return {
+    asunto: `¿Cómo estuvo tu experiencia en ${localNombre}?`,
+    html: box(`
+      <h2 style="margin:0 0 8px">¡Gracias por venir, ${r.cliente_nombre}!</h2>
+      <p style="margin:0 0 16px;color:#555">¿Nos dejás una reseña de tu visita a <strong>${localNombre}</strong>? Te toma 10 segundos y nos ayuda un montón.</p>
+      ${btn(url, 'Dejar mi reseña')}
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos, ignorá este mail.</p>`),
+  };
+}
+
+async function sendEmail(apiKey, from, to, subject, html) {
+  try {
+    const rr = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    const data = await rr.json();
+    if (!rr.ok) return { ok: false, error: data?.message || `HTTP ${rr.status}` };
+    return { ok: true, id: data?.id ?? null };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+const SEL = 'id, cliente_nombre, cliente_email, fecha_hora, personas, estado, local_id, cancel_token';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    return res.status(200).json({ ok: false, error: 'Backend sin configurar' });
+  if (!supabaseUrl || !serviceKey) return res.status(200).json({ ok: false, error: 'Backend sin configurar' });
+
+  const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEnv = process.env.RESEND_FROM;
+  const mesaBase = (process.env.MESA_PUBLIC_BASE || 'https://mesa-orpin.vercel.app').replace(/\/$/, '');
+  const fromHdr = (localNombre) => (fromEnv && fromEnv.includes('<')) ? fromEnv : `${localNombre} <${fromEnv}>`;
+  const cancelUrl = (r) => `${mesaBase}/r/cancelar/${r.id}${r.cancel_token ? `?t=${r.cancel_token}` : ''}`;
+  const resenaUrl = (r) => `${mesaBase}/r/resena/${r.id}${r.cancel_token ? `?t=${r.cancel_token}` : ''}`;
+
+  const auth = req.headers.authorization || '';
+  const isCron = auth === `Bearer ${serviceKey}`;
+
+  // ─── MODO CRON (GitHub Actions): recordatorios + reseñas ───
+  if (isCron) {
+    if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
+    const todayStart = `${arDate(0)}T00:00:00-03:00`;
+    const tomStart = `${arDate(1)}T00:00:00-03:00`;
+    const yestStart = `${arDate(-1)}T00:00:00-03:00`;
+
+    const { data: recs } = await db.from('reservas').select(SEL)
+      .gte('fecha_hora', todayStart).lt('fecha_hora', tomStart)
+      .in('estado', ['pendiente', 'confirmada', 'sentada'])
+      .not('cliente_email', 'is', null).is('notif_recordatorio_at', null).is('deleted_at', null);
+    const { data: revs } = await db.from('reservas').select(SEL)
+      .gte('fecha_hora', yestStart).lt('fecha_hora', todayStart)
+      .in('estado', ['confirmada', 'sentada', 'finalizada'])
+      .not('cliente_email', 'is', null).is('notif_resena_at', null).is('deleted_at', null);
+
+    const ids = [...new Set([...(recs || []), ...(revs || [])].map((x) => x.local_id))];
+    const { data: locs } = ids.length ? await db.from('locales').select('id, nombre').in('id', ids) : { data: [] };
+    const nombreDe = Object.fromEntries((locs || []).map((l) => [l.id, l.nombre]));
+
+    let nRec = 0, nRev = 0;
+    for (const r of recs || []) {
+      const ln = nombreDe[r.local_id] || 'el restaurante';
+      const { asunto, html } = tplRecordatorio(r, ln, cancelUrl(r));
+      const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
+      if (s.ok) { await db.from('reservas').update({ notif_recordatorio_at: new Date().toISOString() }).eq('id', r.id); nRec++; }
+    }
+    for (const r of revs || []) {
+      const ln = nombreDe[r.local_id] || 'el restaurante';
+      const { asunto, html } = tplResena(r, ln, resenaUrl(r));
+      const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
+      if (s.ok) { await db.from('reservas').update({ notif_resena_at: new Date().toISOString() }).eq('id', r.id); nRev++; }
+    }
+    return res.status(200).json({ ok: true, recordatorios: nRec, resenas: nRev });
   }
 
+  // ─── MODO PÚBLICO: confirmación de una reserva recién creada ───
   const reservaId = (req.body && (req.body.reservaId ?? req.body.reserva_id));
   const tipo = (req.body && req.body.tipo) === 'resena' ? 'resena' : 'confirmacion';
   if (!reservaId) return res.status(400).json({ ok: false, error: 'Falta reservaId' });
 
-  const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-
-  // Cargar la reserva.
-  const { data: r, error } = await db
-    .from('reservas')
-    .select('id, cliente_nombre, cliente_email, fecha_hora, personas, estado, local_id, created_at, notif_confirmacion_at, notif_resena_at, cancel_token')
-    .eq('id', reservaId)
-    .maybeSingle();
-  // Respuesta genérica para TODOS los casos de "no envío": no revelar si la
-  // reserva existe / tiene email / etc → evita usar el endpoint como oráculo
-  // de enumeración de reservas (auditoría I2).
-  const OK = { ok: true };
+  const { data: r, error } = await db.from('reservas')
+    .select(`${SEL}, created_at, notif_confirmacion_at, notif_resena_at`)
+    .eq('id', reservaId).maybeSingle();
+  const OK = { ok: true }; // respuesta genérica: no revela si existe/tiene email (audit I2)
   if (error || !r) return res.status(200).json(OK);
   if (!r.cliente_email) return res.status(200).json(OK);
   if (tipo === 'resena') {
@@ -56,71 +161,17 @@ export default async function handler(req, res) {
     if (!['sentada', 'finalizada'].includes(r.estado)) return res.status(200).json(OK);
   } else {
     if (r.notif_confirmacion_at) return res.status(200).json(OK);
-    const edadMin = (Date.now() - new Date(r.created_at).getTime()) / 60000;
-    if (edadMin > 15) return res.status(200).json(OK);
+    if ((Date.now() - new Date(r.created_at).getTime()) / 60000 > 15) return res.status(200).json(OK);
   }
+  if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEnv = process.env.RESEND_FROM;
-  if (!apiKey || !fromEnv) {
-    return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales (RESEND_API_KEY / RESEND_FROM).' });
-  }
-
-  // Nombre del local (para el asunto/cuerpo) + remitente con display name.
-  const { data: local } = await db.from('locales').select('nombre').eq('id', r.local_id).maybeSingle();
-  const localNombre = local?.nombre || 'el restaurante';
-  const from = fromEnv.includes('<') ? fromEnv : `${localNombre} <${fromEnv}>`;
-  const mesaBase = (process.env.MESA_PUBLIC_BASE || 'https://mesa-orpin.vercel.app').replace(/\/$/, '');
-  const tokenQ = r.cancel_token ? `?t=${r.cancel_token}` : '';
-
-  let asunto, html, markCol;
-  if (tipo === 'resena') {
-    const url = `${mesaBase}/r/resena/${r.id}${tokenQ}`;
-    asunto = `¿Cómo estuvo tu experiencia en ${localNombre}?`;
-    html = `
-      <div style="font-family:system-ui,Arial,sans-serif;max-width:480px;margin:auto;color:#1a1a1a">
-        <h2 style="margin:0 0 8px">¡Gracias por venir, ${r.cliente_nombre}!</h2>
-        <p style="margin:0 0 16px;color:#555">¿Nos dejás una reseña de tu visita a <strong>${localNombre}</strong>? Te toma 10 segundos y nos ayuda un montón.</p>
-        <a href="${url}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">Dejar mi reseña</a>
-        <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos, ignorá este mail.</p>
-      </div>`;
-    markCol = 'notif_resena_at';
-  } else {
-    const cancelUrl = `${mesaBase}/r/cancelar/${r.id}${tokenQ}`;
-    const cuando = fmtFechaHora(r.fecha_hora);
-    const estadoTxt = r.estado === 'confirmada'
-      ? 'Tu reserva quedó <strong>confirmada</strong>.'
-      : 'Recibimos tu solicitud. El restaurante la va a <strong>confirmar en breve</strong>.';
-    asunto = `Reserva en ${localNombre} — ${cuando}`;
-    html = `
-      <div style="font-family:system-ui,Arial,sans-serif;max-width:480px;margin:auto;color:#1a1a1a">
-        <h2 style="margin:0 0 8px">¡Hola ${r.cliente_nombre}!</h2>
-        <p style="margin:0 0 16px;color:#555">${estadoTxt}</p>
-        <table style="width:100%;border-collapse:collapse;font-size:15px">
-          <tr><td style="padding:6px 0;color:#888">Lugar</td><td style="padding:6px 0;text-align:right"><strong>${localNombre}</strong></td></tr>
-          <tr><td style="padding:6px 0;color:#888">Fecha y hora</td><td style="padding:6px 0;text-align:right"><strong>${cuando}</strong></td></tr>
-          <tr><td style="padding:6px 0;color:#888">Personas</td><td style="padding:6px 0;text-align:right"><strong>${r.personas}</strong></td></tr>
-        </table>
-        <p style="margin:20px 0 8px;color:#555;font-size:14px">¿No podés asistir? Cancelá así liberamos la mesa:</p>
-        <a href="${cancelUrl}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">Cancelar mi reserva</a>
-        <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos quien reservó, ignorá este mail.</p>
-      </div>`;
-    markCol = 'notif_confirmacion_at';
-  }
-
-  try {
-    const rr = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [r.cliente_email], subject: asunto, html }),
-    });
-    const data = await rr.json();
-    if (!rr.ok) {
-      return res.status(200).json({ ok: false, configured: true, error: data?.message || `HTTP ${rr.status}` });
-    }
-    await db.from('reservas').update({ [markCol]: new Date().toISOString() }).eq('id', r.id);
-    return res.status(200).json({ ok: true, id: data?.id ?? null });
-  } catch (e) {
-    return res.status(200).json({ ok: false, configured: true, error: e instanceof Error ? e.message : String(e) });
-  }
+  const ln = (await db.from('locales').select('nombre').eq('id', r.local_id).maybeSingle()).data?.nombre || 'el restaurante';
+  const { asunto, html } = tipo === 'resena'
+    ? tplResena(r, ln, resenaUrl(r))
+    : tplConfirmacion(r, ln, cancelUrl(r));
+  const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
+  if (!s.ok) return res.status(200).json({ ok: false, configured: true, error: s.error });
+  const markCol = tipo === 'resena' ? 'notif_resena_at' : 'notif_confirmacion_at';
+  await db.from('reservas').update({ [markCol]: new Date().toISOString() }).eq('id', r.id);
+  return res.status(200).json({ ok: true, id: s.id });
 }

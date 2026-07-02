@@ -6,7 +6,6 @@
 // (sesión real del dueño/encargado, RLS por tenant + local).
 
 import { db } from './supabase';
-import { notificarResenaReserva } from './perfilService';
 
 // ─── Types ────────────────────────────────────────────────────────────
 export type EstadoReserva =
@@ -163,8 +162,6 @@ export async function cambiarEstadoReserva(args: {
     p_mesa_id: args.mesaId ?? null,
   });
   if (error) return { error: traducirError(error.message) };
-  // Al finalizar la reserva, disparamos el mail de reseña (best-effort).
-  if (args.nuevoEstado === 'finalizada') void notificarResenaReserva(args.reservaId);
   return { error: null };
 }
 

@@ -1,0 +1,33 @@
+name: Reservas - recordatorios + reseñas (MESA)
+
+# Una vez por día: dispara el modo CRON del endpoint /api/reserva-notificar
+# en pase-yndx, que manda:
+#   - Recordatorio a las reservas de HOY (con email, sin recordatorio enviado).
+#   - Reseña a las reservas de AYER (no canceladas / no no-show, con email).
+# Idempotente: cada reserva se marca al enviar, así un re-run no duplica.
+# Auth: Bearer SUPABASE_SERVICE_KEY (mismo patrón que notif-pendientes-cron).
+
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 14:00 UTC = 11:00 Argentina
+  workflow_dispatch:
+
+concurrency:
+  group: reservas-mails-cron
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/reserva-notificar (modo cron)
+        run: |
+          set -e
+          HTTP=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Content-Type: application/json" \
+            'https://pase-yndx.vercel.app/api/reserva-notificar')
+          echo "HTTP: $HTTP"
+          cat /tmp/body
+          if [ "$HTTP" -ge 400 ]; then exit 1; fi
