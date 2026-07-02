@@ -290,6 +290,8 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
   const [notas, setNotas] = useState('');
+  const [dietas, setDietas] = useState<string[]>([]);
+  const toggleDieta = (d: string) => setDietas((xs) => xs.includes(d) ? xs.filter((x) => x !== d) : [...xs, d]);
   const [confirmando, setConfirmando] = useState(false);
   const [estadoFinal, setEstadoFinal] = useState<string>('pendiente');
   const [reservaId, setReservaId] = useState<number | null>(null);
@@ -369,13 +371,18 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   async function confirmar(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre.trim()) { toast.error('Tu nombre es obligatorio'); return; }
-    if (perfil.reservas.telefono_obligatorio && !telefono.trim()) { toast.error('El teléfono es obligatorio'); return; }
+    if (!telefono.trim()) { toast.error('El teléfono es obligatorio'); return; }
+    if (!email.trim()) { toast.error('El email es obligatorio (te mandamos la confirmación ahí)'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error('Revisá el email, no parece válido'); return; }
+    // Las dietas elegidas se suman a las notas para que el local las vea.
+    const dietasTxt = dietas.length ? `Dietas: ${dietas.join(', ')}.` : '';
+    const notasFinal = [dietasTxt, notas.trim()].filter(Boolean).join(' ');
     setConfirmando(true);
     try {
       const r = await crearReservaPublica({
         slug, nombre: nombre.trim(), telefono: telefono.trim(),
         email: email.trim() || undefined,
-        fechaHora: fechaHoraISO(), personas, notas: notas || undefined, zona,
+        fechaHora: fechaHoraISO(), personas, notas: notasFinal || undefined, zona,
       });
       if (!r.ok) { toast.error(traducirMotivoReserva(r.error)); return; }
       // Confirmación automática al cliente (email). Fire-and-forget.
@@ -531,17 +538,28 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                    className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-tel" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Teléfono{perfil.reservas.telefono_obligatorio ? '*' : ''}</label>
+            <label htmlFor="rw-tel" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Teléfono *</label>
             <input id="rw-tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)}
                    className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-email" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Email (para la confirmación)</label>
+            <label htmlFor="rw-email" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Email * (para la confirmación)</label>
             <input id="rw-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)}
                    className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-notas" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Alergias o intolerancias (opcional)</label>
+            <label className="font-display text-[10px] uppercase tracking-widest text-neutral-400 block mb-2">¿Alguna dieta especial en la mesa? (opcional)</label>
+            <div className="flex flex-wrap gap-2">
+              {['Vegetariano', 'Vegano', 'Celíaco (sin TACC)', 'Sin lactosa'].map((d) => (
+                <button key={d} type="button" onClick={() => toggleDieta(d)}
+                        className={`px-3 py-1.5 border text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          dietas.includes(d) ? 'bg-neutral-900 text-white border-neutral-900' : 'border-neutral-900/25 text-neutral-900 hover:border-neutral-900'
+                        }`}>{d}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="rw-notas" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Alergias, intolerancias o comentarios (opcional)</label>
             <textarea id="rw-notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)}
                       className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
