@@ -68,6 +68,11 @@ export default async function handler(req, res) {
     ? 'Tu reserva quedó <strong>confirmada</strong>.'
     : 'Recibimos tu solicitud. El restaurante la va a <strong>confirmar en breve</strong>.';
 
+  // Link de autocancelación (página pública de MESA). Configurable por si
+  // cambia el dominio; default al canónico de prod.
+  const mesaBase = (process.env.MESA_PUBLIC_BASE || 'https://mesa-orpin.vercel.app').replace(/\/$/, '');
+  const cancelUrl = `${mesaBase}/r/cancelar/${r.id}`;
+
   const asunto = `Reserva en ${localNombre} — ${cuando}`;
   const html = `
     <div style="font-family:system-ui,Arial,sans-serif;max-width:480px;margin:auto;color:#1a1a1a">
@@ -78,7 +83,9 @@ export default async function handler(req, res) {
         <tr><td style="padding:6px 0;color:#888">Fecha y hora</td><td style="padding:6px 0;text-align:right"><strong>${cuando}</strong></td></tr>
         <tr><td style="padding:6px 0;color:#888">Personas</td><td style="padding:6px 0;text-align:right"><strong>${r.personas}</strong></td></tr>
       </table>
-      <p style="margin:16px 0 0;color:#888;font-size:13px">Si no podés asistir, avisanos así liberamos la mesa. ¡Te esperamos!</p>
+      <p style="margin:20px 0 8px;color:#555;font-size:14px">¿No podés asistir? Cancelá así liberamos la mesa:</p>
+      <a href="${cancelUrl}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">Cancelar mi reserva</a>
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos quien reservó, ignorá este mail.</p>
     </div>`;
 
   try {
