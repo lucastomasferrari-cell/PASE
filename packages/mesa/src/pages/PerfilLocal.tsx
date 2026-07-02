@@ -366,7 +366,6 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   function elegirSlot(h: string) { setHora(h); setPaso('datos'); }
 
   const slotsLibres = slots.filter((s) => s.disponible);
-  const ultimoLibre = slotsLibres[slotsLibres.length - 1]?.hora ?? null;
 
   async function confirmar(e: React.FormEvent) {
     e.preventDefault();
@@ -504,8 +503,8 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {slots.map((s) => {
-                  const pocos = s.disponible && s.restantes >= 1 && s.restantes <= 3;
-                  const ultimo = s.disponible && s.hora === ultimoLibre && slotsLibres.length > 1;
+                  const esUltimo = s.disponible && s.restantes === 1;
+                  const pocos = s.disponible && !esUltimo && s.restantes >= 2 && s.restantes <= 3;
                   return (
                     <button key={s.hora} type="button" disabled={!s.disponible}
                             onClick={() => elegirSlot(s.hora)}
@@ -516,8 +515,8 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                             }`}>
                       <span className={!s.disponible ? 'line-through' : ''}>{s.hora}</span>
                       {!s.disponible && <span className="text-[8px] font-bold text-red-400/70 uppercase mt-0.5 no-underline">Lleno</span>}
-                      {ultimo && <span className="absolute top-0 right-0 bg-brand-400 text-[7px] text-white px-1 py-0.5 font-bold uppercase">Último</span>}
-                      {!ultimo && pocos && <span className="absolute top-0 right-0 bg-brand-400 text-[7px] text-white px-1 py-0.5 font-bold uppercase">Quedan {s.restantes}</span>}
+                      {esUltimo && <span className="absolute top-0 right-0 bg-brand-400 text-[7px] text-white px-1 py-0.5 font-bold uppercase">Último</span>}
+                      {pocos && <span className="absolute top-0 right-0 bg-brand-400 text-[7px] text-white px-1 py-0.5 font-bold uppercase">Quedan {s.restantes}</span>}
                     </button>
                   );
                 })}

@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Save, Clock, Loader2, Users, Globe, MessageSquare, Mail, MapPin, Plus, Trash2 } from 'lucide-react';
+import { Save, Clock, Loader2, Users, Globe, MessageSquare, Mail, MapPin, Plus, Trash2, FileText } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 const DIAS: { dia: number; label: string }[] = [
@@ -27,6 +27,7 @@ function parseHorario(txt: string | null | undefined): { activo: boolean; abre: 
   return { activo: false, abre: '20:00', cierra: '00:00' };
 }
 interface ZonaLimite { zona: string; min: string; max: string }
+interface MailTpl { titulo: string; subtitulo: string }
 interface Form {
   activas: boolean;
   requiere_confirmacion: boolean;
@@ -46,6 +47,9 @@ interface Form {
   notif_recordatorio: boolean;
   notif_resena: boolean;
   notif_hora: string;
+  tpl_confirmacion: MailTpl;
+  tpl_recordatorio: MailTpl;
+  tpl_resena: MailTpl;
 }
 
 export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
@@ -80,6 +84,9 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       notif_recordatorio: s.reservas_notif_recordatorio == null ? true : Boolean(s.reservas_notif_recordatorio),
       notif_resena: s.reservas_notif_resena == null ? true : Boolean(s.reservas_notif_resena),
       notif_hora: String(s.reservas_notif_hora ?? 11),
+      tpl_confirmacion: { titulo: (s.reservas_tpl_confirmacion_titulo as string) ?? '', subtitulo: (s.reservas_tpl_confirmacion_subtitulo as string) ?? '' },
+      tpl_recordatorio: { titulo: (s.reservas_tpl_recordatorio_titulo as string) ?? '', subtitulo: (s.reservas_tpl_recordatorio_subtitulo as string) ?? '' },
+      tpl_resena: { titulo: (s.reservas_tpl_resena_titulo as string) ?? '', subtitulo: (s.reservas_tpl_resena_subtitulo as string) ?? '' },
     });
     setCargando(false);
   }, [settingsId]);
@@ -117,6 +124,12 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         reservas_notif_recordatorio: form.notif_recordatorio,
         reservas_notif_resena: form.notif_resena,
         reservas_notif_hora: Math.min(23, Math.max(0, Number(form.notif_hora) || 11)),
+        reservas_tpl_confirmacion_titulo: form.tpl_confirmacion.titulo.trim() || null,
+        reservas_tpl_confirmacion_subtitulo: form.tpl_confirmacion.subtitulo.trim() || null,
+        reservas_tpl_recordatorio_titulo: form.tpl_recordatorio.titulo.trim() || null,
+        reservas_tpl_recordatorio_subtitulo: form.tpl_recordatorio.subtitulo.trim() || null,
+        reservas_tpl_resena_titulo: form.tpl_resena.titulo.trim() || null,
+        reservas_tpl_resena_subtitulo: form.tpl_resena.subtitulo.trim() || null,
         ...horariosCols,
         updated_at: new Date().toISOString(),
       }).eq('id', settingsId);
@@ -134,6 +147,9 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
   }
   function addZona() { setForm((f) => f ? { ...f, zonas_limites: [...f.zonas_limites, { zona: '', min: '1', max: '' }] } : f); }
   function removeZona(i: number) { setForm((f) => f ? { ...f, zonas_limites: f.zonas_limites.filter((_, j) => j !== i) } : f); }
+  function setTpl(key: 'tpl_confirmacion' | 'tpl_recordatorio' | 'tpl_resena', patch: Partial<MailTpl>) {
+    setForm((f) => f ? { ...f, [key]: { ...f[key], ...patch } } : f);
+  }
 
   if (cargando || !form) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-ink-muted" /></div>;
@@ -246,6 +262,37 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         </Field>
       </Card>
 
+      {/* Personalizar textos de mails */}
+      <Card icon={<FileText className="h-4 w-4 text-brand-500" />} title="Personalizar textos de mails">
+        <p className="text-xs text-ink-muted -mt-1">
+          Dejá vacío para usar el texto por defecto. Podés usar variables: <code className="bg-ink/5 px-1 rounded text-[11px]">{'{{nombre}}'}</code> <code className="bg-ink/5 px-1 rounded text-[11px]">{'{{local}}'}</code> <code className="bg-ink/5 px-1 rounded text-[11px]">{'{{fecha}}'}</code> <code className="bg-ink/5 px-1 rounded text-[11px]">{'{{hora}}'}</code> <code className="bg-ink/5 px-1 rounded text-[11px]">{'{{personas}}'}</code>
+        </p>
+
+        <div className="space-y-4 pt-2">
+          <MailTplEditor
+            label="Mail de confirmación"
+            defaultTitulo="¡Hola {{nombre}}!"
+            defaultSubtitulo="Tu reserva quedó confirmada."
+            tpl={form.tpl_confirmacion}
+            onChange={(p) => setTpl('tpl_confirmacion', p)}
+          />
+          <MailTplEditor
+            label="Mail recordatorio"
+            defaultTitulo="¡Hola {{nombre}}!"
+            defaultSubtitulo="Te recordamos tu reserva de hoy a las {{hora}} en {{local}} para {{personas}} personas. ¡Te esperamos!"
+            tpl={form.tpl_recordatorio}
+            onChange={(p) => setTpl('tpl_recordatorio', p)}
+          />
+          <MailTplEditor
+            label="Mail de reseña"
+            defaultTitulo="¡Gracias por venir, {{nombre}}!"
+            defaultSubtitulo="¿Nos dejás una reseña de tu visita a {{local}}? Te toma 10 segundos y nos ayuda un montón."
+            tpl={form.tpl_resena}
+            onChange={(p) => setTpl('tpl_resena', p)}
+          />
+        </div>
+      </Card>
+
       {/* Nota pública */}
       <Card icon={<MessageSquare className="h-4 w-4 text-brand-500" />} title="Mensaje para el cliente">
         <Field label="Nota visible en el formulario de reserva">
@@ -288,5 +335,27 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
             className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${checked ? 'bg-brand-500' : 'bg-ink/20'}`}>
       <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
+  );
+}
+function MailTplEditor({ label, defaultTitulo, defaultSubtitulo, tpl, onChange }: {
+  label: string; defaultTitulo: string; defaultSubtitulo: string;
+  tpl: MailTpl; onChange: (p: Partial<MailTpl>) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-ink/10 p-4 space-y-3">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-ink-soft">Título</label>
+        <input type="text" value={tpl.titulo} placeholder={defaultTitulo}
+               onChange={(e) => onChange({ titulo: e.target.value })}
+               className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-ink-soft">Subtítulo / mensaje</label>
+        <textarea rows={2} value={tpl.subtitulo} placeholder={defaultSubtitulo}
+                  onChange={(e) => onChange({ subtitulo: e.target.value })}
+                  className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+      </div>
+    </div>
   );
 }

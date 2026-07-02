@@ -35,16 +35,25 @@ function arDate(offDays) {
 const box = (inner) => `<div style="font-family:system-ui,Arial,sans-serif;max-width:480px;margin:auto;color:#1a1a1a">${inner}</div>`;
 const btn = (href, label) => `<a href="${href}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">${label}</a>`;
 
-function tplConfirmacion(r, localNombre, cancelUrl) {
+// Reemplaza {{nombre}}, {{local}}, {{fecha}}, {{hora}}, {{personas}} en textos custom.
+function interp(txt, vars) {
+  if (!txt) return txt;
+  return txt.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+}
+
+function tplConfirmacion(r, localNombre, cancelUrl, custom) {
   const cuando = fmtFechaHora(r.fecha_hora);
+  const vars = { nombre: r.cliente_nombre, local: localNombre, fecha: cuando, hora: fmtHora(r.fecha_hora), personas: String(r.personas) };
   const estadoTxt = r.estado === 'confirmada'
     ? 'Tu reserva quedó <strong>confirmada</strong>.'
     : 'Recibimos tu solicitud. El restaurante la va a <strong>confirmar en breve</strong>.';
+  const titulo = interp(custom?.titulo, vars) || `¡Hola ${r.cliente_nombre}!`;
+  const subtitulo = interp(custom?.subtitulo, vars) || estadoTxt;
   return {
-    asunto: `Reserva en ${localNombre} — ${cuando}`,
+    asunto: interp(custom?.titulo, vars) || `Reserva en ${localNombre} — ${cuando}`,
     html: box(`
-      <h2 style="margin:0 0 8px">¡Hola ${r.cliente_nombre}!</h2>
-      <p style="margin:0 0 16px;color:#555">${estadoTxt}</p>
+      <h2 style="margin:0 0 8px">${titulo}</h2>
+      <p style="margin:0 0 16px;color:#555">${subtitulo}</p>
       <table style="width:100%;border-collapse:collapse;font-size:15px">
         <tr><td style="padding:6px 0;color:#888">Lugar</td><td style="padding:6px 0;text-align:right"><strong>${localNombre}</strong></td></tr>
         <tr><td style="padding:6px 0;color:#888">Fecha y hora</td><td style="padding:6px 0;text-align:right"><strong>${cuando}</strong></td></tr>
@@ -55,22 +64,28 @@ function tplConfirmacion(r, localNombre, cancelUrl) {
       <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos quien reservó, ignorá este mail.</p>`),
   };
 }
-function tplRecordatorio(r, localNombre, cancelUrl) {
+function tplRecordatorio(r, localNombre, cancelUrl, custom) {
+  const vars = { nombre: r.cliente_nombre, local: localNombre, fecha: fmtFechaHora(r.fecha_hora), hora: fmtHora(r.fecha_hora), personas: String(r.personas) };
+  const titulo = interp(custom?.titulo, vars) || `¡Hola ${r.cliente_nombre}!`;
+  const subtitulo = interp(custom?.subtitulo, vars) || `Te recordamos tu reserva de <strong>hoy a las ${fmtHora(r.fecha_hora)}</strong> en <strong>${localNombre}</strong> para <strong>${r.personas}</strong> ${r.personas === 1 ? 'persona' : 'personas'}. ¡Te esperamos!`;
   return {
-    asunto: `Hoy te esperamos en ${localNombre} 🍽️`,
+    asunto: interp(custom?.titulo, vars) || `Hoy te esperamos en ${localNombre} 🍽️`,
     html: box(`
-      <h2 style="margin:0 0 8px">¡Hola ${r.cliente_nombre}!</h2>
-      <p style="margin:0 0 16px;color:#555">Te recordamos tu reserva de <strong>hoy a las ${fmtHora(r.fecha_hora)}</strong> en <strong>${localNombre}</strong> para <strong>${r.personas}</strong> ${r.personas === 1 ? 'persona' : 'personas'}. ¡Te esperamos!</p>
+      <h2 style="margin:0 0 8px">${titulo}</h2>
+      <p style="margin:0 0 16px;color:#555">${subtitulo}</p>
       <p style="margin:0 0 8px;color:#555;font-size:14px">Si no vas a poder venir, avisanos:</p>
       ${btn(cancelUrl, 'Cancelar mi reserva')}`),
   };
 }
-function tplResena(r, localNombre, url) {
+function tplResena(r, localNombre, url, custom) {
+  const vars = { nombre: r.cliente_nombre, local: localNombre, fecha: fmtFechaHora(r.fecha_hora), hora: fmtHora(r.fecha_hora), personas: String(r.personas) };
+  const titulo = interp(custom?.titulo, vars) || `¡Gracias por venir, ${r.cliente_nombre}!`;
+  const subtitulo = interp(custom?.subtitulo, vars) || `¿Nos dejás una reseña de tu visita a <strong>${localNombre}</strong>? Te toma 10 segundos y nos ayuda un montón.`;
   return {
-    asunto: `¿Cómo estuvo tu experiencia en ${localNombre}?`,
+    asunto: interp(custom?.titulo, vars) || `¿Cómo estuvo tu experiencia en ${localNombre}?`,
     html: box(`
-      <h2 style="margin:0 0 8px">¡Gracias por venir, ${r.cliente_nombre}!</h2>
-      <p style="margin:0 0 16px;color:#555">¿Nos dejás una reseña de tu visita a <strong>${localNombre}</strong>? Te toma 10 segundos y nos ayuda un montón.</p>
+      <h2 style="margin:0 0 8px">${titulo}</h2>
+      <p style="margin:0 0 16px;color:#555">${subtitulo}</p>
       ${btn(url, 'Dejar mi reseña')}
       <p style="margin:20px 0 0;color:#aaa;font-size:12px">Si no fuiste vos, ignorá este mail.</p>`),
   };
@@ -115,8 +130,9 @@ export default async function handler(req, res) {
     if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
     const hourAR = Number(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hour12: false }));
     const { data: cfgs } = await db.from('comanda_local_settings')
-      .select('local_id, reservas_notif_recordatorio, reservas_notif_resena, reservas_notif_hora')
+      .select('local_id, reservas_notif_recordatorio, reservas_notif_resena, reservas_notif_hora, reservas_tpl_recordatorio_titulo, reservas_tpl_recordatorio_subtitulo, reservas_tpl_resena_titulo, reservas_tpl_resena_subtitulo')
       .is('deleted_at', null);
+    const tplsDe = Object.fromEntries((cfgs || []).map((c) => [c.local_id, c]));
     const recLocals = (cfgs || []).filter((c) => c.reservas_notif_recordatorio && (c.reservas_notif_hora ?? 11) === hourAR).map((c) => c.local_id);
     const revLocals = (cfgs || []).filter((c) => c.reservas_notif_resena && (c.reservas_notif_hora ?? 11) === hourAR).map((c) => c.local_id);
     if (recLocals.length === 0 && revLocals.length === 0) return res.status(200).json({ ok: true, recordatorios: 0, resenas: 0, hora: hourAR });
@@ -143,13 +159,15 @@ export default async function handler(req, res) {
     let nRec = 0, nRev = 0;
     for (const r of recs || []) {
       const ln = nombreDe[r.local_id] || 'el restaurante';
-      const { asunto, html } = tplRecordatorio(r, ln, cancelUrl(r));
+      const tc = tplsDe[r.local_id];
+      const { asunto, html } = tplRecordatorio(r, ln, cancelUrl(r), { titulo: tc?.reservas_tpl_recordatorio_titulo, subtitulo: tc?.reservas_tpl_recordatorio_subtitulo });
       const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
       if (s.ok) { await db.from('reservas').update({ notif_recordatorio_at: new Date().toISOString() }).eq('id', r.id); nRec++; }
     }
     for (const r of revs || []) {
       const ln = nombreDe[r.local_id] || 'el restaurante';
-      const { asunto, html } = tplResena(r, ln, resenaUrl(r));
+      const tc = tplsDe[r.local_id];
+      const { asunto, html } = tplResena(r, ln, resenaUrl(r), { titulo: tc?.reservas_tpl_resena_titulo, subtitulo: tc?.reservas_tpl_resena_subtitulo });
       const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
       if (s.ok) { await db.from('reservas').update({ notif_resena_at: new Date().toISOString() }).eq('id', r.id); nRev++; }
     }
@@ -173,15 +191,17 @@ export default async function handler(req, res) {
   } else {
     if (r.notif_confirmacion_at) return res.status(200).json(OK);
     if ((Date.now() - new Date(r.created_at).getTime()) / 60000 > 15) return res.status(200).json(OK);
-    const { data: st } = await db.from('comanda_local_settings').select('reservas_notif_confirmacion').eq('local_id', r.local_id).maybeSingle();
+    const { data: st } = await db.from('comanda_local_settings').select('reservas_notif_confirmacion, reservas_tpl_confirmacion_titulo, reservas_tpl_confirmacion_subtitulo, reservas_tpl_resena_titulo, reservas_tpl_resena_subtitulo').eq('local_id', r.local_id).maybeSingle();
     if (st && st.reservas_notif_confirmacion === false) return res.status(200).json(OK);
   }
   if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
 
+  const st2 = tipo !== 'confirmacion' ? (await db.from('comanda_local_settings').select('reservas_tpl_resena_titulo, reservas_tpl_resena_subtitulo').eq('local_id', r.local_id).maybeSingle()).data : null;
+  const stData = st || st2 || {};
   const ln = (await db.from('locales').select('nombre').eq('id', r.local_id).maybeSingle()).data?.nombre || 'el restaurante';
   const { asunto, html } = tipo === 'resena'
-    ? tplResena(r, ln, resenaUrl(r))
-    : tplConfirmacion(r, ln, cancelUrl(r));
+    ? tplResena(r, ln, resenaUrl(r), { titulo: stData.reservas_tpl_resena_titulo, subtitulo: stData.reservas_tpl_resena_subtitulo })
+    : tplConfirmacion(r, ln, cancelUrl(r), { titulo: stData.reservas_tpl_confirmacion_titulo, subtitulo: stData.reservas_tpl_confirmacion_subtitulo });
   const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
   if (!s.ok) return res.status(200).json({ ok: false, configured: true, error: s.error });
   const markCol = tipo === 'resena' ? 'notif_resena_at' : 'notif_confirmacion_at';
