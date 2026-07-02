@@ -126,7 +126,7 @@ export function AdminLayout() {
     // (Tienda, MenúQR) se quedan con el coral default.
     <div data-surface="internal" className="min-h-screen bg-background flex">
       {/* Desktop sidebar — fijo */}
-      <AdminSidebar className="hidden lg:flex w-60 flex-shrink-0 sticky top-0 h-screen" />
+      <AdminSidebar className="hidden lg:flex w-[220px] flex-shrink-0 sticky top-0 h-screen" />
 
       {/* Mobile drawer */}
       {drawerOpen && (

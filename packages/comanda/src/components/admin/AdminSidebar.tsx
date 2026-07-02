@@ -4,26 +4,15 @@ import { useLocalActivo } from '@/lib/localActivo';
 import { ADMIN_NAVIGATION, findActiveCategory } from '@/lib/adminNavigation';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
 import { useEffect, useState } from 'react';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { AdminCategoryItem } from './AdminCategoryItem';
 import { cn } from '@/lib/utils';
+import { db } from '@/lib/supabase';
 
 interface Props {
-  // Cuando el sidebar se renderiza dentro del drawer mobile, este callback
-  // se llama al click de un item para cerrar el drawer.
   onItemClick?: () => void;
   className?: string;
 }
 
-// Sidebar permanente del admin. Logo arriba, selector tenant + local,
-// 12 categorías navegables, footer con "← Volver al POS" y avatar.
-//
-// La detección de "categoría activa" se hace via pathname: cuando el user
-// está en /menu/* la categoría Menu queda highlighted y sus sub-items
-// expandidos. El click en otra categoría navega a su href default y
-// expande sus sub-items.
 export function AdminSidebar({ onItemClick, className }: Props) {
   const { user } = useAuth();
   const [localId, setLocalActivo] = useLocalActivo(user);
@@ -36,35 +25,34 @@ export function AdminSidebar({ onItemClick, className }: Props) {
   }, []);
 
   return (
-    <aside className={cn('flex flex-col h-full bg-card border-r border-border', className)}>
-      {/* Header marca + selector */}
-      <div className="px-4 py-4 border-b border-border">
-        <Link to="/reportes/dashboard" className="block text-lg font-medium tracking-tight text-foreground leading-none">
-          comanda<span style={{ color: '#F5C518' }}>.</span>
+    <aside className={cn('cm-sb', className)}>
+      {/* Header marca */}
+      <div className="cm-sb-header">
+        <Link to="/reportes/dashboard" className="cm-sb-brand">
+          comanda<span className="brand-dot">.</span>
         </Link>
-        {locales.length > 1 ? (
-          <Select
-            value={localId !== null ? String(localId) : ''}
-            onValueChange={(v) => setLocalActivo(Number(v))}
-          >
-            <SelectTrigger className="h-8 mt-2 text-xs">
-              <SelectValue placeholder="Elegí local…" />
-            </SelectTrigger>
-            <SelectContent>
-              {locales.map((l) => (
-                <SelectItem key={l.id} value={String(l.id)} className="text-xs">
-                  {l.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : locales.length === 1 ? (
-          <p className="text-xs text-muted-foreground mt-1">{locales[0]!.nombre}</p>
-        ) : null}
       </div>
 
+      {/* Selector de local */}
+      {locales.length > 1 ? (
+        <div className="cm-sb-local">
+          <select
+            value={localId !== null ? String(localId) : ''}
+            onChange={(e) => setLocalActivo(Number(e.target.value))}
+          >
+            {locales.map((l) => (
+              <option key={l.id} value={String(l.id)}>{l.nombre}</option>
+            ))}
+          </select>
+        </div>
+      ) : locales.length === 1 ? (
+        <div className="cm-sb-local">
+          <p className="cm-sb-local-single">{locales[0]!.nombre}</p>
+        </div>
+      ) : null}
+
       {/* Categorías */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-1" aria-label="Navegación admin">
+      <nav className="cm-sb-nav" aria-label="Navegación admin">
         {ADMIN_NAVIGATION.map((cat) => (
           <AdminCategoryItem
             key={cat.slug}
@@ -79,6 +67,27 @@ export function AdminSidebar({ onItemClick, className }: Props) {
         ))}
       </nav>
 
+      {/* Footer usuario */}
+      <div className="cm-sb-foot">
+        <div className="cm-sb-foot-row">
+          <div className="cm-sb-avatar">
+            {user?.nombre?.[0]?.toUpperCase() ?? '?'}
+          </div>
+          <div className="cm-sb-foot-info">
+            <div className="cm-sb-uname">{user?.nombre ?? 'Usuario'}</div>
+            <div className="cm-sb-urole">{user?.rol_pos ?? ''}</div>
+          </div>
+        </div>
+        <Link to="/pos" onClick={onItemClick} className="cm-sb-link">
+          ← Volver al POS
+        </Link>
+        <button
+          className="cm-sb-link"
+          onClick={() => void db.auth.signOut()}
+        >
+          Cerrar sesión
+        </button>
+      </div>
     </aside>
   );
 }
