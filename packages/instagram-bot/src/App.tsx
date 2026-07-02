@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, MessageCircle } from 'lucide-react';
+import { LogOut, MessageCircle, Bell, BellOff } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Mensajeria } from '@/pages/Mensajeria';
+import { getPushPermissionStatus, isCurrentlySubscribed, subscribeToPush, unsubscribeFromPush } from '@/lib/push';
 
 export function App() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -19,6 +20,8 @@ export function App() {
   const [password, setPassword] = useState('');
   const [entrando, setEntrando] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
+  const [pushOn, setPushOn] = useState(false);
+  const [pushToggling, setPushToggling] = useState(false);
 
   useEffect(() => {
     if (!supabaseConfigurado) { setCargando(false); return; }
@@ -36,6 +39,17 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'navigate' && e.data.url) {
+        window.location.href = e.data.url;
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []);
+
+  useEffect(() => {
     if (!sesion) return;
     void (async () => {
       // El usuario interno se resuelve por auth_id, NO por email: la convención
@@ -50,6 +64,26 @@ export function App() {
       if (data?.id) setUserId(data.id as number);
     })();
   }, [sesion]);
+
+  useEffect(() => {
+    if (!sesion) return;
+    void isCurrentlySubscribed().then(setPushOn);
+  }, [sesion]);
+
+  async function togglePush() {
+    setPushToggling(true);
+    try {
+      if (pushOn) {
+        const r = await unsubscribeFromPush();
+        if (r.ok) { setPushOn(false); toast.success('Notificaciones desactivadas'); }
+        else toast.error(r.error);
+      } else {
+        const r = await subscribeToPush();
+        if (r.ok) { setPushOn(true); toast.success('Notificaciones activadas'); }
+        else toast.error(r.error);
+      }
+    } finally { setPushToggling(false); }
+  }
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
@@ -113,6 +147,16 @@ export function App() {
         <h1 className="text-lg font-medium">Mensajería Instagram</h1>
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden sm:block text-xs text-ink-muted truncate max-w-[180px]" title={sesion.email}>{sesion.email}</span>
+          {getPushPermissionStatus() !== 'unsupported' && (
+            <button
+              onClick={() => void togglePush()}
+              disabled={pushToggling}
+              className={`inline-flex items-center gap-1.5 text-sm p-2 rounded-lg transition-colors ${pushOn ? 'text-brand-600 bg-brand-500/10' : 'text-ink-soft hover:text-ink hover:bg-ink/5'}`}
+              title={pushOn ? 'Desactivar notificaciones' : 'Activar notificaciones'}
+            >
+              {pushOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+            </button>
+          )}
           <button onClick={() => void salir()} className="text-ink-soft hover:text-ink inline-flex items-center gap-1.5 text-sm p-2 rounded-lg hover:bg-ink/5" title="Salir">
             <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Salir</span>
           </button>

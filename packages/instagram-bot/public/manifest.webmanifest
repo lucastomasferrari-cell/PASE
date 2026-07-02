@@ -1,0 +1,22 @@
+{
+  "name": "Bot de Instagram — Mensajería",
+  "short_name": "IG Bot",
+  "description": "Panel del bot de Instagram: ver y responder DMs",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/icon-bot.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "social"]
+}
