@@ -55,14 +55,17 @@ export default async function handler(req, res) {
   if (edadMin > 15) return res.status(200).json(OK);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
-  if (!apiKey || !from) {
+  const fromEnv = process.env.RESEND_FROM;
+  if (!apiKey || !fromEnv) {
     return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales (RESEND_API_KEY / RESEND_FROM).' });
   }
 
   // Nombre del local (para el asunto/cuerpo).
   const { data: local } = await db.from('locales').select('nombre').eq('id', r.local_id).maybeSingle();
   const localNombre = local?.nombre || 'el restaurante';
+  // Remitente: si RESEND_FROM es una dirección pelada, usamos el nombre del
+  // local como display name → el cliente ve "Maneki Palermo <reservas@…>".
+  const from = fromEnv.includes('<') ? fromEnv : `${localNombre} <${fromEnv}>`;
   const cuando = fmtFechaHora(r.fecha_hora);
   const estadoTxt = r.estado === 'confirmada'
     ? 'Tu reserva quedó <strong>confirmada</strong>.'
