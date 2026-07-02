@@ -371,9 +371,9 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   async function confirmar(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre.trim()) { toast.error('Tu nombre es obligatorio'); return; }
-    if (!telefono.trim()) { toast.error('El teléfono es obligatorio'); return; }
-    if (!email.trim()) { toast.error('El email es obligatorio (te mandamos la confirmación ahí)'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error('Revisá el email, no parece válido'); return; }
+    if (perfil.reservas.telefono_obligatorio && !telefono.trim()) { toast.error('El teléfono es obligatorio'); return; }
+    if (perfil.reservas.email_obligatorio && !email.trim()) { toast.error('El email es obligatorio (te mandamos la confirmación ahí)'); return; }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error('Revisá el email, no parece válido'); return; }
     // Las dietas elegidas se suman a las notas para que el local las vea.
     const dietasTxt = dietas.length ? `Dietas: ${dietas.join(', ')}.` : '';
     const notasFinal = [dietasTxt, notas.trim()].filter(Boolean).join(' ');
@@ -538,12 +538,12 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                    className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-tel" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Teléfono *</label>
+            <label htmlFor="rw-tel" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Teléfono{perfil.reservas.telefono_obligatorio ? ' *' : ''}</label>
             <input id="rw-tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)}
                    className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>
           <div>
-            <label htmlFor="rw-email" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Email * (para la confirmación)</label>
+            <label htmlFor="rw-email" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Email{perfil.reservas.email_obligatorio ? ' *' : ''} (para la confirmación)</label>
             <input id="rw-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)}
                    className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
           </div>

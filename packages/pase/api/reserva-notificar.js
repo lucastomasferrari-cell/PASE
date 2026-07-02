@@ -109,21 +109,32 @@ export default async function handler(req, res) {
   const auth = req.headers.authorization || '';
   const isCron = auth === `Bearer ${serviceKey}`;
 
-  // ─── MODO CRON (GitHub Actions): recordatorios + reseñas ───
+  // ─── MODO CRON (GitHub Actions, cada hora): recordatorios + reseñas ───
+  // Cada local define su hora de envío (reservas_notif_hora) y qué mails manda.
   if (isCron) {
     if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
+    const hourAR = Number(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hour12: false }));
+    const { data: cfgs } = await db.from('comanda_local_settings')
+      .select('local_id, reservas_notif_recordatorio, reservas_notif_resena, reservas_notif_hora')
+      .is('deleted_at', null);
+    const recLocals = (cfgs || []).filter((c) => c.reservas_notif_recordatorio && (c.reservas_notif_hora ?? 11) === hourAR).map((c) => c.local_id);
+    const revLocals = (cfgs || []).filter((c) => c.reservas_notif_resena && (c.reservas_notif_hora ?? 11) === hourAR).map((c) => c.local_id);
+    if (recLocals.length === 0 && revLocals.length === 0) return res.status(200).json({ ok: true, recordatorios: 0, resenas: 0, hora: hourAR });
+
     const todayStart = `${arDate(0)}T00:00:00-03:00`;
     const tomStart = `${arDate(1)}T00:00:00-03:00`;
     const yestStart = `${arDate(-1)}T00:00:00-03:00`;
 
-    const { data: recs } = await db.from('reservas').select(SEL)
+    const recs = recLocals.length ? (await db.from('reservas').select(SEL)
+      .in('local_id', recLocals)
       .gte('fecha_hora', todayStart).lt('fecha_hora', tomStart)
       .in('estado', ['pendiente', 'confirmada', 'sentada'])
-      .not('cliente_email', 'is', null).is('notif_recordatorio_at', null).is('deleted_at', null);
-    const { data: revs } = await db.from('reservas').select(SEL)
+      .not('cliente_email', 'is', null).is('notif_recordatorio_at', null).is('deleted_at', null)).data : [];
+    const revs = revLocals.length ? (await db.from('reservas').select(SEL)
+      .in('local_id', revLocals)
       .gte('fecha_hora', yestStart).lt('fecha_hora', todayStart)
       .in('estado', ['confirmada', 'sentada', 'finalizada'])
-      .not('cliente_email', 'is', null).is('notif_resena_at', null).is('deleted_at', null);
+      .not('cliente_email', 'is', null).is('notif_resena_at', null).is('deleted_at', null)).data : [];
 
     const ids = [...new Set([...(recs || []), ...(revs || [])].map((x) => x.local_id))];
     const { data: locs } = ids.length ? await db.from('locales').select('id, nombre').in('id', ids) : { data: [] };
@@ -162,6 +173,8 @@ export default async function handler(req, res) {
   } else {
     if (r.notif_confirmacion_at) return res.status(200).json(OK);
     if ((Date.now() - new Date(r.created_at).getTime()) / 60000 > 15) return res.status(200).json(OK);
+    const { data: st } = await db.from('comanda_local_settings').select('reservas_notif_confirmacion').eq('local_id', r.local_id).maybeSingle();
+    if (st && st.reservas_notif_confirmacion === false) return res.status(200).json(OK);
   }
   if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
 

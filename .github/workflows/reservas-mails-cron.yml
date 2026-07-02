@@ -9,7 +9,7 @@ name: Reservas - recordatorios + reseñas (MESA)
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 14:00 UTC = 11:00 Argentina
+    - cron: '0 * * * *'   # cada hora en punto; cada local elige su hora (reservas_notif_hora)
   workflow_dispatch:
 
 concurrency:

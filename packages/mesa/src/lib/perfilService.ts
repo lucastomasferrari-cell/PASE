@@ -25,6 +25,7 @@ export interface PerfilLocalData {
     anticipacion_min_hs: number | null;
     anticipacion_max_dias: number | null;
     telefono_obligatorio: boolean;
+    email_obligatorio?: boolean;
   };
   hay_mesa_ahora: boolean | null;
   populares: Array<{ nombre: string; foto_url: string | null; precio: number; vendidos: number }>;
