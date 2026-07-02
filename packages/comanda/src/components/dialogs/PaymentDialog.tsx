@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, EyeOff } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MoneyInput } from '@/components/MoneyInput';
-import { listMetodosCobroActivos } from '@/services/configService';
-import type { MetodoCobro, VentaPos, VentaPosItem } from '@/types/database';
+import { listMetodosCobroActivos, updateMetodoCobro } from '@/services/configService';
+import type { MetodoCobro, VentaPos, VentaPosItem, ModoVenta } from '@/types/database';
 import type { ItemConGrupo } from '@/services/itemsService';
 import { formatARS } from '@/lib/format';
 import { newIdempotencyKey, agregarPago } from '@/services/pagosService';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
 
 interface PagoEnCurso {
   id: string;
@@ -45,7 +46,9 @@ const PROPINA_FIJA = 0;
 const BILLETES_AR = [1000, 2000, 5000, 10000, 20000];
 
 export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empleadoId, onCobrado }: Props) {
-  const [metodos, setMetodos] = useState<MetodoCobro[]>([]);
+  const { user } = useAuth();
+  const canEdit = user?.rol_pos === 'admin' || user?.rol_pos === 'manager';
+  const [allMetodos, setAllMetodos] = useState<MetodoCobro[]>([]);
   const propina = PROPINA_FIJA;
   const [pagos, setPagos] = useState<PagoEnCurso[]>([]);
   const [montoNuevo, setMontoNuevo] = useState<number>(0);
@@ -54,15 +57,32 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const [montoEntregado, setMontoEntregado] = useState<number>(0);
   const [confirmando, setConfirmando] = useState(false);
   const confirmandoRef = useRef(false);
+  const [ctxMenu, setCtxMenu] = useState<{ metodo: MetodoCobro; x: number; y: number } | null>(null);
+
+  const metodos = useMemo(() => {
+    const modo = venta.modo as ModoVenta;
+    return allMetodos.filter((m) =>
+      !m.sectores_visibles || m.sectores_visibles.length === 0 || m.sectores_visibles.includes(modo),
+    );
+  }, [allMetodos, venta.modo]);
+
+  const reloadMetodos = useCallback(() => {
+    listMetodosCobroActivos(venta.local_id).then((r) => {
+      setAllMetodos(r.data);
+    });
+  }, [venta.local_id]);
 
   useEffect(() => {
     if (!open) return;
     setPagos([]); setMontoNuevo(0); setMontoEntregado(0); setCuotasNuevo(1); setConfirmando(false);
     listMetodosCobroActivos(venta.local_id).then((r) => {
-      setMetodos(r.data);
-      if (r.data.length > 0 && r.data[0]) setMetodoNuevo(r.data[0].slug);
+      setAllMetodos(r.data);
+      const visible = r.data.filter((m) =>
+        !m.sectores_visibles || m.sectores_visibles.length === 0 || m.sectores_visibles.includes(venta.modo),
+      );
+      if (visible.length > 0 && visible[0]) setMetodoNuevo(visible[0].slug);
     });
-  }, [open, venta.local_id]);
+  }, [open, venta.local_id, venta.modo]);
 
   const subtotalSinPropina = Number(venta.subtotal) - Number(venta.descuento_total);
   const totalConPropina = subtotalSinPropina + propina;
@@ -354,6 +374,12 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
                             type="button"
                             aria-pressed={sel}
                             onClick={() => setMetodoNuevo(m.slug)}
+                            onContextMenu={(e) => {
+                              if (!canEdit) return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setCtxMenu({ metodo: m, x: e.clientX, y: e.clientY });
+                            }}
                             className={cn(
                               'flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors duration-150',
                               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -482,6 +508,121 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
           </div>
         </div>
       </DialogContent>
+
+      {ctxMenu && (
+        <MetodoCtxMenu
+          metodo={ctxMenu.metodo}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          onUpdated={reloadMetodos}
+        />
+      )}
     </Dialog>
+  );
+}
+
+const SECTORES: { key: ModoVenta; label: string }[] = [
+  { key: 'salon', label: 'Salón' },
+  { key: 'mostrador', label: 'Mostrador' },
+  { key: 'pedidos', label: 'Pedidos / Delivery' },
+];
+
+function MetodoCtxMenu({ metodo, x, y, onClose, onUpdated }: {
+  metodo: MetodoCobro;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const sectoresActuales = metodo.sectores_visibles ?? [];
+  const todosActivos = sectoresActuales.length === 0;
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [onClose]);
+
+  const clampedY = Math.min(y, window.innerHeight - 260);
+  const clampedX = Math.min(x, window.innerWidth - 220);
+
+  async function toggleSector(sector: ModoVenta) {
+    let next: string[];
+    if (todosActivos) {
+      next = SECTORES.map((s) => s.key).filter((k) => k !== sector);
+    } else if (sectoresActuales.includes(sector)) {
+      next = sectoresActuales.filter((s) => s !== sector);
+      if (next.length === 0) {
+        toast.error('Debe estar visible en al menos un sector');
+        return;
+      }
+    } else {
+      next = [...sectoresActuales, sector];
+    }
+    if (next.length === SECTORES.length) next = [];
+    const { error } = await updateMetodoCobro(metodo.id, { sectores_visibles: next.length > 0 ? next : null });
+    if (error) { toast.error(error); return; }
+    toast.success(next.length === 0 ? `${metodo.nombre}: visible en todos` : `${metodo.nombre}: actualizado`);
+    onUpdated();
+    onClose();
+  }
+
+  async function toggleOcultar() {
+    const { error } = await updateMetodoCobro(metodo.id, { activo: false });
+    if (error) { toast.error(error); return; }
+    toast.success(`${metodo.nombre} desactivado`);
+    onUpdated();
+    onClose();
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-[100] rounded-lg border border-border bg-popover shadow-xl py-1 min-w-[200px] animate-in fade-in-0 zoom-in-95"
+      style={{ top: clampedY, left: clampedX }}
+    >
+      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        Visible en
+      </div>
+      {SECTORES.map((s) => {
+        const checked = todosActivos || sectoresActuales.includes(s.key);
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => void toggleSector(s.key)}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <span className={cn(
+              'h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+              checked ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40',
+            )}>
+              {checked && <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 6l3 3 5-5" /></svg>}
+            </span>
+            {s.label}
+          </button>
+        );
+      })}
+      <div className="h-px bg-border my-1" />
+      <button
+        type="button"
+        onClick={() => void toggleOcultar()}
+        className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+      >
+        <EyeOff className="h-4 w-4" />
+        Desactivar método
+      </button>
+    </div>
   );
 }

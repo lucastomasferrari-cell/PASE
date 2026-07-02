@@ -418,6 +418,7 @@ export interface MetodoCobro {
   pide_vuelto: boolean;
   activo: boolean;
   orden: number;
+  sectores_visibles: string[] | null;
 }
 
 export interface HorariosLocal {

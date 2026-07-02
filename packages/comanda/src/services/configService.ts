@@ -50,6 +50,29 @@ export async function listMetodosCobroActivos(localId: number | null): Promise<{
   return { data: data.filter((m) => m.activo), error: null };
 }
 
+export async function listMetodosCobroActivosPorSector(
+  localId: number | null,
+  sector: string | null,
+): Promise<{ data: MetodoCobro[]; error: string | null }> {
+  const { data, error } = await listMetodosCobroActivos(localId);
+  if (error) return { data: [], error };
+  if (!sector) return { data, error: null };
+  return {
+    data: data.filter((m) =>
+      !m.sectores_visibles || m.sectores_visibles.length === 0 || m.sectores_visibles.includes(sector),
+    ),
+    error: null,
+  };
+}
+
+export async function updateMetodoCobro(
+  id: number,
+  patch: Partial<Pick<MetodoCobro, 'activo' | 'sectores_visibles' | 'orden'>>,
+): Promise<{ error: string | null }> {
+  const { error } = await db.from('medios_cobro').update(patch).eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 // ─── Settings del local ──────────────────────────────────────────────────
 
 export async function getLocalSettings(localId: number): Promise<{ data: ComandaLocalSettings | null; error: string | null }> {
