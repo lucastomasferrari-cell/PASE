@@ -191,17 +191,18 @@ export default async function handler(req, res) {
   } else {
     if (r.notif_confirmacion_at) return res.status(200).json(OK);
     if ((Date.now() - new Date(r.created_at).getTime()) / 60000 > 15) return res.status(200).json(OK);
-    const { data: st } = await db.from('comanda_local_settings').select('reservas_notif_confirmacion, reservas_tpl_confirmacion_titulo, reservas_tpl_confirmacion_subtitulo, reservas_tpl_resena_titulo, reservas_tpl_resena_subtitulo').eq('local_id', r.local_id).maybeSingle();
-    if (st && st.reservas_notif_confirmacion === false) return res.status(200).json(OK);
   }
+  const { data: stData } = await db.from('comanda_local_settings')
+    .select('reservas_notif_confirmacion, reservas_tpl_confirmacion_titulo, reservas_tpl_confirmacion_subtitulo, reservas_tpl_recordatorio_titulo, reservas_tpl_recordatorio_subtitulo, reservas_tpl_resena_titulo, reservas_tpl_resena_subtitulo')
+    .eq('local_id', r.local_id).maybeSingle();
+  if (tipo === 'confirmacion' && stData && stData.reservas_notif_confirmacion === false) return res.status(200).json(OK);
   if (!apiKey || !fromEnv) return res.status(200).json({ ok: false, configured: false, error: 'Email sin credenciales.' });
 
-  const st2 = tipo !== 'confirmacion' ? (await db.from('comanda_local_settings').select('reservas_tpl_resena_titulo, reservas_tpl_resena_subtitulo').eq('local_id', r.local_id).maybeSingle()).data : null;
-  const stData = st || st2 || {};
+  const tpls = stData || {};
   const ln = (await db.from('locales').select('nombre').eq('id', r.local_id).maybeSingle()).data?.nombre || 'el restaurante';
   const { asunto, html } = tipo === 'resena'
-    ? tplResena(r, ln, resenaUrl(r), { titulo: stData.reservas_tpl_resena_titulo, subtitulo: stData.reservas_tpl_resena_subtitulo })
-    : tplConfirmacion(r, ln, cancelUrl(r), { titulo: stData.reservas_tpl_confirmacion_titulo, subtitulo: stData.reservas_tpl_confirmacion_subtitulo });
+    ? tplResena(r, ln, resenaUrl(r), { titulo: tpls.reservas_tpl_resena_titulo, subtitulo: tpls.reservas_tpl_resena_subtitulo })
+    : tplConfirmacion(r, ln, cancelUrl(r), { titulo: tpls.reservas_tpl_confirmacion_titulo, subtitulo: tpls.reservas_tpl_confirmacion_subtitulo });
   const s = await sendEmail(apiKey, fromHdr(ln), r.cliente_email, asunto, html);
   if (!s.ok) return res.status(200).json({ ok: false, configured: true, error: s.error });
   const markCol = tipo === 'resena' ? 'notif_resena_at' : 'notif_confirmacion_at';
