@@ -78,7 +78,7 @@ export async function getZonasReservables(slug: string): Promise<string[]> {
 export async function crearReservaPublica(args: {
   slug: string; nombre: string; telefono: string; email?: string;
   fechaHora: string; personas: number; notas?: string; zona?: string | null;
-}): Promise<{ ok: boolean; estado?: string; id?: number; error?: string }> {
+}): Promise<{ ok: boolean; estado?: string; id?: number; cancelToken?: string; error?: string }> {
   const { data, error } = await db().rpc('fn_crear_reserva_publica', {
     p_local_slug: args.slug,
     p_cliente_nombre: args.nombre,
@@ -96,7 +96,14 @@ export async function crearReservaPublica(args: {
   });
   if (error) return { ok: false, error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
-  return { ok: true, estado: (row?.estado as string) ?? 'pendiente', id: row?.id as number | undefined };
+  return {
+    ok: true,
+    estado: (row?.estado as string) ?? 'pendiente',
+    id: row?.id as number | undefined,
+    // El alta devuelve el cancel_token → armamos el link sin volver a consultar
+    // por teléfono (antes fn_reserva_token_por_tel, ahora sin acceso anónimo).
+    cancelToken: (row?.cancel_token as string | undefined) ?? undefined,
+  };
 }
 
 // Dispara la confirmación automática al cliente (email vía Resend; WA cuando
@@ -109,16 +116,6 @@ export async function notificarConfirmacionReserva(reservaId: number): Promise<v
       body: JSON.stringify({ reservaId }),
     });
   } catch { /* best-effort */ }
-}
-
-// Token de cancelación de una reserva recién creada (verifica por teléfono).
-// Lo usa la pantalla de confirmación para armar el link sin pedir teléfono después.
-export async function getCancelToken(reservaId: number, telefono: string): Promise<string | null> {
-  const { data, error } = await db().rpc('fn_reserva_token_por_tel', {
-    p_reserva_id: reservaId, p_telefono: telefono.trim(),
-  });
-  if (error || !data) return null;
-  return data as string;
 }
 
 export interface ReservaResumen {

@@ -15,7 +15,7 @@ import {
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
-  getPerfil, crearReservaPublica, notificarConfirmacionReserva, getCancelToken,
+  getPerfil, crearReservaPublica, notificarConfirmacionReserva,
   getZonasReservables, getSlotsDisponibilidad, inscribirEventoYPagar, comprarGiftcardYPagar,
   type PerfilLocalData, type SlotDisponibilidad,
 } from '@/lib/perfilService';
@@ -388,7 +388,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
       if (r.id && email.trim()) void notificarConfirmacionReserva(r.id);
       setEstadoFinal(r.estado ?? 'pendiente');
       setReservaId(r.id ?? null);
-      if (r.id) void getCancelToken(r.id, telefono.trim()).then(setCancelToken);
+      if (r.cancelToken) setCancelToken(r.cancelToken);
       setPaso('lista');
     } finally { setConfirmando(false); }
   }
