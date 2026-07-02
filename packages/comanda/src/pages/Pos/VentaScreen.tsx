@@ -1023,7 +1023,7 @@ export function VentaScreen() {
               variant="outline"
               size="sm"
               className="flex-1"
-              onClick={() => void imprimirPreCuenta()}
+              onClick={async () => { await imprimirPreCuenta(); setShowMesaControl(false); }}
             >
               Imprimir
             </Button>
