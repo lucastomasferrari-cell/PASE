@@ -273,17 +273,18 @@ interface TabSueldosProps {
 export function TabSueldos({
   // user: prop reservada para futuro (auth check, default fields, etc.).
   // Por ahora no la usamos directo — RLS protege.
-  user: _user, esDueno, esEnc, locsDisp, localActivo, cuentasUsables,
+  user: _user, esDueno, locsDisp, localActivo, cuentasUsables,
 }: TabSueldosProps) {
   // Filtros
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [anio, setAnio] = useState(now.getFullYear());
-  // Encargado solo ve su local activo; dueño puede cambiar local desde el
-  // dropdown propio (default: el del sidebar)
-  const [localId, setLocalId] = useState<number | null>(localActivo);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync prop → state intencional
-  useEffect(() => { if (localActivo != null) setLocalId(localActivo); }, [localActivo]);
+  // El local es SIEMPRE el del sidebar (localActivo) — fuente única de verdad.
+  // Decisión 18-may (Lucas): la pantalla NO tiene selector propio de local; dos
+  // selectores creaban la contradicción sidebar≠pantalla (ej. sidebar en Villa
+  // Crespo y Sueldos en Devoto) → errores de lógica. El dueño elige el local en
+  // el sidebar; si está en "todos" (localActivo=null), Sueldos pide elegir uno.
+  const localId = localActivo;
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "pendientes" | "pagados">("pendientes");
 
   // Data real desde DB
@@ -1183,11 +1184,6 @@ export function TabSueldos({
           {nombreMes(mes)} {anio}
         </div>
         <button className="btn btn-ghost btn-sm" onClick={goNextMes} style={{ padding: "4px 10px" }}>→</button>
-        <div style={{ width: 1, height: 24, background: "var(--bd)", margin: "0 4px" }} />
-        <select className="search" style={{ width: 170 }} value={localId ?? ""} onChange={e => setLocalId(parseInt(e.target.value))}>
-          {!esEnc && <option value="">Seleccionar local…</option>}
-          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
         <div style={{ flex: 1 }} />
         {(["pendientes", "pagados", "todos"] as const).map(opt => (
           <button
@@ -1278,7 +1274,7 @@ export function TabSueldos({
 
       {/* Lista */}
       {!localId ? (
-        <div className="alert alert-info">Elegí un local.</div>
+        <div className="alert alert-info">Elegí un local en el menú de la izquierda para ver los sueldos.</div>
       ) : loading ? (
         <div className="loading">Cargando…</div>
       ) : empleadosVisibles.length === 0 ? (
