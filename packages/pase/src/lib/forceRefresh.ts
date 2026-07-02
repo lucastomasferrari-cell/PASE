@@ -33,3 +33,5 @@ export async function limpiarCacheYRecargar(): Promise<void> {
   // nuevo que referencia los bundles con hash nuevo.
   window.location.reload();
 }
+
+// redeploy trigger 1782956595
