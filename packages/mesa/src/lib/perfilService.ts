@@ -172,6 +172,33 @@ export async function crearReviewReserva(args: {
   return { ok: true, yaExistia: Boolean(r?.ya_existia) };
 }
 
+// Dispara el mail de reseña post-visita (lo llama el admin al finalizar la
+// reserva). Fire-and-forget; el endpoint valida estado + idempotencia.
+export async function notificarResenaReserva(reservaId: number): Promise<void> {
+  try {
+    await fetch('/api/reserva-notificar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reservaId, tipo: 'resena' }),
+    });
+  } catch { /* best-effort */ }
+}
+
+// Crear reseña con el token del link (sin teléfono).
+export async function crearReviewPorToken(args: {
+  reservaId: number; token: string; rating: number; comentario?: string;
+  estrellasComida?: number; estrellasPresentacion?: number;
+}): Promise<{ ok: boolean; yaExistia?: boolean; error?: string }> {
+  const { data, error } = await db().rpc('fn_crear_review_token', {
+    p_reserva_id: args.reservaId, p_token: args.token, p_rating: args.rating,
+    p_comentario: args.comentario ?? null,
+    p_estrellas_comida: args.estrellasComida ?? null,
+    p_estrellas_presentacion: args.estrellasPresentacion ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  const rr = data as { ya_existia?: boolean };
+  return { ok: true, yaExistia: Boolean(rr?.ya_existia) };
+}
+
 // ─── Eventos: inscripción + checkout MP ────────────────────────────────────
 
 export async function inscribirEventoYPagar(args: {

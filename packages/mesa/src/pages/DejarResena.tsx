@@ -1,16 +1,21 @@
-// Reseña del cliente — /r/resena/:id.
-// El cliente puntúa su experiencia; se verifica por teléfono y que la reserva
-// haya asistido (sentada/finalizada). Una reseña por reserva.
+// Reseña del cliente — /r/resena/:id?t=<token>.
+// Con token (link del mail): muestra la visita, puntúa y comenta, sin teléfono.
+// Sin token: fallback que verifica por teléfono.
 
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Star, CheckCircle2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Star, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabaseConfigurado } from '@/lib/supabase';
-import { crearReviewReserva } from '@/lib/perfilService';
+import {
+  crearReviewReserva, crearReviewPorToken, getReservaResumen, type ReservaResumen,
+} from '@/lib/perfilService';
 
 export function DejarResena() {
   const { id } = useParams<{ id: string }>();
+  const [params] = useSearchParams();
+  const token = params.get('t');
   const idNum = Number(id);
+
   const [telefono, setTelefono] = useState('');
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
@@ -19,12 +24,23 @@ export function DejarResena() {
   const [hecho, setHecho] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [resumen, setResumen] = useState<ReservaResumen | null>(null);
+  const [cargando, setCargando] = useState(Boolean(token));
+  useEffect(() => {
+    if (!token || !idNum) return;
+    let vivo = true;
+    void getReservaResumen(idNum, token).then((r) => { if (vivo) { setResumen(r); setCargando(false); } });
+    return () => { vivo = false; };
+  }, [token, idNum]);
+
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     if (!rating) { setError('Elegí una puntuación (1 a 5 estrellas).'); return; }
-    if (!telefono.trim()) { setError('Ingresá el teléfono con el que reservaste.'); return; }
+    if (!token && !telefono.trim()) { setError('Ingresá el teléfono con el que reservaste.'); return; }
     setEnviando(true); setError(null);
-    const r = await crearReviewReserva({ reservaId: idNum, telefono, rating, comentario });
+    const r = token
+      ? await crearReviewPorToken({ reservaId: idNum, token, rating, comentario })
+      : await crearReviewReserva({ reservaId: idNum, telefono, rating, comentario });
     setEnviando(false);
     if (r.error) {
       const m = r.error;
@@ -37,10 +53,7 @@ export function DejarResena() {
     setHecho(true);
   }
 
-  if (!supabaseConfigurado || !idNum) {
-    return <Centro><p className="text-2xl">Link inválido</p></Centro>;
-  }
-
+  if (!supabaseConfigurado || !idNum) return <Centro><p className="text-2xl">Link inválido</p></Centro>;
   if (hecho) {
     return (
       <Centro>
@@ -51,12 +64,16 @@ export function DejarResena() {
       </Centro>
     );
   }
+  if (token && cargando) return <Centro><Loader2 className="h-8 w-8 animate-spin text-ink-muted mx-auto" /></Centro>;
+  if (token && !resumen) return <Centro><p className="text-2xl">No encontramos esta reserva</p><p className="mt-2 text-sm text-ink-muted">El link puede estar vencido o ser incorrecto.</p></Centro>;
 
   return (
     <div className="min-h-screen grid place-items-center px-6">
       <form onSubmit={enviar} className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-card p-8">
         <p className="text-2xl font-medium text-center">¿Cómo estuvo tu experiencia?</p>
-        <p className="mt-1 text-sm text-ink-muted text-center">Contanos qué te pareció.</p>
+        {token && resumen
+          ? <p className="mt-1 text-sm text-ink-muted text-center">{resumen.local_nombre}</p>
+          : <p className="mt-1 text-sm text-ink-muted text-center">Contanos qué te pareció.</p>}
 
         <div className="mt-6 flex justify-center gap-1">
           {[1, 2, 3, 4, 5].map((n) => (
@@ -72,9 +89,13 @@ export function DejarResena() {
         <textarea id="com" value={comentario} onChange={(e) => setComentario(e.target.value)} rows={3}
                   className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" placeholder="Lo que quieras contarnos…" />
 
-        <label htmlFor="tel" className="mt-4 block text-xs uppercase tracking-widest text-ink-muted">Teléfono de la reserva</label>
-        <input id="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} inputMode="tel"
-               className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" placeholder="Ej: 11 5933 3093" />
+        {!token && (
+          <>
+            <label htmlFor="tel" className="mt-4 block text-xs uppercase tracking-widest text-ink-muted">Teléfono de la reserva</label>
+            <input id="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} inputMode="tel"
+                   className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" placeholder="Ej: 11 5933 3093" />
+          </>
+        )}
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
