@@ -246,3 +246,20 @@ input[type="number"] {
     @apply min-h-[60px];
   }
 }
+
+/* Scrollbars finas y sutiles (Lucas 02-jul: "el scroll de PASE en COMANDA").
+   Antes salía la barra gruesa default del navegador. Respeta la paleta de
+   COMANDA vía --border-strong. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border-strong)) transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+}
