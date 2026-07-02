@@ -105,8 +105,18 @@ export function Mensajeria({ userId }: { userId: number }) {
     const { error } = await p;
     if (error) { toast.error(error); return; }
     toast.success(okMsg);
-    void reloadConvs();
-    if (sel) void reloadMsgs(sel.id);
+    const { data } = await listConversaciones({
+      cuentaId: cuentaSel ?? undefined,
+      estado: filtroEstado,
+      limit: 200,
+    });
+    setConvs(data);
+    setCargandoConvs(false);
+    if (sel) {
+      const updated = data.find((c) => c.id === sel.id);
+      if (updated) setSel(updated);
+      void reloadMsgs(sel.id);
+    }
   }
 
   async function enviar() {
@@ -127,7 +137,7 @@ export function Mensajeria({ userId }: { userId: number }) {
   }, [convs, search]);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3" style={{ height: 'calc(100dvh - 5.5rem)' }}>
       {/* Selector de cuenta IG (desplegable) + config (engranaje), en una línea */}
       <div className="flex items-center gap-2">
         {cuentas.length === 0 ? (
@@ -155,9 +165,9 @@ export function Mensajeria({ userId }: { userId: number }) {
           <p className="text-sm text-ink-muted mt-1">Cuando conectes una cuenta de Instagram, vas a poder operarla desde acá.</p>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-[340px_1fr] gap-3 min-h-[60vh]">
+        <div className="grid lg:grid-cols-[340px_1fr] gap-3 flex-1 min-h-0">
           {/* Lista de conversaciones — en mobile se oculta cuando hay un chat abierto */}
-          <aside className={`rounded-2xl bg-white border border-ink/5 shadow-card flex-col overflow-hidden ${sel ? 'hidden lg:flex' : 'flex'}`}>
+          <aside className={`rounded-2xl bg-white border border-ink/5 shadow-card flex-col overflow-hidden min-h-0 ${sel ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-3 border-b border-ink/5 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
@@ -211,7 +221,7 @@ export function Mensajeria({ userId }: { userId: number }) {
           </aside>
 
           {/* Thread */}
-          <section className={`rounded-2xl bg-white border border-ink/5 shadow-card flex-col overflow-hidden ${!sel ? 'hidden lg:flex' : 'flex'}`}>
+          <section className={`rounded-2xl bg-white border border-ink/5 shadow-card flex-col overflow-hidden min-h-0 ${!sel ? 'hidden lg:flex' : 'flex'}`}>
             {!sel ? (
               <div className="flex-1 grid place-items-center text-ink-muted">
                 <div className="text-center">
