@@ -325,8 +325,10 @@ function PlanoCustom({ mesas, onClick, density }: { mesas: MesaConVenta[]; onCli
         style={{ minHeight: 400 }}>
         <div className="relative" style={{ width: 1600, height: 1200 }}>
           {posicionadas.map((m) => {
-            const w = m.forma === 'rectangular' ? cfg.planoBox.rectW : cfg.planoBox.w;
-            const h = m.forma === 'rectangular' ? cfg.planoBox.rectH : cfg.planoBox.h;
+            // Tamaño por mesa si el editor lo guardó (ancho/alto); si no, cae al
+            // tamaño de la densidad global. Así el plano se ve como se diseñó.
+            const w = m.ancho > 0 ? m.ancho : (m.forma === 'rectangular' ? cfg.planoBox.rectW : cfg.planoBox.w);
+            const h = m.alto  > 0 ? m.alto  : (m.forma === 'rectangular' ? cfg.planoBox.rectH : cfg.planoBox.h);
             return (
             <div
               key={m.id}
@@ -338,7 +340,7 @@ function PlanoCustom({ mesas, onClick, density }: { mesas: MesaConVenta[]; onCli
                 height: h,
               }}
             >
-              <MesaTile mesa={m} density={density} onClick={() => onClick(m)} />
+              <MesaTile mesa={m} density={density} fill onClick={() => onClick(m)} />
             </div>
             );
           })}
@@ -436,7 +438,7 @@ function clasificarMesa(mesa: MesaConVenta): MesaBucket {
 }
 
 
-function MesaTile({ mesa, onClick, density = 'normal' }: { mesa: MesaConVenta; onClick: () => void; density?: MesaDensity }) {
+function MesaTile({ mesa, onClick, density = 'normal', fill = false }: { mesa: MesaConVenta; onClick: () => void; density?: MesaDensity; fill?: boolean }) {
   const bucket = clasificarMesa(mesa);
   const styles = MESA_BUCKET_STYLES[bucket];
   const cfg = DENSITY_CONFIG[density];
@@ -449,7 +451,9 @@ function MesaTile({ mesa, onClick, density = 'normal' }: { mesa: MesaConVenta; o
       className={cn(
         'border-2 flex flex-col justify-center items-center text-center relative',
         cfg.padding,
-        cfg.minHeight,
+        // En el plano (fill) la tile ocupa la caja con el tamaño por mesa; en el
+        // grid (sin posición) usa el minHeight de la densidad.
+        fill ? 'w-full h-full' : cfg.minHeight,
         'transition-all hover:scale-105 hover:shadow-sm',
         radius,
         styles.bg,

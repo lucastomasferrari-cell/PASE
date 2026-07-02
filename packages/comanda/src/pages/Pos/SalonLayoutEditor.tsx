@@ -25,6 +25,23 @@ const FORMA_LABELS: Record<FormaMesa, string> = {
   rectangular: '▭ Rectangular',
 };
 
+// Tamaño por mesa (Lucas 02-jul: "el tamaño de las mesas no se puede achicar
+// ni agrandar"). Multiplica el tamaño base de la forma. Se guarda como
+// ancho/alto reales en la mesa → lo respetan el editor y el salón en vivo.
+const ESCALAS: { key: 'S' | 'M' | 'L'; label: string; factor: number }[] = [
+  { key: 'S', label: 'S', factor: 0.7 },
+  { key: 'M', label: 'M', factor: 1.0 },
+  { key: 'L', label: 'L', factor: 1.45 },
+];
+const ESCALA_DEFAULT = 1.0;
+// Snap de un factor libre (ratio ancho/base) al S/M/L más cercano, para
+// resaltar el botón activo.
+function escalaKey(factor: number): 'S' | 'M' | 'L' {
+  let best = ESCALAS[1]!;
+  for (const e of ESCALAS) if (Math.abs(e.factor - factor) < Math.abs(best.factor - factor)) best = e;
+  return best.key;
+}
+
 const GRID = 8;
 const CANVAS_W = 1600;
 const CANVAS_H = 1200;
@@ -55,6 +72,18 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
     return map;
   });
 
+  // ── Escala (tamaño por mesa) ──────────────────────────────────────────────
+  // Se deriva del ancho guardado vs el tamaño base de su forma. Si la mesa no
+  // tiene ancho propio → escala 1 (M).
+  const [escalas, setEscalas] = useState<Map<number, number>>(() => {
+    const map = new Map<number, number>();
+    mesas.forEach(m => {
+      const base = FORMA_SIZES[m.forma].w;
+      map.set(m.id, m.ancho > 0 ? m.ancho / base : ESCALA_DEFAULT);
+    });
+    return map;
+  });
+
   const [dirty, setDirty] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
 
@@ -75,15 +104,19 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
   // Refs espejo para acceder al último valor en handlers sin recrearlos
   const selectedIdsRef = useRef(selectedIds);
   const formasRef = useRef(formas);
+  const escalasRef = useRef(escalas);
   const zoomRef = useRef(zoom);
   const posicionesRef = useRef(posiciones);
   useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
   useEffect(() => { formasRef.current = formas; }, [formas]);
+  useEffect(() => { escalasRef.current = escalas; }, [escalas]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { posicionesRef.current = posiciones; }, [posiciones]);
 
   function mesaSize(id: number) {
-    return FORMA_SIZES[formasRef.current.get(id) ?? 'cuadrado'];
+    const base = FORMA_SIZES[formasRef.current.get(id) ?? 'cuadrado'];
+    const e = escalasRef.current.get(id) ?? ESCALA_DEFAULT;
+    return { w: Math.round(base.w * e), h: Math.round(base.h * e) };
   }
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
@@ -197,6 +230,48 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
     });
   }
 
+  // ── Cambiar tamaño (escala) de las mesas seleccionadas ────────────────────
+  function changeEscala(factor: number) {
+    const ids = Array.from(selectedIdsRef.current);
+    if (ids.length === 0) return;
+    setEscalas(prev => {
+      const next = new Map(prev);
+      ids.forEach(id => next.set(id, factor));
+      return next;
+    });
+    setDirty(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(id));
+      return next;
+    });
+  }
+
+  // ── Auto-acomodar ─────────────────────────────────────────────────────────
+  // Acomoda TODAS las mesas en una grilla ordenada por número, respetando el
+  // tamaño de cada una. Pedido Lucas 02-jul: las mesas "sin posición" quedaban
+  // sueltas y el salón se veía mal. Deja todo dirty para guardar.
+  function autoAcomodar() {
+    const GAP = 20;
+    const MARGIN = 16;
+    const ordenadas = [...mesas].sort(
+      (a, b) => (Number(a.numero) || 0) - (Number(b.numero) || 0) || a.id - b.id,
+    );
+    const next = new Map(posicionesRef.current);
+    let x = MARGIN, y = MARGIN, rowH = 0;
+    for (const m of ordenadas) {
+      const { w, h } = mesaSize(m.id);
+      if (x + w > CANVAS_W - MARGIN) { x = MARGIN; y += rowH + GAP; rowH = 0; }
+      next.set(m.id, {
+        x: Math.round(x / GRID) * GRID,
+        y: Math.round(y / GRID) * GRID,
+      });
+      x += w + GAP;
+      rowH = Math.max(rowH, h);
+    }
+    setPosiciones(next);
+    setDirty(new Set(mesas.map(m => m.id)));
+  }
+
   // ── Zoom fit ──────────────────────────────────────────────────────────────
   function fitToScreen() {
     if (!wrapperRef.current || mesas.length === 0) return;
@@ -237,10 +312,14 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
     setSaving(true);
     const updates = Array.from(dirty).map(id => {
       const p = posiciones.get(id);
-      const f = formas.get(id);
+      const f = formas.get(id) ?? 'cuadrado';
+      const e = escalas.get(id) ?? ESCALA_DEFAULT;
+      const base = FORMA_SIZES[f];
       return updateMesaEditor(id, {
         ...(p ? { pos_x: Math.round(p.x), pos_y: Math.round(p.y) } : {}),
-        ...(f ? { forma: f } : {}),
+        forma: f,
+        ancho: Math.round(base.w * e),
+        alto: Math.round(base.h * e),
       });
     });
     const results = await Promise.all(updates);
@@ -259,6 +338,9 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
   const firstForma = firstId !== undefined ? (formas.get(firstId) ?? 'cuadrado') : null;
   const activeForma = (selectedIds.size > 0 && selectedArr.every(id => formas.get(id) === firstForma))
     ? firstForma : null;
+  const firstEscala = firstId !== undefined ? escalaKey(escalas.get(firstId) ?? ESCALA_DEFAULT) : null;
+  const activeEscala = (selectedIds.size > 0 && selectedArr.every(id => escalaKey(escalas.get(id) ?? ESCALA_DEFAULT) === firstEscala))
+    ? firstEscala : null;
 
   return (
     <div className="fixed inset-0 z-40 bg-background flex flex-col">
@@ -305,11 +387,41 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
           </button>
         ))}
 
+        <div className="w-px h-5 bg-border mx-1" />
+        <span className="text-xs text-muted-foreground font-medium mr-1">Tamaño:</span>
+        {ESCALAS.map(e => (
+          <button
+            key={e.key}
+            type="button"
+            disabled={selectedIds.size === 0}
+            onClick={() => changeEscala(e.factor)}
+            title={selectedIds.size === 0 ? 'Seleccioná una mesa primero' : `Tamaño ${e.key}`}
+            className={cn(
+              'h-7 w-7 rounded text-xs font-medium border transition-colors',
+              activeEscala === e.key
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border bg-background hover:bg-accent text-foreground',
+              selectedIds.size === 0 && 'opacity-40 cursor-not-allowed pointer-events-none',
+            )}
+          >
+            {e.label}
+          </button>
+        ))}
+
         {selectedIds.size > 0 && (
           <span className="text-xs text-muted-foreground ml-1">
             {selectedIds.size === 1 ? '— 1 mesa' : `— ${selectedIds.size} mesas`}
           </span>
         )}
+
+        <button
+          type="button"
+          onClick={autoAcomodar}
+          title="Acomodar todas las mesas en una grilla ordenada"
+          className="h-7 px-2.5 ml-2 rounded text-xs font-medium border border-border bg-background hover:bg-accent text-foreground transition-colors"
+        >
+          ▦ Auto-acomodar
+        </button>
 
         {/* Zoom */}
         <div className="ml-auto flex items-center gap-1">
@@ -379,7 +491,10 @@ export function SalonLayoutEditor({ mesas, onClose, onSaved }: Props) {
             const isDragging = dragIdState === m.id;
             const isSelected = selectedIds.has(m.id);
             const forma = formas.get(m.id) ?? 'cuadrado';
-            const { w, h } = FORMA_SIZES[forma];
+            const e = escalas.get(m.id) ?? ESCALA_DEFAULT;
+            const base = FORMA_SIZES[forma];
+            const w = Math.round(base.w * e);
+            const h = Math.round(base.h * e);
 
             return (
               <div

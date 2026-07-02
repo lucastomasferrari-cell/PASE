@@ -131,7 +131,7 @@ export async function updateMesaPosicion(id: number, x: number, y: number): Prom
 
 export async function updateMesaEditor(
   id: number,
-  patch: { pos_x?: number; pos_y?: number; forma?: FormaMesa },
+  patch: { pos_x?: number; pos_y?: number; forma?: FormaMesa; ancho?: number; alto?: number },
 ): Promise<{ error: string | null }> {
   const { error } = await db.from('mesas').update(patch).eq('id', id);
   return { error: error?.message ?? null };
