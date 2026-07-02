@@ -10,7 +10,7 @@ import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   MapPin, Phone, AtSign, Globe, Clock, Star, Users, CalendarCheck,
-  Gift, Sparkles, ChevronRight, MessageCircle,
+  Gift, Sparkles, MessageCircle,
 } from 'lucide-react';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { supabaseConfigurado } from '@/lib/supabase';
@@ -69,7 +69,7 @@ export function PerfilLocal() {
     );
   }
 
-  const { local, reviews, populares, eventos, giftcards, hermanos } = perfil;
+  const { local, reviews, populares, eventos, giftcards } = perfil;
   const fotos = (local.fotos ?? []).filter(Boolean);
 
   return (
@@ -233,21 +233,8 @@ export function PerfilLocal() {
             </div>
           </section>
 
-          {/* Más locales del grupo */}
-          {hermanos.length > 0 && (
-            <section>
-              <Titulo icon={<ChevronRight className="h-5 w-5 text-brand-500" />}>Más locales del grupo</Titulo>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {hermanos.map((h) => (
-                  <Link key={h.slug} to={`/${h.slug}`}
-                        className="rounded-xl bg-white border border-ink/5 p-4 shadow-card hover:border-brand-300 transition-colors">
-                    <p className="font-medium">{h.nombre}</p>
-                    {h.direccion && <p className="text-xs text-ink-muted mt-0.5">{h.direccion}</p>}
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
+          {/* "Más locales del grupo" — oculto por pedido de Lucas (01-jul). El dato
+              (perfil.hermanos) sigue disponible para reactivarlo cuando quiera. */}
         </div>
 
         {/* ── Sidebar: widget de reserva ────────────────────────────────── */}
@@ -305,6 +292,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [notas, setNotas] = useState('');
   const [confirmando, setConfirmando] = useState(false);
   const [estadoFinal, setEstadoFinal] = useState<string>('pendiente');
+  const [reservaId, setReservaId] = useState<number | null>(null);
 
   // Cargar los sectores reservables (Barra/Salón/Terraza/…) del local.
   useEffect(() => {
@@ -392,6 +380,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
       // Confirmación automática al cliente (email). Fire-and-forget.
       if (r.id && email.trim()) void notificarConfirmacionReserva(r.id);
       setEstadoFinal(r.estado ?? 'pendiente');
+      setReservaId(r.id ?? null);
       setPaso('lista');
     } finally { setConfirmando(false); }
   }
@@ -419,7 +408,12 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
             </a>
           );
         })()}
-        <p className="mt-3 text-[10px] text-neutral-400">Para cambios o cancelaciones, escribinos por WhatsApp.</p>
+        <p className="mt-3 text-[10px] text-neutral-400">Para cambios o consultas, escribinos por WhatsApp.</p>
+        {reservaId && (
+          <Link to={`/r/cancelar/${reservaId}`} className="mt-2 inline-block text-[11px] text-neutral-500 underline hover:text-neutral-900">
+            Cancelar mi reserva
+          </Link>
+        )}
       </div>
     );
   }

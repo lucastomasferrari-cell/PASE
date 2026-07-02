@@ -3,11 +3,11 @@
 // (libre / ocupada por ticket / en mesa por reserva / reservada pronto).
 // La edición de posiciones (drag-drop) queda en COMANDA → Config → Mesas.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Users, Clock, RefreshCw } from 'lucide-react';
+import { Users, Clock, RefreshCw, Move, Check } from 'lucide-react';
 import {
-  listMesas, estadoMesasLive,
+  listMesas, estadoMesasLive, actualizarPosicionMesa,
   type Mesa, type MesaEstadoLive, type EstadoMesaLive,
 } from '@/lib/mesasService';
 import { sentarDePaso } from '@/lib/reservasService';
@@ -51,6 +51,9 @@ export function AdminMapa({ localId }: Props) {
   const [estados, setEstados] = useState<Map<number, MesaEstadoLive>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [walkInMesa, setWalkInMesa] = useState<number | null>(null);
+  const [editando, setEditando] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: number; offX: number; offY: number; x: number; y: number; moved: boolean } | null>(null);
 
   const reload = useCallback(async () => {
     const [m, e] = await Promise.all([listMesas(localId), estadoMesasLive(localId)]);
@@ -68,8 +71,48 @@ export function AdminMapa({ localId }: Props) {
     return () => clearInterval(id);
   }, [reload]);
 
-  const ubicadas = useMemo(() => mesas.filter((m) => m.pos_x !== null), [mesas]);
-  const sinUbicar = useMemo(() => mesas.filter((m) => m.pos_x === null), [mesas]);
+  // En modo edición TODAS las mesas van al canvas (las sin ubicar arrancan en
+  // una grilla en cascada para poder arrastrarlas al lugar). Fuera de edición,
+  // solo las que tienen posición guardada.
+  const ubicadas = useMemo(() => {
+    if (!editando) return mesas.filter((m) => m.pos_x !== null);
+    let i = 0;
+    return mesas.map((m) => {
+      if (m.pos_x !== null && m.pos_y !== null) return m;
+      const x = 20 + (i % 6) * 135, y = 20 + Math.floor(i / 6) * 95; i++;
+      return { ...m, pos_x: x, pos_y: y };
+    });
+  }, [mesas, editando]);
+  const sinUbicar = useMemo(() => (editando ? [] : mesas.filter((m) => m.pos_x === null)), [mesas, editando]);
+
+  // ── Arrastrar mesas (pointer events + pointer capture) ──
+  function onPointerDownMesa(e: React.PointerEvent, m: Mesa) {
+    if (!editando) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    dragRef.current = {
+      id: m.id,
+      offX: e.clientX - rect.left - (m.pos_x ?? 0),
+      offY: e.clientY - rect.top - (m.pos_y ?? 0),
+      x: m.pos_x ?? 0, y: m.pos_y ?? 0, moved: false,
+    };
+  }
+  function onPointerMoveMesa(e: React.PointerEvent) {
+    const d = dragRef.current; const rect = canvasRef.current?.getBoundingClientRect();
+    if (!d || !rect) return;
+    const x = Math.max(0, Math.min(CANVAS_W - 60, e.clientX - rect.left - d.offX));
+    const y = Math.max(0, Math.min(CANVAS_H - 60, e.clientY - rect.top - d.offY));
+    d.x = x; d.y = y; d.moved = true;
+    setMesas((prev) => prev.map((m) => (m.id === d.id ? { ...m, pos_x: x, pos_y: y } : m)));
+  }
+  async function onPointerUpMesa() {
+    const d = dragRef.current; dragRef.current = null;
+    if (!d || !d.moved) return;
+    const { error } = await actualizarPosicionMesa(d.id, d.x, d.y);
+    if (error) toast.error('No se pudo guardar la posición: ' + error);
+  }
 
   const conteo = useMemo(() => {
     const c: Record<EstadoMesaLive, number> = { libre: 0, ocupada_ticket: 0, ocupada_reserva: 0, reservada_pronto: 0 };
@@ -98,29 +141,44 @@ export function AdminMapa({ localId }: Props) {
             {ESTADO_LABEL[k]} <span className="font-medium text-ink-soft">({conteo[k]})</span>
           </span>
         ))}
-        <button onClick={() => void reload()} className="ml-auto inline-flex items-center gap-1 text-ink-soft hover:text-ink">
+        <button onClick={() => setEditando((v) => !v)}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${editando ? 'bg-ink text-white' : 'text-ink-soft hover:text-ink border border-ink/15'}`}>
+          {editando ? <><Check className="h-3.5 w-3.5" /> Listo</> : <><Move className="h-3.5 w-3.5" /> Editar plano</>}
+        </button>
+        <button onClick={() => void reload()} className="inline-flex items-center gap-1 text-ink-soft hover:text-ink">
           <RefreshCw className="h-3.5 w-3.5" /> Actualizar
         </button>
       </div>
 
+      {editando && (
+        <p className="text-xs text-brand-700 bg-brand-50 border border-brand-200 rounded-md px-3 py-2">
+          Arrastrá las mesas para ubicarlas en el plano. Se guarda solo al soltar.
+        </p>
+      )}
+
       {/* Canvas */}
       <div className="border border-ink/10 rounded-xl overflow-auto bg-white">
         <div
+          ref={canvasRef}
+          onPointerMove={editando ? onPointerMoveMesa : undefined}
+          onPointerUp={editando ? () => void onPointerUpMesa() : undefined}
           className="relative bg-[radial-gradient(circle,_#C5E0F4_1px,_transparent_1px)] bg-[size:24px_24px]"
           style={{ width: CANVAS_W, height: CANVAS_H, minWidth: CANVAS_W }}
         >
           {ubicadas.map((m) => (
-            <div key={m.id} className="absolute" style={{ left: m.pos_x ?? 0, top: m.pos_y ?? 0 }}>
-              <MesaToken mesa={m} estado={estados.get(m.id) ?? null} onSeat={() => setWalkInMesa(m.id)} />
+            <div key={m.id} className={`absolute ${editando ? 'cursor-move touch-none' : ''}`}
+                 style={{ left: m.pos_x ?? 0, top: m.pos_y ?? 0 }}
+                 onPointerDown={editando ? (e) => onPointerDownMesa(e, m) : undefined}>
+              <MesaToken mesa={m} estado={estados.get(m.id) ?? null} onSeat={editando ? undefined : () => setWalkInMesa(m.id)} />
             </div>
           ))}
         </div>
       </div>
 
-      {/* Sin ubicar */}
+      {/* Sin ubicar (fuera de edición) */}
       {sinUbicar.length > 0 && (
         <div className="rounded-lg border border-dashed border-ink/15 p-3">
-          <p className="text-xs font-medium text-ink-muted mb-2">Sin ubicar en el plano (ubicalas desde COMANDA)</p>
+          <p className="text-xs font-medium text-ink-muted mb-2">Sin ubicar en el plano — tocá "Editar plano" para arrastrarlas al salón</p>
           <div className="flex flex-wrap gap-2">
             {sinUbicar.map((m) => <MesaToken key={m.id} mesa={m} estado={estados.get(m.id) ?? null} onSeat={() => setWalkInMesa(m.id)} />)}
           </div>

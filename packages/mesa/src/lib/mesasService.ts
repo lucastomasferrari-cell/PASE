@@ -44,6 +44,16 @@ export async function listMesas(localId: number): Promise<{ data: Mesa[]; error:
   return { data: (data ?? []) as Mesa[], error: null };
 }
 
+// Guardar la posición de una mesa en el plano (arrastrar-y-soltar desde MESA).
+export async function actualizarPosicionMesa(
+  mesaId: number, x: number, y: number,
+): Promise<{ error: string | null }> {
+  const { error } = await db().rpc('fn_mesa_posicion', {
+    p_mesa_id: mesaId, p_x: Math.round(x), p_y: Math.round(y),
+  });
+  return { error: error ? error.message : null };
+}
+
 export async function estadoMesasLive(localId: number): Promise<{ data: MesaEstadoLive[]; error: string | null }> {
   const { data, error } = await db().rpc('fn_estado_mesas_live', { p_local_id: localId });
   if (error) return { data: [], error: error.message };

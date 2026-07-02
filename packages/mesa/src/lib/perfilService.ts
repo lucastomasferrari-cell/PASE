@@ -110,6 +110,33 @@ export async function notificarConfirmacionReserva(reservaId: number): Promise<v
   } catch { /* best-effort */ }
 }
 
+// Cancelación por el propio cliente (verifica por teléfono). true = cancelada.
+export async function cancelarReservaPublica(
+  reservaId: number, telefono: string, motivo?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await db().rpc('fn_cancelar_reserva_publica', {
+    p_reserva_id: reservaId, p_telefono: telefono.trim(), p_motivo: motivo ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: data === true };
+}
+
+// Reseña del cliente para una reserva que asistió (verifica por teléfono).
+export async function crearReviewReserva(args: {
+  reservaId: number; telefono: string; rating: number; comentario?: string;
+  email?: string; estrellasComida?: number; estrellasPresentacion?: number;
+}): Promise<{ ok: boolean; yaExistia?: boolean; error?: string }> {
+  const { data, error } = await db().rpc('fn_crear_review_reserva', {
+    p_reserva_id: args.reservaId, p_telefono: args.telefono.trim(), p_rating: args.rating,
+    p_comentario: args.comentario ?? null, p_email: args.email ?? null,
+    p_estrellas_comida: args.estrellasComida ?? null,
+    p_estrellas_presentacion: args.estrellasPresentacion ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  const r = data as { ya_existia?: boolean };
+  return { ok: true, yaExistia: Boolean(r?.ya_existia) };
+}
+
 // ─── Eventos: inscripción + checkout MP ────────────────────────────────────
 
 export async function inscribirEventoYPagar(args: {
