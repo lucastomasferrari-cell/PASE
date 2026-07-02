@@ -68,12 +68,18 @@ export function AdminDiario({ localId, localNombre }: Props) {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  // Rango horario: arranca a las 12 (o antes si hay reservas temprano) hasta
-  // las 24 (o más si alguna termina más tarde).
-  const { rangoIni, rangoFin, horas } = useMemo(
-    () => calcularRango(reservas.map((r) => ({ startMin: minutosDelDia(r.fecha_hora), durMin: r.duracion_min ?? DUR_DEFAULT }))),
-    [reservas],
-  );
+  // Rango horario: se ajusta a la franja real del día (primera reserva →
+  // última salida) en vez de un fijo 12–24 que dejaba medio timeline vacío.
+  // Sin reservas, cae en una ventana de noche por defecto (19–24).
+  const { rangoIni, rangoFin, horas } = useMemo(() => {
+    const items = reservas.map((r) => ({ startMin: minutosDelDia(r.fecha_hora), durMin: r.duracion_min ?? DUR_DEFAULT }));
+    let defIni = 19 * 60, defFin = 24 * 60;
+    if (items.length) {
+      defIni = Math.min(...items.map((i) => Math.floor(i.startMin / 60) * 60));
+      defFin = Math.max(...items.map((i) => Math.ceil((i.startMin + i.durMin) / 60) * 60));
+    }
+    return calcularRango(items, defIni, defFin);
+  }, [reservas]);
 
   const anchoGrid = (rangoFin - rangoIni) * PX_PER_MIN;
 

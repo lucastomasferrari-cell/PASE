@@ -34,9 +34,10 @@ function labelFecha(f: Date) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-type Rango = 'hoy' | 'semana' | 'proximas' | 'pasadas';
+type Rango = 'hoy' | 'semana' | 'proximas' | 'pasadas' | 'dia';
 const RANGOS: { key: Rango; label: string }[] = [
   { key: 'hoy', label: 'Hoy' },
+  { key: 'dia', label: 'Fecha exacta…' },
   { key: 'semana', label: 'Próx. 7 días' },
   { key: 'proximas', label: 'Próx. 30 días' },
   { key: 'pasadas', label: 'Pasadas' },
@@ -51,10 +52,14 @@ const ESTADO_FILTROS: { key: EstadoReserva | 'todas'; label: string }[] = [
   { key: 'cancelada', label: 'Canceladas' },
 ];
 
-function rangoFechas(r: Rango): { desde: string; hasta: string } {
+function rangoFechas(r: Rango, dia?: string): { desde: string; hasta: string } {
   const inicioHoy = new Date(); inicioHoy.setHours(0, 0, 0, 0);
   const finHoy = new Date(); finHoy.setHours(23, 59, 59, 999);
   const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  if (r === 'dia' && dia) {
+    const ini = new Date(`${dia}T00:00:00`); const fin = new Date(`${dia}T23:59:59.999`);
+    return { desde: ini.toISOString(), hasta: fin.toISOString() };
+  }
   if (r === 'hoy') return { desde: inicioHoy.toISOString(), hasta: finHoy.toISOString() };
   if (r === 'semana') return { desde: inicioHoy.toISOString(), hasta: addDays(finHoy, 7).toISOString() };
   if (r === 'proximas') return { desde: inicioHoy.toISOString(), hasta: addDays(finHoy, 30).toISOString() };
@@ -67,6 +72,9 @@ export function AdminReservas({ localId, localNombre }: Props) {
   const [cargando, setCargando] = useState(true);
   const [editando, setEditando] = useState<Reserva | 'nueva' | null>(null);
   const [rango, setRango] = useState<Rango>('semana');
+  const [diaEspecifico, setDiaEspecifico] = useState<string>(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoReserva | 'todas'>('todas');
   const [search, setSearch] = useState('');
 
@@ -75,7 +83,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
 
   const reload = useCallback(async () => {
     setCargando(true);
-    const { desde, hasta } = rangoFechas(rango);
+    const { desde, hasta } = rangoFechas(rango, diaEspecifico);
     const [r, m] = await Promise.all([
       listReservas({ localId, desde, hasta, estado: estadoFiltro, limit: 500 }),
       listMesasDelLocal(localId),
@@ -85,7 +93,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
     setMesas(m.data);
     vistasRef.current = new Set(r.data.map((x) => x.id)); // resetear baseline
     setCargando(false);
-  }, [localId, rango, estadoFiltro]);
+  }, [localId, rango, estadoFiltro, diaEspecifico]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -96,7 +104,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
     let cancelado = false; // descartar un fetch en vuelo si cambió el filtro/local
     const id = setInterval(async () => {
       if (document.visibilityState !== 'visible') return;
-      const { desde, hasta } = rangoFechas(rango);
+      const { desde, hasta } = rangoFechas(rango, diaEspecifico);
       const r = await listReservas({ localId, desde, hasta, estado: estadoFiltro, limit: 500 });
       if (cancelado || r.error) return; // el efecto ya se limpió → no pisar con datos viejos
       const nuevas = r.data.filter((x) => !vistasRef.current.has(x.id));
@@ -107,7 +115,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
       }
     }, 25_000);
     return () => { cancelado = true; clearInterval(id); };
-  }, [localId, rango, estadoFiltro]);
+  }, [localId, rango, estadoFiltro, diaEspecifico]);
 
   const filtradas = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -173,6 +181,10 @@ export function AdminReservas({ localId, localNombre }: Props) {
                 className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm">
           {RANGOS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
+        {rango === 'dia' && (
+          <input type="date" value={diaEspecifico} onChange={(e) => setDiaEspecifico(e.target.value)}
+                 className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm" />
+        )}
         <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value as EstadoReserva | 'todas')}
                 className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm">
           {ESTADO_FILTROS.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}

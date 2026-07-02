@@ -10,8 +10,9 @@ import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   MapPin, Phone, AtSign, Globe, Clock, Star, Users, CalendarCheck,
-  Gift, Sparkles, ChevronRight,
+  Gift, Sparkles, ChevronRight, MessageCircle,
 } from 'lucide-react';
+import { whatsAppUrl } from '@/lib/whatsapp';
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
   getPerfil, crearReservaPublica, notificarConfirmacionReserva,
@@ -312,22 +313,36 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     return () => { vivo = false; };
   }, [slug]);
 
-  // Próximos 14 días para el scroller de fecha.
+  // Scroller de fecha: sólo los días que el negocio ABRE (según horarios del
+  // local), hasta 30 días abiertos hacia adelante. Así no se muestran días
+  // cerrados (que darían "sin turnos") y se puede llegar a fechas futuras.
   const dias = useMemo(() => {
-    const out: { iso: string; dow: string; num: string }[] = [];
+    // getDay(): 0=Dom … 6=Sáb → clave de horarios
+    const keys = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab'] as const;
+    const hor = perfil.local.horarios;
+    const out: { iso: string; dow: string; num: string; mes: string }[] = [];
     const base = new Date();
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 120 && out.length < 30; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
-      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const k = keys[d.getDay()]!;
+      if (hor && !hor[k]) continue; // cerrado ese día
       out.push({
-        iso,
+        iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
         dow: d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', ''),
         num: String(d.getDate()),
+        mes: d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''),
       });
     }
     return out;
-  }, []);
+  }, [perfil.local.horarios]);
+
+  // Si la fecha elegida cayó en un día cerrado (o es la de hoy y hoy cierra),
+  // saltar al primer día abierto disponible.
+  useEffect(() => {
+    if (dias.length && !dias.some((d) => d.iso === fecha)) setFecha(dias[0]!.iso);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dias]);
 
   // Traer los horarios disponibles cada vez que cambia fecha/personas/sector.
   useEffect(() => {
@@ -393,6 +408,18 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
         <p className="mt-3 text-xs text-neutral-400 uppercase tracking-widest">
           {estadoFinal === 'pendiente' ? 'El restaurante confirma en breve' : 'Reserva confirmada'}
         </p>
+        {(() => {
+          const waMsg = `Hola! Hice una reserva a nombre de ${nombre.trim()} para el ${new Date(`${fecha}T${hora}:00`).toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} (${personas} ${personas === 1 ? 'persona' : 'personas'}). Quería consultar/modificar.`;
+          const waUrl = whatsAppUrl(perfil.local.telefono, waMsg);
+          if (!waUrl) return null;
+          return (
+            <a href={waUrl} target="_blank" rel="noopener noreferrer"
+               className="mt-6 inline-flex items-center justify-center gap-2 w-full bg-neutral-900 text-white px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors">
+              <MessageCircle className="h-4 w-4" /> Escribir por WhatsApp
+            </a>
+          );
+        })()}
+        <p className="mt-3 text-[10px] text-neutral-400">Para cambios o cancelaciones, escribinos por WhatsApp.</p>
       </div>
     );
   }
@@ -437,6 +464,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                         }`}>
                   <span className="text-[10px] font-bold uppercase">{d.dow}</span>
                   <span className="font-display text-lg leading-none mt-0.5">{d.num}</span>
+                  <span className="text-[8px] uppercase opacity-60 leading-none mt-0.5">{d.mes}</span>
                 </button>
               ))}
             </div>
