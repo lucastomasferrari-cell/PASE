@@ -58,11 +58,19 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const [confirmando, setConfirmando] = useState(false);
   const confirmandoRef = useRef(false);
   const [ctxMenu, setCtxMenu] = useState<{ metodo: MetodoCobro; x: number; y: number } | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
 
   const metodos = useMemo(() => {
     const modo = venta.modo as ModoVenta;
     return allMetodos.filter((m) =>
       !m.sectores_visibles || m.sectores_visibles.length === 0 || m.sectores_visibles.includes(modo),
+    );
+  }, [allMetodos, venta.modo]);
+
+  const hiddenMetodos = useMemo(() => {
+    const modo = venta.modo as ModoVenta;
+    return allMetodos.filter((m) =>
+      m.sectores_visibles && m.sectores_visibles.length > 0 && !m.sectores_visibles.includes(modo),
     );
   }, [allMetodos, venta.modo]);
 
@@ -394,6 +402,45 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
                         );
                       })}
                     </div>
+                    {canEdit && hiddenMetodos.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowHidden((v) => !v)}
+                        className="w-full text-[10px] text-muted-foreground hover:text-foreground py-1 transition-colors"
+                      >
+                        {showHidden ? '▾ Ocultar' : `+ ${hiddenMetodos.length} oculto${hiddenMetodos.length > 1 ? 's' : ''} en ${venta.modo === 'salon' ? 'Salón' : venta.modo === 'mostrador' ? 'Mostrador' : 'Pedidos'}`}
+                      </button>
+                    )}
+                    {showHidden && hiddenMetodos.length > 0 && (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {hiddenMetodos.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              const modo = venta.modo as ModoVenta;
+                              const next = [...(m.sectores_visibles ?? []), modo];
+                              void updateMetodoCobro(m.id, {
+                                sectores_visibles: next.length >= SECTORES.length ? null : next,
+                              }).then(({ error }) => {
+                                if (error) { toast.error(error); return; }
+                                toast.success(`${m.nombre} visible en ${modo === 'salon' ? 'Salón' : modo === 'mostrador' ? 'Mostrador' : 'Pedidos'}`);
+                                reloadMetodos();
+                              });
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setCtxMenu({ metodo: m, x: e.clientX, y: e.clientY });
+                            }}
+                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-left border border-dashed border-muted-foreground/30 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground/80 transition-colors duration-150"
+                          >
+                            <EyeOff className="h-3 w-3 shrink-0 opacity-50" />
+                            <span className="text-xs font-medium leading-tight line-clamp-1">{m.nombre}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Monto + cliente entrega */}
