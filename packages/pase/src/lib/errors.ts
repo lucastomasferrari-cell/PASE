@@ -78,6 +78,7 @@ const MAP: Record<string, string> = {
   FECHA_REQUIRED: "Seleccioná una fecha",
   FECHA_INVALIDA: "La fecha es inválida",
   LOCAL_REQUIRED: "Seleccioná un local",
+  LOCAL_USA_COMANDA: "Este local usa COMANDA como fuente de ventas — no se puede cargar un cierre manual. Desactivá el flag si querés volver a Maxirest.",
   LINEA_INVALIDA: "Una de las líneas no tiene monto o medio válido",
 
   // RRHH
