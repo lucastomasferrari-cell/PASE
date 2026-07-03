@@ -22,6 +22,8 @@ export interface LocalPerfil {
   mesa_fotos: string[];
 }
 
+const MAX_FOTOS = 6;
+
 export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (l: LocalPerfil) => void }) {
   const [form, setForm] = useState<LocalPerfil>(local);
   const [guardando, setGuardando] = useState(false);
@@ -52,9 +54,15 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
     e.target.value = '';
     if (archivos.length === 0) return;
 
+    // Tope de fotos: solo subimos las que entren hasta el máximo.
+    const libres = MAX_FOTOS - form.mesa_fotos.filter((f) => f.trim()).length;
+    if (libres <= 0) { toast.error(`Máximo ${MAX_FOTOS} fotos. Quitá alguna para agregar otra.`); return; }
+    const aSubir = archivos.slice(0, libres);
+    if (archivos.length > libres) toast.error(`Solo se suben ${libres}: el máximo es ${MAX_FOTOS} fotos.`);
+
     setSubiendo(true);
     try {
-      for (const file of archivos) {
+      for (const file of aSubir) {
         const { url, error } = await subirFotoLocal(file, form.tenant_id, form.local_id);
         if (error || !url) {
           toast.error(`No se pudo subir ${file.name}: ${error ?? 'error desconocido'}`);
@@ -70,7 +78,7 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
   async function guardar() {
     setGuardando(true);
     try {
-      const fotos = form.mesa_fotos.map((f) => f.trim()).filter(Boolean);
+      const fotos = form.mesa_fotos.map((f) => f.trim()).filter(Boolean).slice(0, MAX_FOTOS);
       const { error } = await db().from('comanda_local_settings').update({
         direccion: form.direccion?.trim() || null,
         telefono: form.telefono?.trim() || null,
@@ -156,13 +164,16 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
           {/* Input oculto + botón agregar */}
           <input ref={fileInputRef} type="file" accept="image/*" multiple hidden
                  onChange={(e) => void onSeleccionarArchivos(e)} />
-          <button type="button" disabled={subiendo}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-1 inline-flex items-center gap-2 rounded-lg border border-dashed border-ink/25 px-3 py-2 text-sm text-ink-soft hover:border-brand-500 hover:text-brand-600 disabled:opacity-60">
-            {subiendo
-              ? (<><Upload className="h-4 w-4 animate-pulse" /> Subiendo…</>)
-              : (<><ImagePlus className="h-4 w-4" /> Agregar fotos</>)}
-          </button>
+          <div className="mt-1 flex items-center gap-3 flex-wrap">
+            <button type="button" disabled={subiendo || fotos.length >= MAX_FOTOS}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 rounded-lg border border-dashed border-ink/25 px-3 py-2 text-sm text-ink-soft hover:border-brand-500 hover:text-brand-600 disabled:opacity-60 disabled:hover:border-ink/25 disabled:hover:text-ink-soft">
+              {subiendo
+                ? (<><Upload className="h-4 w-4 animate-pulse" /> Subiendo…</>)
+                : (<><ImagePlus className="h-4 w-4" /> Agregar fotos</>)}
+            </button>
+            <span className="text-xs text-ink-muted">{fotos.length}/{MAX_FOTOS}{fotos.length >= MAX_FOTOS ? ' — máximo' : ''}</span>
+          </div>
 
           <p className="text-xs text-ink-muted">
             La primera foto es la portada del hero. Los cambios se guardan cuando
