@@ -16,7 +16,7 @@ import { db } from '@/lib/supabase';
 type Forma = 'cuadrado' | 'redondo' | 'rectangular';
 interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; forma: Forma; reservable: boolean }
 interface Settings { id: number; permiteCombinar: boolean; limites: { zona: string; min: string; max: string }[] }
-interface Combo { id: number; nombre: string | null; mesa_ids: number[]; activa: boolean }
+interface Combo { id: number; nombre: string | null; mesa_ids: number[]; tipo: 'grupo' | 'fija'; min_personas: number | null; max_personas: number | null; activa: boolean }
 const NUEVO = '__nuevo__';
 const FORMAS: { value: Forma; label: string }[] = [
   { value: 'cuadrado', label: 'Cuadrada' },
@@ -36,11 +36,15 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
   const [agregando, setAgregando] = useState(false);
   const [renombrar, setRenombrar] = useState<string | null>(null);
   const [renombreVal, setRenombreVal] = useState('');
-  // Grupos combinables (adyacencia): una fila ordenada de mesas pegables; el
-  // motor junta las que estén libres y contiguas. La capacidad la calcula solo.
+  // Combinar mesas — dos modos (como Eat App):
+  //  grupo = marcás las mesas de una fila; el motor arma el tramo contiguo libre.
+  //  fija  = combinación exacta de mesas puntuales, con rango desde/hasta personas.
   const [combos, setCombos] = useState<Combo[]>([]);
+  const [comboModo, setComboModo] = useState<'grupo' | 'fija'>('grupo');
   const [comboSel, setComboSel] = useState<number[]>([]);
   const [comboNombre, setComboNombre] = useState('');
+  const [comboMin, setComboMin] = useState('');
+  const [comboMax, setComboMax] = useState('');
   const [comboAgregando, setComboAgregando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -70,16 +74,19 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
       setSettings(null);
     }
 
-    // Grupos combinables (el motor arma tramos contiguos libres dentro de cada uno).
+    // Combinaciones (grupos + fijas).
     const { data: cData, error: cErr } = await db()
       .from('reservas_combinaciones')
-      .select('id, nombre, mesa_ids, activa')
+      .select('id, nombre, mesa_ids, tipo, min_personas, max_personas, activa')
       .eq('local_id', localId).is('deleted_at', null).order('id');
-    if (cErr) toast.error('No se pudieron cargar los grupos: ' + cErr.message);
+    if (cErr) toast.error('No se pudieron cargar las combinaciones: ' + cErr.message);
     setCombos((cData ?? []).map((c) => ({
       id: c.id as number,
       nombre: (c.nombre ?? null) as string | null,
       mesa_ids: ((c.mesa_ids ?? []) as number[]).map(Number),
+      tipo: (c.tipo === 'fija' ? 'fija' : 'grupo') as 'grupo' | 'fija',
+      min_personas: c.min_personas == null ? null : Number(c.min_personas),
+      max_personas: c.max_personas == null ? null : Number(c.max_personas),
       activa: Boolean(c.activa),
     })));
     setCargando(false);
@@ -214,21 +221,36 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
 
   async function agregarCombo() {
     if (comboSel.length < 2) { toast.error('Elegí al menos 2 mesas'); return; }
+    let min: number | null = null, max: number | null = null;
+    if (comboModo === 'fija') {
+      min = comboMin.trim() ? Number(comboMin) : null;
+      max = comboMax.trim() ? Number(comboMax) : null;
+      if (min != null && max != null && min > max) { toast.error('El "desde" no puede ser mayor que el "hasta"'); return; }
+    }
+    // Para un grupo el orden importa (adyacencia): guardamos las mesas ordenadas
+    // por su número/nombre, así "Banqueta 1..8" queda en secuencia física.
+    const ids = comboModo === 'grupo'
+      ? [...comboSel].sort((a, b) => nombreDeMesa(a).localeCompare(nombreDeMesa(b), 'es', { numeric: true }))
+      : comboSel;
     setComboAgregando(true);
     try {
       const { data, error } = await db().from('reservas_combinaciones').insert({
         tenant_id: tenantId, local_id: localId,
         nombre: comboNombre.trim() || null,
-        mesa_ids: comboSel, activa: true,
-      }).select('id, nombre, mesa_ids, activa').single();
-      if (error) { toast.error('No se pudo crear el grupo: ' + error.message); return; }
-      const c = data as { id: number; nombre: string | null; mesa_ids: number[]; activa: boolean };
+        mesa_ids: ids, tipo: comboModo,
+        min_personas: min, max_personas: max, activa: true,
+      }).select('id, nombre, mesa_ids, tipo, min_personas, max_personas, activa').single();
+      if (error) { toast.error('No se pudo crear la combinación: ' + error.message); return; }
+      const c = data as { id: number; nombre: string | null; mesa_ids: number[]; tipo: string; min_personas: number | null; max_personas: number | null; activa: boolean };
       setCombos((prev) => [...prev, {
         id: c.id, nombre: c.nombre ?? null, mesa_ids: (c.mesa_ids ?? []).map(Number),
+        tipo: c.tipo === 'fija' ? 'fija' : 'grupo',
+        min_personas: c.min_personas == null ? null : Number(c.min_personas),
+        max_personas: c.max_personas == null ? null : Number(c.max_personas),
         activa: Boolean(c.activa),
       }]);
-      setComboSel([]); setComboNombre('');
-      toast.success('Grupo combinable creado');
+      setComboSel([]); setComboNombre(''); setComboMin(''); setComboMax('');
+      toast.success(comboModo === 'grupo' ? 'Grupo creado' : 'Combinación creada');
     } finally { setComboAgregando(false); }
   }
 
@@ -239,7 +261,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
   }
 
   async function eliminarCombo(id: number) {
-    if (!window.confirm('¿Eliminar este grupo combinable?')) return;
+    if (!window.confirm('¿Eliminar esta combinación?')) return;
     setCombos((prev) => prev.filter((c) => c.id !== id));
     const { error } = await db().from('reservas_combinaciones')
       .update({ deleted_at: new Date().toISOString() }).eq('id', id);
@@ -360,23 +382,33 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         </div>
       )}
 
-      {/* Grupos combinables (adyacencia) */}
+      {/* Combinar mesas — grupos + combinaciones fijas */}
       {mesas.length >= 2 && (
         <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
-          <p className="font-medium flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-500" /> Grupos combinables</p>
-          <p className="text-xs text-ink-muted mt-1 mb-4">Marcá las mesas de una fila o barra que se pueden pegar, <b>en el orden en que están</b> (de una punta a la otra). Cuando un grupo no entra en una mesa sola, el motor junta las mesas de esa fila que estén <b>libres y contiguas</b>, y suma su capacidad. Una mesa que no va en ningún grupo nunca se combina.</p>
+          <p className="font-medium flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-500" /> Combinar mesas</p>
+          <p className="text-xs text-ink-muted mt-1 mb-4">Dos formas de juntar mesas. Un <b>grupo</b>: marcás las mesas de una fila (la barra, los sillones) y el sistema arma solo la combinación libre que alcance. Una <b>combinación fija</b>: mesas puntuales para un rango de personas. Las mesas que no ponés en ninguna, nunca se combinan.</p>
 
-          {/* Armar un grupo */}
+          {/* Selector de modo */}
+          <div className="inline-flex rounded-lg border border-ink/10 p-0.5 mb-3">
+            {(['grupo', 'fija'] as const).map((t) => (
+              <button key={t} type="button" onClick={() => setComboModo(t)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${comboModo === t ? 'bg-brand-500 text-white' : 'text-ink-soft hover:text-ink'}`}>
+                {t === 'grupo' ? 'Grupo' : 'Combinación fija'}
+              </button>
+            ))}
+          </div>
+
+          {/* Armar */}
           <div className="rounded-xl border border-ink/10 p-3 mb-4">
-            <p className="text-xs font-medium text-ink-soft mb-2">Elegí las mesas de la fila, en orden</p>
+            <p className="text-xs font-medium text-ink-soft mb-2">
+              {comboModo === 'grupo' ? 'Marcá las mesas que se pueden juntar' : 'Elegí las mesas exactas de la combinación'}
+            </p>
             <div className="flex flex-wrap gap-1.5 mb-3">
               {mesas.map((m) => {
-                const pos = comboSel.indexOf(m.id);
-                const sel = pos >= 0;
+                const sel = comboSel.includes(m.id);
                 return (
                   <button key={m.id} type="button" onClick={() => toggleComboMesa(m.id)}
                           className={`rounded-lg border px-2.5 py-1.5 text-sm inline-flex items-baseline gap-1 transition-colors ${sel ? 'bg-brand-500 border-brand-500 text-white' : 'border-ink/15 text-ink hover:border-brand-300'}`}>
-                    {sel && <span className="text-[11px] font-semibold text-white/90">{pos + 1}.</span>}
                     <span className="font-medium">{m.numero}</span>
                     {m.zona && <span className={`text-[11px] ${sel ? 'text-white/70' : 'text-ink-muted'}`}>{m.zona}</span>}
                   </button>
@@ -385,42 +417,63 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
             </div>
             {comboSel.length >= 2 && (
               <p className="text-xs text-ink-muted mb-3">
-                Fila: {comboSel.map((id) => nombreDeMesa(id)).join(' → ')} · capacidad máxima {capacidadDeGrupo(comboSel)} personas
+                {comboSel.map((id) => nombreDeMesa(id)).join(' + ')} · capacidad {capacidadDeGrupo(comboSel)} personas
               </p>
             )}
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="Nombre (opcional)" className="w-44">
+              {comboModo === 'fija' && (
+                <>
+                  <Field label="Desde" className="w-20">
+                    <input type="number" min={1} value={comboMin} onChange={(e) => setComboMin(e.target.value)}
+                           placeholder="1" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                  </Field>
+                  <Field label="Hasta" className="w-20">
+                    <input type="number" min={1} value={comboMax} onChange={(e) => setComboMax(e.target.value)}
+                           placeholder={String(capacidadDeGrupo(comboSel) || '')} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                  </Field>
+                </>
+              )}
+              <Field label="Nombre (opcional)" className="w-40">
                 <input value={comboNombre} onChange={(e) => setComboNombre(e.target.value)}
-                       placeholder="ej. Barra" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                       placeholder={comboModo === 'grupo' ? 'ej. Barra' : 'ej. Sillones'} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
               </Field>
               <button onClick={() => void agregarCombo()} disabled={comboAgregando || comboSel.length < 2}
                       className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-60">
-                {comboAgregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar grupo
+                {comboAgregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {comboModo === 'grupo' ? 'Agregar grupo' : 'Agregar combinación'}
               </button>
             </div>
           </div>
 
-          {/* Grupos existentes */}
+          {/* Existentes */}
           {combos.length === 0 ? (
-            <p className="text-sm text-ink-muted">Todavía no hay grupos. Armá uno arriba marcando las mesas de una fila en orden (ej. toda la barra).</p>
+            <p className="text-sm text-ink-muted">Todavía no hay combinaciones. Armá una arriba (ej. un grupo con toda la barra).</p>
           ) : (
             <div className="divide-y divide-ink/5">
-              {combos.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 py-2.5">
-                  <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
-                    {c.nombre && <span className="text-sm font-medium text-ink mr-1">{c.nombre}:</span>}
-                    {c.mesa_ids.map((mid, i) => (
-                      <span key={mid} className="inline-flex items-center gap-1">
-                        {i > 0 && <span className="text-ink-muted text-sm">+</span>}
-                        <span className="rounded-md bg-ink/5 border border-ink/10 px-2 py-0.5 text-sm font-medium">{nombreDeMesa(mid)}</span>
-                      </span>
-                    ))}
-                    <span className="text-ink-muted text-xs ml-1">· hasta {capacidadDeGrupo(c.mesa_ids)} personas</span>
+              {combos.map((c) => {
+                const sum = capacidadDeGrupo(c.mesa_ids);
+                const rango = c.tipo === 'grupo'
+                  ? `hasta ${sum} personas`
+                  : `${c.min_personas ?? 1} a ${c.max_personas ?? sum} personas`;
+                return (
+                  <div key={c.id} className="flex items-center gap-3 py-2.5">
+                    <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${c.tipo === 'grupo' ? 'bg-brand-500/10 text-brand-600' : 'bg-ink/5 text-ink-soft'}`}>
+                      {c.tipo === 'grupo' ? 'Grupo' : 'Fija'}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
+                      {c.nombre && <span className="text-sm font-medium text-ink mr-1">{c.nombre}:</span>}
+                      {c.mesa_ids.map((mid, i) => (
+                        <span key={mid} className="inline-flex items-center gap-1">
+                          {i > 0 && <span className="text-ink-muted text-sm">+</span>}
+                          <span className="rounded-md bg-ink/5 border border-ink/10 px-2 py-0.5 text-sm font-medium">{nombreDeMesa(mid)}</span>
+                        </span>
+                      ))}
+                      <span className="text-ink-muted text-xs ml-1">· {rango}</span>
+                    </div>
+                    <Toggle checked={c.activa} onChange={(v) => void toggleComboActiva(c.id, v)} />
+                    <button onClick={() => void eliminarCombo(c.id)} className="text-ink-muted hover:text-red-500 p-1 shrink-0" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
                   </div>
-                  <Toggle checked={c.activa} onChange={(v) => void toggleComboActiva(c.id, v)} />
-                  <button onClick={() => void eliminarCombo(c.id)} className="text-ink-muted hover:text-red-500 p-1 shrink-0" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
