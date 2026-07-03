@@ -1,20 +1,28 @@
-// Editor de mesas / plano del salón — sección del admin de MESA.
-// Permite cargar el salón real (número, zona/sector, capacidad, reservable),
-// que alimenta el motor de reservas (asignación por mesa + selector de sector).
+// Editor de mesas / sectores del salón — sección del admin de MESA.
+// Carga el salón real (número, sector/zona, capacidad, reservable), que
+// alimenta el motor de reservas (asignación por mesa + selector de sector que
+// ve el cliente). Los sectores se ELIGEN de una lista (no texto libre) para
+// evitar duplicados por typo; se pueden renombrar en bloque.
 // Escribe directo en `mesas` (RLS: dueño/admin con permiso comanda.mesas.gestionar).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, LayoutGrid } from 'lucide-react';
+import { Plus, Trash2, Loader2, LayoutGrid, Pencil, Check, X } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; reservable: boolean }
+const NUEVO = '__nuevo__';
 
 export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: string }) {
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [nueva, setNueva] = useState({ numero: '', zona: '', capacidad: '4' });
+  const [numero, setNumero] = useState('');
+  const [capacidad, setCapacidad] = useState('4');
+  const [sectorSel, setSectorSel] = useState<string>('');
+  const [sectorNuevo, setSectorNuevo] = useState('');
   const [agregando, setAgregando] = useState(false);
+  const [renombrar, setRenombrar] = useState<string | null>(null);
+  const [renombreVal, setRenombreVal] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -30,22 +38,37 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
 
   useEffect(() => { void cargar(); }, [cargar]);
 
-  const zonasExistentes = Array.from(new Set(mesas.map((m) => m.zona).filter(Boolean))) as string[];
+  const sectores = useMemo(
+    () => Array.from(new Set(mesas.map((m) => m.zona).filter(Boolean))).sort() as string[],
+    [mesas],
+  );
+
+  const porSector = useMemo(() => {
+    const map = new Map<string, Mesa[]>();
+    for (const m of mesas) {
+      const k = m.zona || 'Sin sector';
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(m);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [mesas]);
 
   async function agregar() {
-    if (!nueva.numero.trim()) { toast.error('Poné un número/nombre de mesa'); return; }
+    if (!numero.trim()) { toast.error('Poné un número/nombre de mesa'); return; }
+    const zona = (sectorSel === NUEVO ? sectorNuevo : sectorSel).trim() || null;
+    if (!zona) { toast.error('Elegí o creá un sector'); return; }
     setAgregando(true);
     try {
       const { data, error } = await db().from('mesas').insert({
         tenant_id: tenantId, local_id: localId,
-        numero: nueva.numero.trim(),
-        zona: nueva.zona.trim() || null,
-        capacidad: nueva.capacidad ? Number(nueva.capacidad) : null,
+        numero: numero.trim(), zona,
+        capacidad: capacidad ? Number(capacidad) : null,
         forma: 'cuadrado', reservable: true,
       }).select('id, numero, zona, capacidad, reservable').single();
       if (error) { toast.error('No se pudo agregar: ' + error.message); return; }
       setMesas((prev) => [...prev, data as Mesa]);
-      setNueva((n) => ({ ...n, numero: '' }));
+      setNumero('');
+      setSectorSel(zona); setSectorNuevo('');
     } finally { setAgregando(false); }
   }
 
@@ -62,27 +85,56 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     if (error) { toast.error('No se pudo eliminar: ' + error.message); void cargar(); }
   }
 
+  // Renombra un sector: actualiza TODAS las mesas de esa zona de una (corrige
+  // duplicados por typo y lo que ve el cliente).
+  async function guardarRenombre(viejo: string) {
+    const nuevo = renombreVal.trim();
+    setRenombrar(null);
+    if (!nuevo || nuevo === viejo) return;
+    setMesas((prev) => prev.map((m) => (m.zona === viejo ? { ...m, zona: nuevo } : m)));
+    const { error } = await db().from('mesas').update({ zona: nuevo })
+      .eq('local_id', localId).eq('zona', viejo);
+    if (error) { toast.error('No se pudo renombrar: ' + error.message); void cargar(); }
+    else toast.success(`Sector renombrado a "${nuevo}"`);
+  }
+
   if (cargando) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-ink-muted" /></div>;
 
   const totalCubiertos = mesas.filter((m) => m.reservable).reduce((s, m) => s + (m.capacidad ?? 0), 0);
+  const creandoSector = sectorSel === NUEVO || sectores.length === 0;
 
   return (
     <div className="mt-6 max-w-3xl space-y-5 pb-10">
+      {/* Cargar mesa */}
       <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
         <p className="font-medium flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-brand-500" /> Cargar mesa</p>
-        <p className="text-xs text-ink-muted mt-1 mb-3">El sector (zona) es lo que el cliente elige al reservar. Ej: Barra, Salón, Terraza, Privado.</p>
+        <p className="text-xs text-ink-muted mt-1 mb-3">El sector es lo que el cliente elige al reservar (Barra, Salón, Terraza, Privado…). Elegí uno o creá uno nuevo.</p>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Número / nombre" className="w-28">
-            <input value={nueva.numero} onChange={(e) => setNueva((n) => ({ ...n, numero: e.target.value }))}
+            <input value={numero} onChange={(e) => setNumero(e.target.value)}
                    placeholder="ej. 12" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
           </Field>
-          <Field label="Sector / zona" className="w-40">
-            <input value={nueva.zona} list="zonas-existentes" onChange={(e) => setNueva((n) => ({ ...n, zona: e.target.value }))}
-                   placeholder="ej. Salón" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
-            <datalist id="zonas-existentes">{zonasExistentes.map((z) => <option key={z} value={z} />)}</datalist>
+          <Field label="Sector" className="w-44">
+            {creandoSector ? (
+              <div className="flex items-center gap-1">
+                <input value={sectorNuevo} onChange={(e) => setSectorNuevo(e.target.value)} autoFocus={sectores.length > 0}
+                       placeholder="ej. Salón" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                {sectores.length > 0 && (
+                  <button onClick={() => { setSectorSel(''); setSectorNuevo(''); }} title="Elegir uno existente"
+                          className="text-ink-muted hover:text-ink p-1.5"><X className="h-4 w-4" /></button>
+                )}
+              </div>
+            ) : (
+              <select value={sectorSel} onChange={(e) => setSectorSel(e.target.value)}
+                      className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+                <option value="">Elegí un sector…</option>
+                {sectores.map((s) => <option key={s} value={s}>{s}</option>)}
+                <option value={NUEVO}>＋ Nuevo sector…</option>
+              </select>
+            )}
           </Field>
           <Field label="Capacidad" className="w-24">
-            <input type="number" min={1} value={nueva.capacidad} onChange={(e) => setNueva((n) => ({ ...n, capacidad: e.target.value }))}
+            <input type="number" min={1} value={capacidad} onChange={(e) => setCapacidad(e.target.value)}
                    className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
           </Field>
           <button onClick={() => void agregar()} disabled={agregando}
@@ -92,6 +144,43 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         </div>
       </div>
 
+      {/* Sectores (resumen + renombrar) */}
+      {sectores.length > 0 && (
+        <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
+          <p className="font-medium mb-1">Sectores <span className="text-ink-muted font-normal">({sectores.length})</span></p>
+          <p className="text-xs text-ink-muted mb-3">Lo que ve el cliente al elegir dónde sentarse. Renombralos para corregir duplicados.</p>
+          <div className="flex flex-wrap gap-2">
+            {porSector.map(([zona, ms]) => {
+              const cub = ms.filter((m) => m.reservable).reduce((s, m) => s + (m.capacidad ?? 0), 0);
+              const esRen = renombrar === zona;
+              return (
+                <div key={zona} className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/5 px-2.5 py-1.5 text-sm">
+                  {esRen ? (
+                    <>
+                      <input value={renombreVal} autoFocus onChange={(e) => setRenombreVal(e.target.value)}
+                             onKeyDown={(e) => { if (e.key === 'Enter') void guardarRenombre(zona); if (e.key === 'Escape') setRenombrar(null); }}
+                             className="w-28 rounded border border-ink/15 px-1.5 py-0.5 text-sm" />
+                      <button onClick={() => void guardarRenombre(zona)} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-4 w-4" /></button>
+                      <button onClick={() => setRenombrar(null)} className="text-ink-muted hover:text-ink p-0.5"><X className="h-4 w-4" /></button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium">{zona}</span>
+                      <span className="text-ink-muted text-xs">· {ms.length} mesa{ms.length !== 1 ? 's' : ''} · {cub} cub.</span>
+                      {zona !== 'Sin sector' && (
+                        <button onClick={() => { setRenombrar(zona); setRenombreVal(zona); }} title="Renombrar sector"
+                                className="text-ink-muted hover:text-brand-600 p-0.5 ml-0.5"><Pencil className="h-3.5 w-3.5" /></button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Mesas del salón */}
       <div className="rounded-2xl bg-white border border-ink/5 shadow-card overflow-hidden">
         <div className="px-5 py-3 border-b border-ink/5 flex items-center justify-between">
           <p className="font-medium">Mesas del salón <span className="text-ink-muted font-normal">({mesas.length})</span></p>
@@ -108,8 +197,11 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
               <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.8fr_auto_auto] gap-3 px-5 py-2.5 items-center">
                 <input defaultValue={m.numero} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.numero) void patch(m.id, { numero: v }); }}
                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
-                <input defaultValue={m.zona ?? ''} list="zonas-existentes" onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== m.zona) void patch(m.id, { zona: v }); }}
-                       className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <select value={m.zona ?? ''} onChange={(e) => void patch(m.id, { zona: e.target.value || null })}
+                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
+                  {m.zona == null && <option value="">Sin sector</option>}
+                  {sectores.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
                 <input type="number" min={1} defaultValue={m.capacidad ?? ''} onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.capacidad) void patch(m.id, { capacidad: v }); }}
                        className="w-16 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
                 <Toggle checked={m.reservable} onChange={(v) => void patch(m.id, { reservable: v })} />
