@@ -158,30 +158,63 @@ export async function cancelarReservaPorToken(
 }
 
 // Cancelación por el propio cliente (verifica por teléfono). true = cancelada.
+// Ya no llama a la RPC directo (se le revocó anon): pega a /api/reserva-accion,
+// que corre con service_role y aplica rate limit por IP antes de cancelar. El
+// endpoint está rebotado por vercel.json al proyecto PASE (en dev local no hay
+// rewrite, probar en deploy).
 export async function cancelarReservaPublica(
   reservaId: number, telefono: string, motivo?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { data, error } = await db().rpc('fn_cancelar_reserva_publica', {
-    p_reserva_id: reservaId, p_telefono: telefono.trim(), p_motivo: motivo ?? null,
-  });
-  if (error) return { ok: false, error: error.message };
-  return { ok: data === true };
+  try {
+    const res = await fetch('/api/reserva-accion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accion: 'cancelar',
+        reservaId,
+        telefono: telefono.trim(),
+        motivo: motivo ?? null,
+      }),
+    });
+    const json = await res.json() as { ok: boolean; error?: string };
+    // El endpoint pasa el mensaje de la RPC tal cual → lo propagamos.
+    if (json.ok === false && json.error) return { ok: false, error: json.error };
+    return { ok: json.ok === true };
+  } catch {
+    return { ok: false, error: 'No se pudo conectar' };
+  }
 }
 
 // Reseña del cliente para una reserva que asistió (verifica por teléfono).
+// Ya no llama a la RPC directo (se le revocó anon): pega a /api/reserva-accion,
+// que corre con service_role y aplica rate limit por IP antes de guardar la
+// reseña. Rebotado por vercel.json al proyecto PASE (en dev local no hay
+// rewrite, probar en deploy).
 export async function crearReviewReserva(args: {
   reservaId: number; telefono: string; rating: number; comentario?: string;
   email?: string; estrellasComida?: number; estrellasPresentacion?: number;
 }): Promise<{ ok: boolean; yaExistia?: boolean; error?: string }> {
-  const { data, error } = await db().rpc('fn_crear_review_reserva', {
-    p_reserva_id: args.reservaId, p_telefono: args.telefono.trim(), p_rating: args.rating,
-    p_comentario: args.comentario ?? null, p_email: args.email ?? null,
-    p_estrellas_comida: args.estrellasComida ?? null,
-    p_estrellas_presentacion: args.estrellasPresentacion ?? null,
-  });
-  if (error) return { ok: false, error: error.message };
-  const r = data as { ya_existia?: boolean };
-  return { ok: true, yaExistia: Boolean(r?.ya_existia) };
+  try {
+    const res = await fetch('/api/reserva-accion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accion: 'review',
+        reservaId: args.reservaId,
+        telefono: args.telefono.trim(),
+        rating: args.rating,
+        comentario: args.comentario ?? null,
+        email: args.email ?? null,
+        estrellasComida: args.estrellasComida ?? null,
+        estrellasPresentacion: args.estrellasPresentacion ?? null,
+      }),
+    });
+    const json = await res.json() as { ok: boolean; yaExistia?: boolean; error?: string };
+    if (json.ok === false) return { ok: false, error: json.error };
+    return { ok: true, yaExistia: Boolean(json.yaExistia) };
+  } catch {
+    return { ok: false, error: 'No se pudo conectar' };
+  }
 }
 
 // Dispara el mail de reseña post-visita (lo llama el admin al finalizar la
