@@ -114,13 +114,14 @@ export function PerfilLocal() {
       {/* hero: galería (grayscale editorial) */}
       {fotos.length > 0 ? (
         <div className="container">
-          {/* Galería: tiles de tamaño fijo modesto (no se estiran con pocas
-              fotos), a color, relación 4:5 = la de las fotos de celular. */}
-          <div className="flex flex-wrap gap-2.5">
+          {/* Galería masonry (columnas): cada foto entra entera a su relación
+              natural y las alturas quedan escalonadas → ritmo editorial, sin
+              recorte, a color. */}
+          <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-2.5 [column-fill:balance]">
             {fotos.slice(0, 6).map((f, i) => (
               <img key={i} src={f} alt={i === 0 ? local.nombre : ''}
                    loading={i === 0 ? undefined : 'lazy'} decoding="async"
-                   className="aspect-[4/5] w-[calc(50%-0.3125rem)] sm:w-36 md:w-40 object-cover object-center rounded-lg" />
+                   className="mb-2.5 w-full rounded-lg break-inside-avoid" />
             ))}
           </div>
         </div>
