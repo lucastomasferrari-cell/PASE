@@ -1,8 +1,11 @@
 // Editor de mesas / sectores del salón — sección del admin de MESA.
-// Carga el salón real (número, sector/zona, capacidad, reservable), que
+// Carga el salón real (número, sector/zona, capacidad, forma, reservable), que
 // alimenta el motor de reservas (asignación por mesa + selector de sector que
 // ve el cliente). Los sectores se ELIGEN de una lista (no texto libre) para
 // evitar duplicados por typo; se pueden renombrar en bloque.
+// Acá también vive la config de asignación que depende de las mesas: "Combinar
+// mesas" y los límites (mín/máx) por sector — se persisten en
+// `comanda_local_settings` en el momento (sin botón Guardar aparte).
 // Escribe directo en `mesas` (RLS: dueño/admin con permiso comanda.mesas.gestionar).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,14 +13,23 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Loader2, LayoutGrid, Pencil, Check, X } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
-interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; reservable: boolean }
+type Forma = 'cuadrado' | 'redondo' | 'rectangular';
+interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; forma: Forma; reservable: boolean }
+interface Settings { id: number; permiteCombinar: boolean; limites: { zona: string; min: string; max: string }[] }
 const NUEVO = '__nuevo__';
+const FORMAS: { value: Forma; label: string }[] = [
+  { value: 'cuadrado', label: 'Cuadrada' },
+  { value: 'redondo', label: 'Redonda' },
+  { value: 'rectangular', label: 'Rectangular' },
+];
 
 export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: string }) {
   const [mesas, setMesas] = useState<Mesa[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [cargando, setCargando] = useState(true);
   const [numero, setNumero] = useState('');
   const [capacidad, setCapacidad] = useState('4');
+  const [forma, setForma] = useState<Forma>('cuadrado');
   const [sectorSel, setSectorSel] = useState<string>('');
   const [sectorNuevo, setSectorNuevo] = useState('');
   const [agregando, setAgregando] = useState(false);
@@ -28,11 +40,28 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     setCargando(true);
     const { data, error } = await db()
       .from('mesas')
-      .select('id, numero, zona, capacidad, reservable')
+      .select('id, numero, zona, capacidad, forma, reservable')
       .eq('local_id', localId).is('deleted_at', null)
       .order('zona', { ascending: true }).order('numero', { ascending: true });
     if (error) toast.error('No se pudieron cargar las mesas: ' + error.message);
     setMesas((data ?? []) as Mesa[]);
+
+    // Config de asignación que vive junto a las mesas (combinar + límites por sector).
+    const { data: sData } = await db()
+      .from('comanda_local_settings')
+      .select('id, reservas_permite_combinar, reservas_zonas_limites')
+      .eq('local_id', localId).maybeSingle();
+    if (sData) {
+      const s = sData as { id: number; reservas_permite_combinar: boolean | null; reservas_zonas_limites: Array<{ zona: string; min: number; max: number }> | null };
+      const zl = s.reservas_zonas_limites ?? [];
+      setSettings({
+        id: s.id,
+        permiteCombinar: s.reservas_permite_combinar == null ? true : Boolean(s.reservas_permite_combinar),
+        limites: zl.map((z) => ({ zona: z.zona, min: String(z.min ?? ''), max: String(z.max ?? '') })),
+      });
+    } else {
+      setSettings(null);
+    }
     setCargando(false);
   }, [localId]);
 
@@ -63,8 +92,8 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         tenant_id: tenantId, local_id: localId,
         numero: numero.trim(), zona,
         capacidad: capacidad ? Number(capacidad) : null,
-        forma: 'cuadrado', reservable: true,
-      }).select('id, numero, zona, capacidad, reservable').single();
+        forma, reservable: true,
+      }).select('id, numero, zona, capacidad, forma, reservable').single();
       if (error) { toast.error('No se pudo agregar: ' + error.message); return; }
       setMesas((prev) => [...prev, data as Mesa]);
       setNumero('');
@@ -85,8 +114,46 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     if (error) { toast.error('No se pudo eliminar: ' + error.message); void cargar(); }
   }
 
+  // Persiste el array de límites (solo los pares zona+min+max completos, con el
+  // shape que lee la RPC: { zona, min, max } numérico). Guarda en el momento.
+  async function persistirLimites(limites: Settings['limites']) {
+    if (!settings) return;
+    const cleaned = limites
+      .filter((z) => z.zona.trim() && z.min !== '' && z.max !== '')
+      .map((z) => ({ zona: z.zona.trim(), min: Number(z.min), max: Number(z.max) }));
+    const { error } = await db().from('comanda_local_settings')
+      .update({ reservas_zonas_limites: cleaned }).eq('id', settings.id);
+    if (error) toast.error('No se pudieron guardar los límites: ' + error.message);
+  }
+
+  // Toggle "Combinar mesas" — estado local + persistencia inmediata.
+  async function toggleCombinar(v: boolean) {
+    if (!settings) return;
+    setSettings({ ...settings, permiteCombinar: v });
+    const { error } = await db().from('comanda_local_settings')
+      .update({ reservas_permite_combinar: v }).eq('id', settings.id);
+    if (error) toast.error('No se pudo guardar: ' + error.message);
+  }
+
+  // Actualiza mín/máx de un sector (por nombre exacto) y persiste el array entero.
+  function setLimite(zona: string, campo: 'min' | 'max', valor: string) {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const existe = prev.limites.some((z) => z.zona === zona);
+      const limites = existe
+        ? prev.limites.map((z) => z.zona === zona ? { ...z, [campo]: valor } : z)
+        : [...prev.limites, { zona, min: campo === 'min' ? valor : '', max: campo === 'max' ? valor : '' }];
+      return { ...prev, limites };
+    });
+  }
+  function limiteDe(zona: string): { min: string; max: string } {
+    const z = settings?.limites.find((l) => l.zona === zona);
+    return { min: z?.min ?? '', max: z?.max ?? '' };
+  }
+
   // Renombra un sector: actualiza TODAS las mesas de esa zona de una (corrige
-  // duplicados por typo y lo que ve el cliente).
+  // duplicados por typo y lo que ve el cliente). También renombra su límite para
+  // que no quede huérfano.
   async function guardarRenombre(viejo: string) {
     const nuevo = renombreVal.trim();
     setRenombrar(null);
@@ -94,8 +161,14 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     setMesas((prev) => prev.map((m) => (m.zona === viejo ? { ...m, zona: nuevo } : m)));
     const { error } = await db().from('mesas').update({ zona: nuevo })
       .eq('local_id', localId).eq('zona', viejo);
-    if (error) { toast.error('No se pudo renombrar: ' + error.message); void cargar(); }
-    else toast.success(`Sector renombrado a "${nuevo}"`);
+    if (error) { toast.error('No se pudo renombrar: ' + error.message); void cargar(); return; }
+    toast.success(`Sector renombrado a "${nuevo}"`);
+    // Renombrar el límite del sector (si tenía) para no orfanarlo.
+    if (settings) {
+      const renombrados = settings.limites.map((z) => z.zona === viejo ? { ...z, zona: nuevo } : z);
+      setSettings({ ...settings, limites: renombrados });
+      await persistirLimites(renombrados);
+    }
   }
 
   if (cargando) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-ink-muted" /></div>;
@@ -137,6 +210,12 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
             <input type="number" min={1} value={capacidad} onChange={(e) => setCapacidad(e.target.value)}
                    className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
           </Field>
+          <Field label="Forma" className="w-32">
+            <select value={forma} onChange={(e) => setForma(e.target.value as Forma)}
+                    className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+              {FORMAS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </Field>
           <button onClick={() => void agregar()} disabled={agregando}
                   className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-60">
             {agregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar
@@ -144,35 +223,61 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         </div>
       </div>
 
-      {/* Sectores (resumen + renombrar) */}
+      {/* Sectores (resumen + renombrar + combinar + límites) */}
       {sectores.length > 0 && (
         <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
           <p className="font-medium mb-1">Sectores <span className="text-ink-muted font-normal">({sectores.length})</span></p>
-          <p className="text-xs text-ink-muted mb-3">Lo que ve el cliente al elegir dónde sentarse. Renombralos para corregir duplicados.</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-ink-muted mb-3">Lo que ve el cliente al elegir dónde sentarse. Renombralos para corregir duplicados. Podés poner un mín/máx de personas por reserva en cada sector (vacío = sin límite).</p>
+
+          {settings && (
+            <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-ink/5">
+              <div>
+                <p className="text-sm font-medium">Combinar mesas</p>
+                <p className="text-xs text-ink-muted mt-0.5">Si un grupo no entra en una mesa, junta dos (ej. dos de 4 para un grupo de 6).</p>
+              </div>
+              <div className="shrink-0"><Toggle checked={settings.permiteCombinar} onChange={(v) => void toggleCombinar(v)} /></div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center px-1 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
+              <span>Sector</span><span className="w-20 text-center">mín</span><span className="w-20 text-center">máx</span>
+            </div>
             {porSector.map(([zona, ms]) => {
               const cub = ms.filter((m) => m.reservable).reduce((s, m) => s + (m.capacidad ?? 0), 0);
               const esRen = renombrar === zona;
+              const lim = limiteDe(zona);
+              const esSinSector = zona === 'Sin sector';
               return (
-                <div key={zona} className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/5 px-2.5 py-1.5 text-sm">
-                  {esRen ? (
-                    <>
-                      <input value={renombreVal} autoFocus onChange={(e) => setRenombreVal(e.target.value)}
-                             onKeyDown={(e) => { if (e.key === 'Enter') void guardarRenombre(zona); if (e.key === 'Escape') setRenombrar(null); }}
-                             className="w-28 rounded border border-ink/15 px-1.5 py-0.5 text-sm" />
-                      <button onClick={() => void guardarRenombre(zona)} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-4 w-4" /></button>
-                      <button onClick={() => setRenombrar(null)} className="text-ink-muted hover:text-ink p-0.5"><X className="h-4 w-4" /></button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium">{zona}</span>
-                      <span className="text-ink-muted text-xs">· {ms.length} mesa{ms.length !== 1 ? 's' : ''} · {cub} cub.</span>
-                      {zona !== 'Sin sector' && (
-                        <button onClick={() => { setRenombrar(zona); setRenombreVal(zona); }} title="Renombrar sector"
-                                className="text-ink-muted hover:text-brand-600 p-0.5 ml-0.5"><Pencil className="h-3.5 w-3.5" /></button>
-                      )}
-                    </>
-                  )}
+                <div key={zona} className="grid grid-cols-[1fr_auto_auto] gap-3 items-center px-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {esRen ? (
+                      <>
+                        <input value={renombreVal} autoFocus onChange={(e) => setRenombreVal(e.target.value)}
+                               onKeyDown={(e) => { if (e.key === 'Enter') void guardarRenombre(zona); if (e.key === 'Escape') setRenombrar(null); }}
+                               className="w-32 rounded border border-ink/15 px-1.5 py-1 text-sm" />
+                        <button onClick={() => void guardarRenombre(zona)} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-4 w-4" /></button>
+                        <button onClick={() => setRenombrar(null)} className="text-ink-muted hover:text-ink p-0.5"><X className="h-4 w-4" /></button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-sm truncate">{zona}</span>
+                        <span className="text-ink-muted text-xs shrink-0">· {ms.length} mesa{ms.length !== 1 ? 's' : ''} · {cub} cub.</span>
+                        {!esSinSector && (
+                          <button onClick={() => { setRenombrar(zona); setRenombreVal(zona); }} title="Renombrar sector"
+                                  className="text-ink-muted hover:text-brand-600 p-0.5 ml-0.5 shrink-0"><Pencil className="h-3.5 w-3.5" /></button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <input type="number" min={1} value={lim.min} disabled={!settings || esSinSector} placeholder="sin límite"
+                         onChange={(e) => setLimite(zona, 'min', e.target.value)}
+                         onBlur={() => { if (settings) void persistirLimites(settings.limites); }}
+                         className="w-20 rounded-lg border border-ink/15 px-2 py-1.5 text-sm text-center disabled:bg-ink/5 disabled:text-ink-muted" />
+                  <input type="number" min={1} value={lim.max} disabled={!settings || esSinSector} placeholder="sin límite"
+                         onChange={(e) => setLimite(zona, 'max', e.target.value)}
+                         onBlur={() => { if (settings) void persistirLimites(settings.limites); }}
+                         className="w-20 rounded-lg border border-ink/15 px-2 py-1.5 text-sm text-center disabled:bg-ink/5 disabled:text-ink-muted" />
                 </div>
               );
             })}
@@ -190,11 +295,11 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
           <p className="px-5 py-10 text-center text-sm text-ink-muted">Todavía no hay mesas. Cargá el salón arriba para habilitar la asignación por mesa y los sectores.</p>
         ) : (
           <div className="divide-y divide-ink/5">
-            <div className="grid grid-cols-[1fr_1.4fr_0.8fr_auto_auto] gap-3 px-5 py-2 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
-              <span>Mesa</span><span>Sector</span><span>Capac.</span><span>Reservable</span><span></span>
+            <div className="grid grid-cols-[1fr_1.4fr_0.8fr_1fr_auto_auto] gap-3 px-5 py-2 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
+              <span>Mesa</span><span>Sector</span><span>Capac.</span><span>Forma</span><span>Reservable</span><span></span>
             </div>
             {mesas.map((m) => (
-              <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.8fr_auto_auto] gap-3 px-5 py-2.5 items-center">
+              <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.8fr_1fr_auto_auto] gap-3 px-5 py-2.5 items-center">
                 <input defaultValue={m.numero} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.numero) void patch(m.id, { numero: v }); }}
                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
                 <select value={m.zona ?? ''} onChange={(e) => void patch(m.id, { zona: e.target.value || null })}
@@ -204,6 +309,10 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
                 </select>
                 <input type="number" min={1} defaultValue={m.capacidad ?? ''} onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.capacidad) void patch(m.id, { capacidad: v }); }}
                        className="w-16 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <select value={m.forma} onChange={(e) => void patch(m.id, { forma: e.target.value as Forma })}
+                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
+                  {FORMAS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
                 <Toggle checked={m.reservable} onChange={(v) => void patch(m.id, { reservable: v })} />
                 <button onClick={() => void eliminar(m.id)} className="text-ink-muted hover:text-red-500 p-1" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
               </div>

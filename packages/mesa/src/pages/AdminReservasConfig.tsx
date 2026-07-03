@@ -1,11 +1,12 @@
 // Configuración de reservas — sección del admin de MESA.
 // Unifica en MESA lo que antes vivía en COMANDA → Config → Reservas:
 // on/off, horarios por día, capacidad, anticipación, duración, teléfono
-// obligatorio, confirmación manual, combinar mesas, pacing y nota pública.
+// obligatorio, confirmación manual, pacing y nota pública.
+// (Combinar mesas y los límites por sector ahora viven en la sección Mesas.)
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Save, Clock, Loader2, Users, Globe, MessageSquare, Mail, MapPin, Plus, Trash2, FileText } from 'lucide-react';
+import { Save, Clock, Loader2, Users, Globe, MessageSquare, Mail, FileText } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 const DIAS: { dia: number; label: string }[] = [
@@ -26,14 +27,12 @@ function parseHorario(txt: string | null | undefined): { activo: boolean; abre: 
   if (parts.length >= 2 && parts[0] && parts[1]) return { activo: true, abre: parts[0].trim(), cierra: parts[1].trim() };
   return { activo: false, abre: '20:00', cierra: '00:00' };
 }
-interface ZonaLimite { zona: string; min: string; max: string }
 interface MailTpl { titulo: string; subtitulo: string }
 interface Form {
   activas: boolean;
   requiere_confirmacion: boolean;
   telefono_obligatorio: boolean;
   email_obligatorio: boolean;
-  permite_combinar: boolean;
   capacidad_max: string;
   anticipacion_min_hs: string;
   anticipacion_max_dias: string;
@@ -42,7 +41,6 @@ interface Form {
   pacing_max: string;
   notas_visibles: string;
   horarios: { dia: number; activo: boolean; abre: string; cierra: string }[];
-  zonas_limites: ZonaLimite[];
   notif_confirmacion: boolean;
   notif_recordatorio: boolean;
   notif_resena: boolean;
@@ -78,13 +76,11 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
     } else {
       setCubiertos(null);
     }
-    const zl = (s.reservas_zonas_limites as Array<{ zona: string; min: number; max: number }> | null) ?? [];
     setForm({
       activas: Boolean(s.reservas_activas),
       requiere_confirmacion: Boolean(s.reservas_requiere_confirmacion),
       telefono_obligatorio: s.reservas_telefono_obligatorio == null ? true : Boolean(s.reservas_telefono_obligatorio),
       email_obligatorio: Boolean(s.reservas_email_obligatorio),
-      permite_combinar: s.reservas_permite_combinar == null ? true : Boolean(s.reservas_permite_combinar),
       capacidad_max: s.reservas_capacidad_max != null ? String(s.reservas_capacidad_max) : '',
       anticipacion_min_hs: String(s.reservas_anticipacion_min_hs ?? 2),
       anticipacion_max_dias: String(s.reservas_anticipacion_max_dias ?? 30),
@@ -96,7 +92,6 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         const p = parseHorario(s[HCOL[dia]!] as string | null);
         return { dia, activo: p.activo, abre: p.abre, cierra: p.cierra };
       }),
-      zonas_limites: zl.map((z) => ({ zona: z.zona, min: String(z.min ?? ''), max: String(z.max ?? '') })),
       notif_confirmacion: s.reservas_notif_confirmacion == null ? true : Boolean(s.reservas_notif_confirmacion),
       notif_recordatorio: s.reservas_notif_recordatorio == null ? true : Boolean(s.reservas_notif_recordatorio),
       notif_resena: s.reservas_notif_resena == null ? true : Boolean(s.reservas_notif_resena),
@@ -119,16 +114,11 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       // reservas quedan siempre en sync con lo que se edita acá.
       const horariosCols: Record<string, string | null> = {};
       for (const h of form.horarios) horariosCols[HCOL[h.dia]!] = h.activo ? `${h.abre} – ${h.cierra}` : null;
-      // Límites por sector: solo los que tengan zona + min/max válidos.
-      const zonas = form.zonas_limites
-        .filter((z) => z.zona.trim() && z.min !== '' && z.max !== '')
-        .map((z) => ({ zona: z.zona.trim(), min: Number(z.min), max: Number(z.max) }));
       const { error } = await db().from('comanda_local_settings').update({
         reservas_activas: form.activas,
         reservas_requiere_confirmacion: form.requiere_confirmacion,
         reservas_telefono_obligatorio: form.telefono_obligatorio,
         reservas_email_obligatorio: form.email_obligatorio,
-        reservas_permite_combinar: form.permite_combinar,
         reservas_capacidad_max: form.capacidad_max ? Number(form.capacidad_max) : null,
         reservas_anticipacion_min_hs: Number(form.anticipacion_min_hs) || 2,
         reservas_anticipacion_max_dias: Number(form.anticipacion_max_dias) || 30,
@@ -136,7 +126,6 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         reservas_slot_min: Number(form.slot_min) || 30,
         reservas_pacing_max_por_franja: form.pacing_max ? Number(form.pacing_max) : null,
         reservas_notas_visibles_cliente: form.notas_visibles.trim() || null,
-        reservas_zonas_limites: zonas,
         reservas_notif_confirmacion: form.notif_confirmacion,
         reservas_notif_recordatorio: form.notif_recordatorio,
         reservas_notif_resena: form.notif_resena,
@@ -159,11 +148,6 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
   function setHorario(dia: number, patch: Partial<{ activo: boolean; abre: string; cierra: string }>) {
     setForm((f) => f ? { ...f, horarios: f.horarios.map((h) => h.dia === dia ? { ...h, ...patch } : h) } : f);
   }
-  function setZona(i: number, patch: Partial<ZonaLimite>) {
-    setForm((f) => f ? { ...f, zonas_limites: f.zonas_limites.map((z, j) => j === i ? { ...z, ...patch } : z) } : f);
-  }
-  function addZona() { setForm((f) => f ? { ...f, zonas_limites: [...f.zonas_limites, { zona: '', min: '1', max: '' }] } : f); }
-  function removeZona(i: number) { setForm((f) => f ? { ...f, zonas_limites: f.zonas_limites.filter((_, j) => j !== i) } : f); }
   function setTpl(key: 'tpl_confirmacion' | 'tpl_recordatorio' | 'tpl_resena', patch: Partial<MailTpl>) {
     setForm((f) => f ? { ...f, [key]: { ...f[key], ...patch } } : f);
   }
@@ -218,10 +202,7 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
 
       {/* Asignación de mesas */}
       <Card icon={<Users className="h-4 w-4 text-brand-500" />} title="Asignación de mesas">
-        <p className="text-xs text-ink-muted -mt-1">Las reservas se asignan a una mesa real según la capacidad (las mesas se cargan en la sección Mapa de mesas).</p>
-        <Row label="Combinar mesas" desc="Si un grupo no entra en una mesa, junta dos (ej. dos de 4 para un grupo de 6).">
-          <Toggle checked={form.permite_combinar} onChange={(v) => set({ permite_combinar: v })} />
-        </Row>
+        <p className="text-xs text-ink-muted -mt-1">Las reservas se asignan a una mesa real según la capacidad. Combinar mesas y los límites por sector se configuran en la sección Mesas.</p>
         <Field label="Máx. reservas por franja de 15 min (pacing)">
           <input type="number" min={0} className="w-32 rounded-lg border border-ink/15 px-3 py-2 text-sm" value={form.pacing_max} placeholder="sin límite" onChange={(e) => set({ pacing_max: e.target.value })} />
           <p className="text-xs text-ink-muted mt-1">Limita cuántas reservas arrancan juntas para no saturar la cocina. Vacío = sin límite.</p>
@@ -248,26 +229,6 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
             </div>
           ))}
         </div>
-      </Card>
-
-      {/* Límites por sector */}
-      <Card icon={<MapPin className="h-4 w-4 text-brand-500" />} title="Límites por sector">
-        <p className="text-xs text-ink-muted -mt-1">Cuánta gente entra por reserva en cada sector (ej. Barra máx 3, Privado mín 4). El sector sale de la zona de las mesas (Mapa de mesas). Vacío = sin límite.</p>
-        <div className="space-y-2">
-          {form.zonas_limites.map((z, i) => (
-            <div key={i} className="flex items-center gap-2 flex-wrap">
-              <input value={z.zona} onChange={(e) => setZona(i, { zona: e.target.value })} placeholder="Sector (ej. Salón - Barra)"
-                     className="flex-1 min-w-[140px] rounded-lg border border-ink/15 px-3 py-1.5 text-sm" />
-              <input type="number" min={1} value={z.min} onChange={(e) => setZona(i, { min: e.target.value })} placeholder="mín"
-                     className="w-20 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
-              <span className="text-ink-muted text-xs">a</span>
-              <input type="number" min={1} value={z.max} onChange={(e) => setZona(i, { max: e.target.value })} placeholder="máx"
-                     className="w-20 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
-              <button type="button" onClick={() => removeZona(i)} className="text-ink-muted hover:text-red-500 p-1" aria-label="Quitar"><Trash2 className="h-4 w-4" /></button>
-            </div>
-          ))}
-        </div>
-        <button type="button" onClick={addZona} className="inline-flex items-center gap-1 text-sm text-brand-600 hover:underline"><Plus className="h-3.5 w-3.5" /> Agregar sector</button>
       </Card>
 
       {/* Notificaciones por email */}
