@@ -79,31 +79,45 @@ export async function crearReservaPublica(args: {
   slug: string; nombre: string; telefono: string; email?: string;
   fechaHora: string; personas: number; notas?: string; zona?: string | null;
 }): Promise<{ ok: boolean; estado?: string; id?: number; cancelToken?: string; error?: string }> {
-  const { data, error } = await db().rpc('fn_crear_reserva_publica', {
-    p_local_slug: args.slug,
-    p_cliente_nombre: args.nombre,
-    p_cliente_telefono: args.telefono,
-    p_cliente_email: args.email ?? null,
-    p_fecha_hora: args.fechaHora,
-    p_personas: args.personas,
-    p_notas: args.notas ?? null,
-    p_zona: args.zona ?? null,
-    // Incluye teléfono: antes era slug-nombre-fechaHora → dos personas
-    // distintas con el mismo nombre y horario colisionaban (la 2ª "heredaba"
-    // la reserva de la 1ª). Con el teléfono, mismo cliente que re-envía =
-    // idempotente; clientes distintos = reservas separadas.
-    p_idempotency_key: `mesa-${args.slug}-${args.nombre}-${args.telefono}-${args.fechaHora}`,
-  });
-  if (error) return { ok: false, error: error.message };
-  const row = Array.isArray(data) ? data[0] : data;
-  return {
-    ok: true,
-    estado: (row?.estado as string) ?? 'pendiente',
-    id: row?.id as number | undefined,
-    // El alta devuelve el cancel_token → armamos el link sin volver a consultar
-    // por teléfono (antes fn_reserva_token_por_tel, ahora sin acceso anónimo).
-    cancelToken: (row?.cancel_token as string | undefined) ?? undefined,
-  };
+  // El alta pública ya no llama a la RPC directo (se le revocó anon): pega a
+  // /api/reservar, que corre con service_role y aplica rate limit por IP antes
+  // de crear la reserva. El endpoint está rebotado por vercel.json al proyecto
+  // PASE (en dev local no hay rewrite, probar en deploy).
+  try {
+    const res = await fetch('/api/reservar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug: args.slug,
+        nombre: args.nombre,
+        telefono: args.telefono,
+        email: args.email ?? null,
+        fechaHora: args.fechaHora,
+        personas: args.personas,
+        notas: args.notas ?? null,
+        zona: args.zona ?? null,
+        // Incluye teléfono: antes era slug-nombre-fechaHora → dos personas
+        // distintas con el mismo nombre y horario colisionaban (la 2ª "heredaba"
+        // la reserva de la 1ª). Con el teléfono, mismo cliente que re-envía =
+        // idempotente; clientes distintos = reservas separadas.
+        idempotencyKey: `mesa-${args.slug}-${args.nombre}-${args.telefono}-${args.fechaHora}`,
+      }),
+    });
+    const json = await res.json() as {
+      ok: boolean; estado?: string; id?: number; cancelToken?: string; error?: string;
+    };
+    if (!json.ok) return { ok: false, error: json.error };
+    return {
+      ok: true,
+      estado: json.estado ?? 'pendiente',
+      id: json.id,
+      // El alta devuelve el cancel_token → armamos el link sin volver a consultar
+      // por teléfono (antes fn_reserva_token_por_tel, ahora sin acceso anónimo).
+      cancelToken: json.cancelToken ?? undefined,
+    };
+  } catch {
+    return { ok: false, error: 'No se pudo conectar' };
+  }
 }
 
 // Dispara la confirmación automática al cliente (email vía Resend; WA cuando
