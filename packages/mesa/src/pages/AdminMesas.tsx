@@ -114,7 +114,13 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         capacidad: capacidad ? Number(capacidad) : null,
         forma, reservable: true,
       }).select('id, numero, zona, capacidad, forma, reservable').single();
-      if (error) { toast.error('No se pudo agregar: ' + error.message); return; }
+      if (error) {
+        const dup = error.code === '23505' || /duplicate key|uniq_mesas_numero/i.test(error.message);
+        toast.error(dup
+          ? `Ya existe una mesa "${numero.trim()}" en este local. Poné otro número/nombre.`
+          : 'No se pudo agregar: ' + error.message);
+        return;
+      }
       setMesas((prev) => [...prev, data as Mesa]);
       setNumero('');
       setSectorSel(zona); setSectorNuevo('');
