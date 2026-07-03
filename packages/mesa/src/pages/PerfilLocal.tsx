@@ -5,7 +5,7 @@
 //   info + horarios · más locales del grupo.
 // Todo sale de UNA llamada (fn_get_perfil_publico_local).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -114,16 +114,10 @@ export function PerfilLocal() {
       {/* hero: galería (grayscale editorial) */}
       {fotos.length > 0 ? (
         <div className="container">
-          {/* Galería masonry (columnas): cada foto entra entera a su relación
-              natural y las alturas quedan escalonadas → ritmo editorial, sin
-              recorte, a color. */}
-          <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-2.5 [column-fill:balance]">
-            {fotos.slice(0, 6).map((f, i) => (
-              <img key={i} src={f} alt={i === 0 ? local.nombre : ''}
-                   loading={i === 0 ? undefined : 'lazy'} decoding="async"
-                   className="mb-2.5 w-full rounded-lg break-inside-avoid" />
-            ))}
-          </div>
+          {/* Galería justificada (estilo Google Fotos): filas que llenan el
+              ancho exacto según el formato real de cada foto. Auto-adaptativa a
+              cualquier cantidad y proporción, sin recorte ni huecos. */}
+          <Galeria fotos={fotos} nombre={local.nombre} />
         </div>
       ) : (
         <div className="container">
@@ -711,6 +705,73 @@ function GiftcardCard({ gift: g, slug }: { gift: PerfilLocalData['giftcards'][nu
 function Centro({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen grid place-items-center text-ink-muted text-center px-6"><div>{children}</div></div>;
 }
+// Galería justificada: mide la proporción real de cada foto (onLoad), arma
+// filas que llenan el ancho exacto escalando cada una a su aspecto (sin
+// recorte), con tope de altura para que no se agranden de más y centrado si
+// sobra espacio. Se re-calcula al cambiar el ancho (ResizeObserver). Sirve para
+// cualquier cantidad/formato de fotos que suba cada cliente.
+function Galeria({ fotos, nombre }: { fotos: string[]; nombre: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  const [ars, setArs] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const medir = () => setWidth(el.clientWidth);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const items = useMemo(() => fotos.slice(0, 6), [fotos]);
+  const GAP = 10;
+  const chico = width > 0 && width < 520;
+  const targetH = chico ? 175 : 240; // altura buscada para cortar filas
+  const maxH = chico ? 240 : 300;    // altura máxima (evita fotos gigantes)
+
+  const rows = useMemo(() => {
+    if (!width) return [items.map((_, i) => i)];
+    const out: number[][] = [];
+    let row: number[] = [];
+    let sumAr = 0;
+    items.forEach((_, i) => {
+      row.push(i);
+      sumAr += ars[i] ?? 0.75;
+      if (sumAr * targetH + (row.length - 1) * GAP >= width) {
+        out.push(row); row = []; sumAr = 0;
+      }
+    });
+    if (row.length) out.push(row);
+    return out;
+  }, [items, ars, width, targetH]);
+
+  return (
+    <div ref={ref} className="flex flex-col gap-2.5">
+      {rows.map((row, ri) => {
+        const sumAr = row.reduce((s, i) => s + (ars[i] ?? 0.75), 0);
+        const avail = width - (row.length - 1) * GAP;
+        const h = width ? Math.min(avail / sumAr, maxH) : targetH;
+        return (
+          <div key={ri} className="flex gap-2.5 justify-center">
+            {row.map((i) => (
+              <img key={i} src={items[i]} alt={i === 0 ? nombre : ''}
+                   loading={i === 0 ? undefined : 'lazy'} decoding="async"
+                   onLoad={(e) => {
+                     const im = e.currentTarget;
+                     if (im.naturalHeight) setArs((p) => (p[i] ? p : { ...p, [i]: im.naturalWidth / im.naturalHeight }));
+                   }}
+                   style={{ height: Math.round(h), width: Math.round(h * (ars[i] ?? 0.75)) }}
+                   className="object-cover rounded-lg" />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Titulo({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <h2 className="font-display uppercase tracking-tight text-2xl md:text-3xl text-neutral-900 mb-6 pb-3 border-b-2 border-neutral-900 flex items-center gap-2">
