@@ -114,10 +114,13 @@ export function PerfilLocal() {
       {/* hero: galería (grayscale editorial) */}
       {fotos.length > 0 ? (
         <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 overflow-hidden h-80 md:h-[28rem]">
-            <img src={fotos[0]} alt={local.nombre} className="col-span-2 row-span-2 h-full w-full object-cover object-center md:grayscale md:hover:grayscale-0 transition-all duration-700" />
-            {fotos.slice(1, 5).map((f, i) => (
-              <img key={i} src={f} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover hidden md:block md:grayscale md:hover:grayscale-0 transition-all duration-700" />
+          {/* Galería en grilla vertical (3:4): las fotos de celular son
+              verticales, así se ven casi enteras sin el recorte del hero ancho. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {fotos.slice(0, 6).map((f, i) => (
+              <img key={i} src={f} alt={i === 0 ? local.nombre : ''}
+                   loading={i === 0 ? undefined : 'lazy'} decoding="async"
+                   className="aspect-[3/4] w-full object-cover object-center rounded-lg md:grayscale md:hover:grayscale-0 transition-all duration-700" />
             ))}
           </div>
         </div>
