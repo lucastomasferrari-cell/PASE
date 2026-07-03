@@ -2,10 +2,11 @@
 // Lo que ven los clientes en /:slug: descripción, fotos, dirección, contacto.
 // (Extraído del AdminHome original al sumarse la Agenda de reservas.)
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarCheck, ExternalLink, Save, Link2 } from 'lucide-react';
+import { CalendarCheck, ExternalLink, Save, Link2, ImagePlus, X, Star, Upload } from 'lucide-react';
 import { db } from '@/lib/supabase';
+import { subirFotoLocal } from '@/lib/uploadFoto';
 
 export interface LocalPerfil {
   settings_id: number;
@@ -24,9 +25,47 @@ export interface LocalPerfil {
 export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (l: LocalPerfil) => void }) {
   const [form, setForm] = useState<LocalPerfil>(local);
   const [guardando, setGuardando] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const [mostrarUrls, setMostrarUrls] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Si cambia el local seleccionado en el shell, resetear el form.
   useEffect(() => { setForm(local); }, [local]);
+
+  // Fotos con URL no vacía — lo que se muestra en la grilla.
+  const fotos = form.mesa_fotos.filter((f) => f.trim());
+
+  function quitarFoto(url: string) {
+    setForm((f) => ({ ...f, mesa_fotos: f.mesa_fotos.filter((x) => x !== url) }));
+  }
+
+  function hacerPortada(url: string) {
+    setForm((f) => ({
+      ...f,
+      mesa_fotos: [url, ...f.mesa_fotos.filter((x) => x !== url)],
+    }));
+  }
+
+  async function onSeleccionarArchivos(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivos = Array.from(e.target.files ?? []);
+    // Reseteo el input para poder re-subir el mismo archivo si hace falta.
+    e.target.value = '';
+    if (archivos.length === 0) return;
+
+    setSubiendo(true);
+    try {
+      for (const file of archivos) {
+        const { url, error } = await subirFotoLocal(file, form.tenant_id, form.local_id);
+        if (error || !url) {
+          toast.error(`No se pudo subir ${file.name}: ${error ?? 'error desconocido'}`);
+          continue;
+        }
+        setForm((f) => ({ ...f, mesa_fotos: [...f.mesa_fotos, url] }));
+      }
+    } finally {
+      setSubiendo(false);
+    }
+  }
 
   async function guardar() {
     setGuardando(true);
@@ -80,11 +119,67 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
                     onChange={(e) => setForm((f) => ({ ...f, mesa_descripcion: e.target.value }))}
                     className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
         </Campo>
-        <Campo label="Fotos (una URL por línea — la primera es la grande del hero)">
-          <textarea rows={4} value={form.mesa_fotos.join('\n')}
-                    placeholder={'https://…/fachada.jpg\nhttps://…/salon.jpg'}
-                    onChange={(e) => setForm((f) => ({ ...f, mesa_fotos: e.target.value.split('\n') }))}
-                    className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm font-mono" />
+        <Campo label="Fotos — la primera es la portada del hero">
+          {/* Grilla de miniaturas */}
+          {fotos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {fotos.map((url, i) => (
+                <div key={url} className="group relative aspect-square overflow-hidden rounded-lg border border-ink/15 bg-ink/5">
+                  <img src={url} alt={i === 0 ? 'Portada del local' : `Foto ${i + 1}`}
+                       className="h-full w-full object-cover" />
+
+                  {i === 0 && (
+                    <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-brand-500 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-card">
+                      <Star className="h-2.5 w-2.5 fill-current" /> Portada
+                    </span>
+                  )}
+
+                  {/* Quitar */}
+                  <button type="button" onClick={() => quitarFoto(url)}
+                          title="Quitar foto"
+                          className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md bg-black/55 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover:opacity-100">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+
+                  {/* Hacer portada (no en la primera) */}
+                  {i !== 0 && (
+                    <button type="button" onClick={() => hacerPortada(url)}
+                            className="absolute inset-x-1.5 bottom-1.5 inline-flex items-center justify-center gap-1 rounded-md bg-white/90 py-1 text-[10px] font-medium text-ink opacity-0 shadow-card transition-opacity hover:bg-white group-hover:opacity-100">
+                      <Star className="h-2.5 w-2.5" /> Hacer portada
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input oculto + botón agregar */}
+          <input ref={fileInputRef} type="file" accept="image/*" multiple hidden
+                 onChange={(e) => void onSeleccionarArchivos(e)} />
+          <button type="button" disabled={subiendo}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-1 inline-flex items-center gap-2 rounded-lg border border-dashed border-ink/25 px-3 py-2 text-sm text-ink-soft hover:border-brand-500 hover:text-brand-600 disabled:opacity-60">
+            {subiendo
+              ? (<><Upload className="h-4 w-4 animate-pulse" /> Subiendo…</>)
+              : (<><ImagePlus className="h-4 w-4" /> Agregar fotos</>)}
+          </button>
+
+          <p className="text-xs text-ink-muted">
+            La primera foto es la portada del hero. Los cambios se guardan cuando
+            tocás <span className="font-medium">Guardar perfil</span>.{' '}
+            <button type="button" onClick={() => setMostrarUrls((v) => !v)}
+                    className="text-brand-600 hover:underline">
+              {mostrarUrls ? 'ocultar URLs' : 'pegar una URL'}
+            </button>
+          </p>
+
+          {/* Escape hatch: editar URLs a mano (comportamiento viejo) */}
+          {mostrarUrls && (
+            <textarea rows={4} value={form.mesa_fotos.join('\n')}
+                      placeholder={'https://…/fachada.jpg\nhttps://…/salon.jpg'}
+                      onChange={(e) => setForm((f) => ({ ...f, mesa_fotos: e.target.value.split('\n') }))}
+                      className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm font-mono" />
+          )}
         </Campo>
       </div>
 
