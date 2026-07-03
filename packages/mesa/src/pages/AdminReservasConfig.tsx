@@ -56,11 +56,28 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
   const [form, setForm] = useState<Form | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  // Cubiertos reservables reales (suma de la capacidad de las mesas reservables).
+  // Si el local tiene mesas, la capacidad se deriva de ahí y el campo plano
+  // "Capacidad simultánea" no aplica (el motor asigna mesa real, no cupo global).
+  const [cubiertos, setCubiertos] = useState<number | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     const { data } = await db().from('comanda_local_settings').select('*').eq('id', settingsId).maybeSingle();
     const s = (data ?? {}) as Record<string, unknown>;
+
+    // Cubiertos reservables del local (para saber si mostrar el cupo plano).
+    const localId = s.local_id as number | undefined;
+    if (localId) {
+      const { data: mesas } = await db().from('mesas')
+        .select('capacidad, reservable').eq('local_id', localId).is('deleted_at', null);
+      const tot = (mesas ?? [])
+        .filter((m) => (m as { reservable?: boolean }).reservable)
+        .reduce((a, m) => a + (Number((m as { capacidad?: number }).capacidad) || 0), 0);
+      setCubiertos(tot);
+    } else {
+      setCubiertos(null);
+    }
     const zl = (s.reservas_zonas_limites as Array<{ zona: string; min: number; max: number }> | null) ?? [];
     setForm({
       activas: Boolean(s.reservas_activas),
@@ -178,7 +195,17 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       {/* Cupo y tiempos */}
       <Card icon={<Users className="h-4 w-4 text-brand-500" />} title="Cupo y tiempos">
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Capacidad simultánea (cubiertos)"><input type="number" min={0} className={input} value={form.capacidad_max} placeholder="ej. 40" onChange={(e) => set({ capacidad_max: e.target.value })} /></Field>
+          {cubiertos && cubiertos > 0 ? (
+            <Field label="Capacidad simultánea (cubiertos)">
+              <div className={`${input} bg-ink/5 text-ink-soft flex items-center`}>{cubiertos} cubiertos — se calcula de tus mesas</div>
+              <p className="text-xs text-ink-muted mt-1">Sale de tus mesas reservables (Mapa de mesas). No hace falta configurarla acá.</p>
+            </Field>
+          ) : (
+            <Field label="Capacidad simultánea (cubiertos)">
+              <input type="number" min={0} className={input} value={form.capacidad_max} placeholder="ej. 40" onChange={(e) => set({ capacidad_max: e.target.value })} />
+              <p className="text-xs text-ink-muted mt-1">Se usa solo si todavía no cargaste mesas. Si cargás mesas, la capacidad se calcula sola.</p>
+            </Field>
+          )}
           <Field label="Duración estimada por reserva (min)"><input type="number" min={30} className={input} value={form.duracion_estimada_min} onChange={(e) => set({ duracion_estimada_min: e.target.value })} /></Field>
           <Field label="Anticipación mínima (horas)"><input type="number" min={0} className={input} value={form.anticipacion_min_hs} onChange={(e) => set({ anticipacion_min_hs: e.target.value })} /></Field>
           <Field label="Anticipación máxima (días)"><input type="number" min={1} className={input} value={form.anticipacion_max_dias} onChange={(e) => set({ anticipacion_max_dias: e.target.value })} /></Field>
