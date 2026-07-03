@@ -115,9 +115,9 @@ export function PerfilLocal() {
       {fotos.length > 0 ? (
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 overflow-hidden h-80 md:h-[28rem]">
-            <img src={fotos[0]} alt={local.nombre} className="col-span-2 row-span-2 h-full w-full object-cover object-center grayscale hover:grayscale-0 transition-all duration-700" />
+            <img src={fotos[0]} alt={local.nombre} className="col-span-2 row-span-2 h-full w-full object-cover object-center md:grayscale md:hover:grayscale-0 transition-all duration-700" />
             {fotos.slice(1, 5).map((f, i) => (
-              <img key={i} src={f} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover hidden md:block grayscale hover:grayscale-0 transition-all duration-700" />
+              <img key={i} src={f} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover hidden md:block md:grayscale md:hover:grayscale-0 transition-all duration-700" />
             ))}
           </div>
         </div>

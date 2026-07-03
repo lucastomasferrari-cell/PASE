@@ -13,9 +13,9 @@
 import { db } from '@/lib/supabase';
 
 const EXTENSIONES_OK = ['jpg', 'jpeg', 'png', 'webp'];
-const MAX_LADO = 1600; // px del lado más largo tras redimensionar
-const CALIDAD_WEBP = 0.82;
-const MAX_BYTES = 4 * 1024 * 1024; // ~4MB tras comprimir
+const MAX_LADO = 2200; // px del lado más largo tras redimensionar (hero grande)
+const CALIDAD_WEBP = 0.92; // calidad alta: la portada se ve grande, no queremos artefactos
+const MAX_BYTES = 6 * 1024 * 1024; // tope tras comprimir
 
 export async function subirFotoLocal(
   file: File,
