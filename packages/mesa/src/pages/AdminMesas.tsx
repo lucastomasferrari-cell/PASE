@@ -10,12 +10,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, LayoutGrid, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, Loader2, LayoutGrid, Pencil, Check, X, Link2 } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 type Forma = 'cuadrado' | 'redondo' | 'rectangular';
 interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; forma: Forma; reservable: boolean }
 interface Settings { id: number; permiteCombinar: boolean; limites: { zona: string; min: string; max: string }[] }
+interface Combo { id: number; nombre: string | null; mesa_ids: number[]; capacidad: number; activa: boolean }
 const NUEVO = '__nuevo__';
 const FORMAS: { value: Forma; label: string }[] = [
   { value: 'cuadrado', label: 'Cuadrada' },
@@ -35,6 +36,13 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
   const [agregando, setAgregando] = useState(false);
   const [renombrar, setRenombrar] = useState<string | null>(null);
   const [renombreVal, setRenombreVal] = useState('');
+  // Combinaciones de mesas: seleccionás 2+ mesas y para cuántas personas juntas.
+  const [combos, setCombos] = useState<Combo[]>([]);
+  const [comboSel, setComboSel] = useState<number[]>([]);
+  const [comboNombre, setComboNombre] = useState('');
+  const [comboCap, setComboCap] = useState('');
+  const [comboCapManual, setComboCapManual] = useState(false);
+  const [comboAgregando, setComboAgregando] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -62,6 +70,20 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     } else {
       setSettings(null);
     }
+
+    // Combinaciones de mesas (motor las ofrece solo si todas sus mesas están libres).
+    const { data: cData, error: cErr } = await db()
+      .from('reservas_combinaciones')
+      .select('id, nombre, mesa_ids, capacidad, activa')
+      .eq('local_id', localId).is('deleted_at', null).order('id');
+    if (cErr) toast.error('No se pudieron cargar las combinaciones: ' + cErr.message);
+    setCombos((cData ?? []).map((c) => ({
+      id: c.id as number,
+      nombre: (c.nombre ?? null) as string | null,
+      mesa_ids: ((c.mesa_ids ?? []) as number[]).map(Number),
+      capacidad: Number(c.capacidad),
+      activa: Boolean(c.activa),
+    })));
     setCargando(false);
   }, [localId]);
 
@@ -169,6 +191,60 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
       setSettings({ ...settings, limites: renombrados });
       await persistirLimites(renombrados);
     }
+  }
+
+  // Alterna una mesa dentro de la selección de la combinación en armado.
+  function toggleComboMesa(id: number) {
+    setComboSel((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+
+  // Auto-sugiere la capacidad = suma de las mesas elegidas, salvo que el usuario
+  // la haya escrito a mano (muchos locales sientan menos al juntar mesas).
+  useEffect(() => {
+    if (comboCapManual) return;
+    const sum = comboSel.reduce((s, id) => s + (mesas.find((m) => m.id === id)?.capacidad ?? 0), 0);
+    setComboCap(sum > 0 ? String(sum) : '');
+  }, [comboSel, comboCapManual, mesas]);
+
+  const nombreDeMesa = useCallback(
+    (id: number) => mesas.find((m) => m.id === id)?.numero ?? `#${id}`,
+    [mesas],
+  );
+
+  async function agregarCombo() {
+    if (comboSel.length < 2) { toast.error('Elegí al menos 2 mesas'); return; }
+    const cap = Number(comboCap);
+    if (!cap || cap < 1) { toast.error('Poné la capacidad de la combinación'); return; }
+    setComboAgregando(true);
+    try {
+      const { data, error } = await db().from('reservas_combinaciones').insert({
+        tenant_id: tenantId, local_id: localId,
+        nombre: comboNombre.trim() || null,
+        mesa_ids: comboSel, capacidad: cap, activa: true,
+      }).select('id, nombre, mesa_ids, capacidad, activa').single();
+      if (error) { toast.error('No se pudo crear la combinación: ' + error.message); return; }
+      const c = data as { id: number; nombre: string | null; mesa_ids: number[]; capacidad: number; activa: boolean };
+      setCombos((prev) => [...prev, {
+        id: c.id, nombre: c.nombre ?? null, mesa_ids: (c.mesa_ids ?? []).map(Number),
+        capacidad: Number(c.capacidad), activa: Boolean(c.activa),
+      }]);
+      setComboSel([]); setComboNombre(''); setComboCapManual(false); setComboCap('');
+      toast.success('Combinación creada');
+    } finally { setComboAgregando(false); }
+  }
+
+  async function toggleComboActiva(id: number, v: boolean) {
+    setCombos((prev) => prev.map((c) => c.id === id ? { ...c, activa: v } : c));
+    const { error } = await db().from('reservas_combinaciones').update({ activa: v }).eq('id', id);
+    if (error) { toast.error('No se pudo guardar: ' + error.message); void cargar(); }
+  }
+
+  async function eliminarCombo(id: number) {
+    if (!window.confirm('¿Eliminar esta combinación?')) return;
+    setCombos((prev) => prev.filter((c) => c.id !== id));
+    const { error } = await db().from('reservas_combinaciones')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) { toast.error('No se pudo eliminar: ' + error.message); void cargar(); }
   }
 
   if (cargando) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-ink-muted" /></div>;
@@ -282,6 +358,70 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Combinaciones de mesas */}
+      {mesas.length >= 2 && (
+        <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
+          <p className="font-medium flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-500" /> Combinaciones</p>
+          <p className="text-xs text-ink-muted mt-1 mb-4">Definí qué mesas se pueden juntar y para cuántas personas. Cuando un grupo no entra en una mesa sola, el motor ofrece la combinación más chica que entre y cuyas mesas estén todas libres.</p>
+
+          {/* Armar una combinación */}
+          <div className="rounded-xl border border-ink/10 p-3 mb-4">
+            <p className="text-xs font-medium text-ink-soft mb-2">Elegí las mesas que se juntan</p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {mesas.map((m) => {
+                const sel = comboSel.includes(m.id);
+                return (
+                  <button key={m.id} type="button" onClick={() => toggleComboMesa(m.id)}
+                          className={`rounded-lg border px-2.5 py-1.5 text-sm inline-flex items-baseline gap-1 transition-colors ${sel ? 'bg-brand-500 border-brand-500 text-white' : 'border-ink/15 text-ink hover:border-brand-300'}`}>
+                    <span className="font-medium">{m.numero}</span>
+                    {m.zona && <span className={`text-[11px] ${sel ? 'text-white/70' : 'text-ink-muted'}`}>{m.zona}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Capacidad" className="w-24">
+                <input type="number" min={1} value={comboCap}
+                       onChange={(e) => { setComboCapManual(true); setComboCap(e.target.value); }}
+                       className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+              </Field>
+              <Field label="Nombre (opcional)" className="w-44">
+                <input value={comboNombre} onChange={(e) => setComboNombre(e.target.value)}
+                       placeholder="ej. 10 + 11" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+              </Field>
+              <button onClick={() => void agregarCombo()} disabled={comboAgregando || comboSel.length < 2 || Number(comboCap) < 1}
+                      className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-60">
+                {comboAgregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar combinación
+              </button>
+            </div>
+          </div>
+
+          {/* Combinaciones existentes */}
+          {combos.length === 0 ? (
+            <p className="text-sm text-ink-muted">Todavía no hay combinaciones. Armá una arriba juntando 2 o más mesas.</p>
+          ) : (
+            <div className="divide-y divide-ink/5">
+              {combos.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
+                    {c.mesa_ids.map((mid, i) => (
+                      <span key={mid} className="inline-flex items-center gap-1">
+                        {i > 0 && <span className="text-ink-muted text-sm">+</span>}
+                        <span className="rounded-md bg-ink/5 border border-ink/10 px-2 py-0.5 text-sm font-medium">{nombreDeMesa(mid)}</span>
+                      </span>
+                    ))}
+                    <span className="text-ink-muted text-xs ml-1">· {c.capacidad} persona{c.capacidad !== 1 ? 's' : ''}</span>
+                    {c.nombre && <span className="text-ink-muted text-xs truncate">· {c.nombre}</span>}
+                  </div>
+                  <Toggle checked={c.activa} onChange={(v) => void toggleComboActiva(c.id, v)} />
+                  <button onClick={() => void eliminarCombo(c.id)} className="text-ink-muted hover:text-red-500 p-1 shrink-0" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
