@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, LayoutGrid, Pencil, Check, X, Link2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, LayoutGrid, X, Link2 } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 type Forma = 'cuadrado' | 'redondo' | 'rectangular';
@@ -35,8 +35,6 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
   const [sectorSel, setSectorSel] = useState<string>('');
   const [sectorNuevo, setSectorNuevo] = useState('');
   const [agregando, setAgregando] = useState(false);
-  const [renombrar, setRenombrar] = useState<string | null>(null);
-  const [renombreVal, setRenombreVal] = useState('');
   // Combinar mesas — dos modos (como Eat App):
   //  grupo = marcás las mesas de una fila; el motor arma el tramo contiguo libre.
   //  fija  = combinación exacta de mesas puntuales, con rango desde/hasta personas.
@@ -102,15 +100,6 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     [mesas],
   );
 
-  const porSector = useMemo(() => {
-    const map = new Map<string, Mesa[]>();
-    for (const m of mesas) {
-      const k = m.zona || 'Sin sector';
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(m);
-    }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [mesas]);
 
   async function agregar() {
     if (!numero.trim()) { toast.error('Poné un número/nombre de mesa'); return; }
@@ -151,18 +140,6 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     if (error) { toast.error('No se pudo eliminar: ' + error.message); void cargar(); }
   }
 
-  // Persiste el array de límites (solo los pares zona+min+max completos, con el
-  // shape que lee la RPC: { zona, min, max } numérico). Guarda en el momento.
-  async function persistirLimites(limites: Settings['limites']) {
-    if (!settings) return;
-    const cleaned = limites
-      .filter((z) => z.zona.trim() && z.min !== '' && z.max !== '')
-      .map((z) => ({ zona: z.zona.trim(), min: Number(z.min), max: Number(z.max) }));
-    const { error } = await db().from('comanda_local_settings')
-      .update({ reservas_zonas_limites: cleaned }).eq('id', settings.id);
-    if (error) toast.error('No se pudieron guardar los límites: ' + error.message);
-  }
-
   // Toggle "Combinar mesas" — estado local + persistencia inmediata.
   async function toggleCombinar(v: boolean) {
     if (!settings) return;
@@ -170,26 +147,6 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     const { error } = await db().from('comanda_local_settings')
       .update({ reservas_permite_combinar: v }).eq('id', settings.id);
     if (error) toast.error('No se pudo guardar: ' + error.message);
-  }
-
-  // Renombra un sector: actualiza TODAS las mesas de esa zona de una (corrige
-  // duplicados por typo y lo que ve el cliente). También renombra su límite para
-  // que no quede huérfano.
-  async function guardarRenombre(viejo: string) {
-    const nuevo = renombreVal.trim();
-    setRenombrar(null);
-    if (!nuevo || nuevo === viejo) return;
-    setMesas((prev) => prev.map((m) => (m.zona === viejo ? { ...m, zona: nuevo } : m)));
-    const { error } = await db().from('mesas').update({ zona: nuevo })
-      .eq('local_id', localId).eq('zona', viejo);
-    if (error) { toast.error('No se pudo renombrar: ' + error.message); void cargar(); return; }
-    toast.success(`Sector renombrado a "${nuevo}"`);
-    // Renombrar el límite del sector (si tenía) para no orfanarlo.
-    if (settings) {
-      const renombrados = settings.limites.map((z) => z.zona === viejo ? { ...z, zona: nuevo } : z);
-      setSettings({ ...settings, limites: renombrados });
-      await persistirLimites(renombrados);
-    }
   }
 
   // Alterna una mesa dentro de la selección de la combinación en armado.
