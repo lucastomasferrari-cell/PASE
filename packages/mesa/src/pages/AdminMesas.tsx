@@ -1,11 +1,4 @@
-// Editor de mesas / sectores del salón — sección del admin de MESA.
-// Carga el salón real (número, sector/zona, capacidad, forma, reservable), que
-// alimenta el motor de reservas (asignación por mesa + selector de sector que
-// ve el cliente). Los sectores se ELIGEN de una lista (no texto libre) para
-// evitar duplicados por typo; se pueden renombrar en bloque.
-// Acá también vive la config de asignación que depende de las mesas: "Combinar
-// mesas" y los límites (mín/máx) por sector — se persisten en
-// `comanda_local_settings` en el momento (sin botón Guardar aparte).
+// Editor de mesas del salón — sección del admin de MESA.
 // Escribe directo en `mesas` (RLS: dueño/admin con permiso comanda.mesas.gestionar).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -15,7 +8,7 @@ import { db } from '@/lib/supabase';
 
 type Forma = 'cuadrado' | 'redondo' | 'rectangular';
 interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; min_personas: number | null; forma: Forma; reservable: boolean }
-interface Settings { id: number; permiteCombinar: boolean; limites: { zona: string; min: string; max: string }[] }
+interface Settings { id: number; permiteCombinar: boolean }
 interface Combo { id: number; nombre: string | null; mesa_ids: number[]; tipo: 'grupo' | 'fija'; min_personas: number | null; max_personas: number | null; max_sillas_vacias: number | null; activa: boolean }
 const NUEVO = '__nuevo__';
 const FORMAS: { value: Forma; label: string }[] = [
@@ -57,18 +50,15 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     if (error) toast.error('No se pudieron cargar las mesas: ' + error.message);
     setMesas((data ?? []) as Mesa[]);
 
-    // Config de asignación que vive junto a las mesas (combinar + límites por sector).
     const { data: sData } = await db()
       .from('comanda_local_settings')
-      .select('id, reservas_permite_combinar, reservas_zonas_limites')
+      .select('id, reservas_permite_combinar')
       .eq('local_id', localId).maybeSingle();
     if (sData) {
-      const s = sData as { id: number; reservas_permite_combinar: boolean | null; reservas_zonas_limites: Array<{ zona: string; min: number; max: number }> | null };
-      const zl = s.reservas_zonas_limites ?? [];
+      const s = sData as { id: number; reservas_permite_combinar: boolean | null };
       setSettings({
         id: s.id,
         permiteCombinar: s.reservas_permite_combinar == null ? true : Boolean(s.reservas_permite_combinar),
-        limites: zl.map((z) => ({ zona: z.zona, min: String(z.min ?? ''), max: String(z.max ?? '') })),
       });
     } else {
       setSettings(null);
