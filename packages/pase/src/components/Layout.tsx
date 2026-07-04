@@ -388,7 +388,7 @@ body{
 /* User section — moved to TopBar (top-right header) */
 
 /* ─── MAIN ─────────────────────────────────────────────────────────── */
-.main{margin-left:220px;flex:1;padding:28px 36px 36px;min-height:100vh;background:var(--pase-bg-page);transition:margin-left 0.2s ease}
+.main{margin-left:220px;flex:1;padding:28px 120px 36px 36px;min-height:100vh;background:var(--pase-bg-page);transition:margin-left 0.2s ease}
 body.sb-collapsed .main{margin-left:56px}
 .ph-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:12px;flex-wrap:wrap}
 .ph-title{font-family:var(--pase-font);font-size:20px;font-weight:500;line-height:1.15;color:var(--pase-text);letter-spacing:-0.025em}
