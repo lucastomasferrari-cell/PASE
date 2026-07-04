@@ -273,7 +273,45 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         </div>
       </div>
 
-      {/* Sectores: renombrar inline (sin tarjeta separada) se hace desde la lista de mesas */}
+      {/* Mesas del salón */}
+      <div className="rounded-2xl bg-white border border-ink/5 shadow-card overflow-hidden">
+        <div className="px-5 py-3 border-b border-ink/5 flex items-center justify-between">
+          <p className="font-medium">Mesas del salón <span className="text-ink-muted font-normal">({mesas.length})</span></p>
+          <p className="text-xs text-ink-muted">{totalCubiertos} cubiertos reservables</p>
+        </div>
+        {mesas.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-ink-muted">Todavía no hay mesas. Cargá el salón arriba para habilitar la asignación por mesa y los sectores.</p>
+        ) : (
+          <div className="divide-y divide-ink/5">
+            <div className="grid grid-cols-[1fr_1.4fr_0.55fr_0.55fr_1fr_auto_auto] gap-3 px-5 py-2 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
+              <span>Mesa</span><span>Sector</span><span>Mín</span><span>Máx</span><span>Forma</span><span>Reservable</span><span></span>
+            </div>
+            {mesas.map((m) => (
+              <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.55fr_0.55fr_1fr_auto_auto] gap-3 px-5 py-2.5 items-center">
+                <input defaultValue={m.numero} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.numero) void patch(m.id, { numero: v }); }}
+                       className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <select value={m.zona ?? ''} onChange={(e) => void patch(m.id, { zona: e.target.value || null })}
+                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
+                  {m.zona == null && <option value="">Sin sector</option>}
+                  {sectores.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <input type="number" min={1} defaultValue={m.min_personas ?? ''} placeholder="1" title="Mínimo de personas para usar esta mesa"
+                       onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.min_personas) void patch(m.id, { min_personas: v }); }}
+                       className="w-14 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <input type="number" min={1} defaultValue={m.capacidad ?? ''} title="Máximo de personas (capacidad)"
+                       onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.capacidad) void patch(m.id, { capacidad: v }); }}
+                       className="w-14 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <select value={m.forma} onChange={(e) => void patch(m.id, { forma: e.target.value as Forma })}
+                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
+                  {FORMAS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+                <Toggle checked={m.reservable} onChange={(v) => void patch(m.id, { reservable: v })} />
+                <button onClick={() => void eliminar(m.id)} className="text-ink-muted hover:text-red-500 p-1" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Combinar mesas — grupos + combinaciones fijas */}
       {mesas.length >= 2 && (
@@ -383,46 +421,6 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
           )}
         </div>
       )}
-
-      {/* Mesas del salón */}
-      <div className="rounded-2xl bg-white border border-ink/5 shadow-card overflow-hidden">
-        <div className="px-5 py-3 border-b border-ink/5 flex items-center justify-between">
-          <p className="font-medium">Mesas del salón <span className="text-ink-muted font-normal">({mesas.length})</span></p>
-          <p className="text-xs text-ink-muted">{totalCubiertos} cubiertos reservables</p>
-        </div>
-        {mesas.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-ink-muted">Todavía no hay mesas. Cargá el salón arriba para habilitar la asignación por mesa y los sectores.</p>
-        ) : (
-          <div className="divide-y divide-ink/5">
-            <div className="grid grid-cols-[1fr_1.4fr_0.55fr_0.55fr_1fr_auto_auto] gap-3 px-5 py-2 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
-              <span>Mesa</span><span>Sector</span><span>Mín</span><span>Máx</span><span>Forma</span><span>Reservable</span><span></span>
-            </div>
-            {mesas.map((m) => (
-              <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.55fr_0.55fr_1fr_auto_auto] gap-3 px-5 py-2.5 items-center">
-                <input defaultValue={m.numero} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.numero) void patch(m.id, { numero: v }); }}
-                       className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
-                <select value={m.zona ?? ''} onChange={(e) => void patch(m.id, { zona: e.target.value || null })}
-                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
-                  {m.zona == null && <option value="">Sin sector</option>}
-                  {sectores.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <input type="number" min={1} defaultValue={m.min_personas ?? ''} placeholder="1" title="Mínimo de personas para usar esta mesa"
-                       onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.min_personas) void patch(m.id, { min_personas: v }); }}
-                       className="w-14 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
-                <input type="number" min={1} defaultValue={m.capacidad ?? ''} title="Máximo de personas (capacidad)"
-                       onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.capacidad) void patch(m.id, { capacidad: v }); }}
-                       className="w-14 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
-                <select value={m.forma} onChange={(e) => void patch(m.id, { forma: e.target.value as Forma })}
-                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
-                  {FORMAS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                </select>
-                <Toggle checked={m.reservable} onChange={(v) => void patch(m.id, { reservable: v })} />
-                <button onClick={() => void eliminar(m.id)} className="text-ink-muted hover:text-red-500 p-1" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
