@@ -16,7 +16,7 @@ import { db } from '@/lib/supabase';
 type Forma = 'cuadrado' | 'redondo' | 'rectangular';
 interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; min_personas: number | null; forma: Forma; reservable: boolean }
 interface Settings { id: number; permiteCombinar: boolean; limites: { zona: string; min: string; max: string }[] }
-interface Combo { id: number; nombre: string | null; mesa_ids: number[]; tipo: 'grupo' | 'fija'; min_personas: number | null; max_personas: number | null; activa: boolean }
+interface Combo { id: number; nombre: string | null; mesa_ids: number[]; tipo: 'grupo' | 'fija'; min_personas: number | null; max_personas: number | null; max_sillas_vacias: number | null; activa: boolean }
 const NUEVO = '__nuevo__';
 const FORMAS: { value: Forma; label: string }[] = [
   { value: 'cuadrado', label: 'Cuadrada' },
@@ -46,6 +46,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
   const [comboNombre, setComboNombre] = useState('');
   const [comboMin, setComboMin] = useState('');
   const [comboMax, setComboMax] = useState('');
+  const [comboMaxVacias, setComboMaxVacias] = useState('');
   const [comboAgregando, setComboAgregando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -78,7 +79,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     // Combinaciones (grupos + fijas).
     const { data: cData, error: cErr } = await db()
       .from('reservas_combinaciones')
-      .select('id, nombre, mesa_ids, tipo, min_personas, max_personas, activa')
+      .select('id, nombre, mesa_ids, tipo, min_personas, max_personas, max_sillas_vacias, activa')
       .eq('local_id', localId).is('deleted_at', null).order('id');
     if (cErr) toast.error('No se pudieron cargar las combinaciones: ' + cErr.message);
     setCombos((cData ?? []).map((c) => ({
@@ -88,6 +89,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
       tipo: (c.tipo === 'fija' ? 'fija' : 'grupo') as 'grupo' | 'fija',
       min_personas: c.min_personas == null ? null : Number(c.min_personas),
       max_personas: c.max_personas == null ? null : Number(c.max_personas),
+      max_sillas_vacias: c.max_sillas_vacias == null ? null : Number(c.max_sillas_vacias),
       activa: Boolean(c.activa),
     })));
     setCargando(false);
@@ -207,14 +209,13 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
 
   async function agregarCombo() {
     if (comboSel.length < 2) { toast.error('Elegí al menos 2 mesas'); return; }
-    let min: number | null = null, max: number | null = null;
+    let min: number | null = null, max: number | null = null, maxVacias: number | null = null;
     if (comboModo === 'fija') {
       min = comboMin.trim() ? Number(comboMin) : null;
       max = comboMax.trim() ? Number(comboMax) : null;
       if (min != null && max != null && min > max) { toast.error('El "desde" no puede ser mayor que el "hasta"'); return; }
     } else {
-      // Grupo: "combinar desde N" opcional (mínimo para ofrecer la combinación).
-      min = comboMin.trim() ? Number(comboMin) : null;
+      maxVacias = comboMaxVacias.trim() ? Number(comboMaxVacias) : null;
     }
     // Para un grupo el orden importa (adyacencia): guardamos las mesas ordenadas
     // por su número/nombre, así "Banqueta 1..8" queda en secuencia física.
@@ -227,18 +228,20 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         tenant_id: tenantId, local_id: localId,
         nombre: comboNombre.trim() || null,
         mesa_ids: ids, tipo: comboModo,
-        min_personas: min, max_personas: max, activa: true,
-      }).select('id, nombre, mesa_ids, tipo, min_personas, max_personas, activa').single();
+        min_personas: min, max_personas: max,
+        max_sillas_vacias: maxVacias, activa: true,
+      }).select('id, nombre, mesa_ids, tipo, min_personas, max_personas, max_sillas_vacias, activa').single();
       if (error) { toast.error('No se pudo crear la combinación: ' + error.message); return; }
-      const c = data as { id: number; nombre: string | null; mesa_ids: number[]; tipo: string; min_personas: number | null; max_personas: number | null; activa: boolean };
+      const c = data as { id: number; nombre: string | null; mesa_ids: number[]; tipo: string; min_personas: number | null; max_personas: number | null; max_sillas_vacias: number | null; activa: boolean };
       setCombos((prev) => [...prev, {
         id: c.id, nombre: c.nombre ?? null, mesa_ids: (c.mesa_ids ?? []).map(Number),
         tipo: c.tipo === 'fija' ? 'fija' : 'grupo',
         min_personas: c.min_personas == null ? null : Number(c.min_personas),
         max_personas: c.max_personas == null ? null : Number(c.max_personas),
+        max_sillas_vacias: c.max_sillas_vacias == null ? null : Number(c.max_sillas_vacias),
         activa: Boolean(c.activa),
       }]);
-      setComboSel([]); setComboNombre(''); setComboMin(''); setComboMax('');
+      setComboSel([]); setComboNombre(''); setComboMin(''); setComboMax(''); setComboMaxVacias('');
       toast.success(comboModo === 'grupo' ? 'Grupo creado' : 'Combinación creada');
     } finally { setComboAgregando(false); }
   }
@@ -358,7 +361,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
             <p className="font-medium flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-500" /> Combinar mesas</p>
             {settings && <Toggle checked={settings.permiteCombinar} onChange={(v) => void toggleCombinar(v)} />}
           </div>
-          <p className="text-xs text-ink-muted mt-1 mb-4">Dos formas de juntar mesas. Un <b>grupo</b>: marcás las mesas de una fila (la barra, los sillones) y el sistema arma solo la combinación libre que alcance. Una <b>combinación fija</b>: mesas puntuales para un rango de personas. Las mesas que no ponés en ninguna, nunca se combinan.</p>
+          <p className="text-xs text-ink-muted mt-1 mb-4">Dos formas de juntar mesas. Un <b>grupo</b>: marcás las mesas de una fila (la barra, los sillones) y el sistema arma solo la combinación libre que alcance. Podés poner un <b>máximo de sillas vacías</b> para no desperdiciar mesas rígidas. Una <b>combinación fija</b>: mesas puntuales para un rango de personas.</p>
           {settings && !settings.permiteCombinar && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">Las combinaciones están <b>desactivadas</b>: las reservas solo entran en mesas sueltas. Activá el interruptor de arriba para usarlas.</p>
           )}
@@ -397,9 +400,9 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
             )}
             <div className="flex flex-wrap items-end gap-2">
               {comboModo === 'grupo' && (
-                <Field label="Combinar desde" className="w-28">
-                  <input type="number" min={2} value={comboMin} onChange={(e) => setComboMin(e.target.value)}
-                         placeholder="apenas haga falta" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                <Field label="Máx. sillas vacías" className="w-36">
+                  <input type="number" min={0} value={comboMaxVacias} onChange={(e) => setComboMaxVacias(e.target.value)}
+                         placeholder="sin límite" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
                 </Field>
               )}
               {comboModo === 'fija' && (
@@ -433,7 +436,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
               {combos.map((c) => {
                 const sum = capacidadDeGrupo(c.mesa_ids);
                 const rango = c.tipo === 'grupo'
-                  ? (c.min_personas ? `de ${c.min_personas} a ${sum} personas` : `hasta ${sum} personas`)
+                  ? `hasta ${sum} pers.` + (c.max_sillas_vacias != null ? ` · máx. ${c.max_sillas_vacias} vacías` : '')
                   : `${c.min_personas ?? 1} a ${c.max_personas ?? sum} personas`;
                 return (
                   <div key={c.id} className="flex items-center gap-3 py-2.5">
