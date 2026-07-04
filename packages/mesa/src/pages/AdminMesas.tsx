@@ -14,7 +14,7 @@ import { Plus, Trash2, Loader2, LayoutGrid, Pencil, Check, X, Link2 } from 'luci
 import { db } from '@/lib/supabase';
 
 type Forma = 'cuadrado' | 'redondo' | 'rectangular';
-interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; forma: Forma; reservable: boolean }
+interface Mesa { id: number; numero: string; zona: string | null; capacidad: number | null; min_personas: number | null; forma: Forma; reservable: boolean }
 interface Settings { id: number; permiteCombinar: boolean; limites: { zona: string; min: string; max: string }[] }
 interface Combo { id: number; nombre: string | null; mesa_ids: number[]; tipo: 'grupo' | 'fija'; min_personas: number | null; max_personas: number | null; activa: boolean }
 const NUEVO = '__nuevo__';
@@ -30,6 +30,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
   const [cargando, setCargando] = useState(true);
   const [numero, setNumero] = useState('');
   const [capacidad, setCapacidad] = useState('4');
+  const [capMin, setCapMin] = useState('');
   const [forma, setForma] = useState<Forma>('cuadrado');
   const [sectorSel, setSectorSel] = useState<string>('');
   const [sectorNuevo, setSectorNuevo] = useState('');
@@ -51,7 +52,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     setCargando(true);
     const { data, error } = await db()
       .from('mesas')
-      .select('id, numero, zona, capacidad, forma, reservable')
+      .select('id, numero, zona, capacidad, min_personas, forma, reservable')
       .eq('local_id', localId).is('deleted_at', null)
       .order('zona', { ascending: true }).order('numero', { ascending: true });
     if (error) toast.error('No se pudieron cargar las mesas: ' + error.message);
@@ -119,8 +120,9 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         tenant_id: tenantId, local_id: localId,
         numero: numero.trim(), zona,
         capacidad: capacidad ? Number(capacidad) : null,
+        min_personas: capMin ? Number(capMin) : null,
         forma, reservable: true,
-      }).select('id, numero, zona, capacidad, forma, reservable').single();
+      }).select('id, numero, zona, capacidad, min_personas, forma, reservable').single();
       if (error) {
         const dup = error.code === '23505' || /duplicate key|uniq_mesas_numero/i.test(error.message);
         toast.error(dup
@@ -166,22 +168,6 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
     const { error } = await db().from('comanda_local_settings')
       .update({ reservas_permite_combinar: v }).eq('id', settings.id);
     if (error) toast.error('No se pudo guardar: ' + error.message);
-  }
-
-  // Actualiza mín/máx de un sector (por nombre exacto) y persiste el array entero.
-  function setLimite(zona: string, campo: 'min' | 'max', valor: string) {
-    setSettings((prev) => {
-      if (!prev) return prev;
-      const existe = prev.limites.some((z) => z.zona === zona);
-      const limites = existe
-        ? prev.limites.map((z) => z.zona === zona ? { ...z, [campo]: valor } : z)
-        : [...prev.limites, { zona, min: campo === 'min' ? valor : '', max: campo === 'max' ? valor : '' }];
-      return { ...prev, limites };
-    });
-  }
-  function limiteDe(zona: string): { min: string; max: string } {
-    const z = settings?.limites.find((l) => l.zona === zona);
-    return { min: z?.min ?? '', max: z?.max ?? '' };
   }
 
   // Renombra un sector: actualiza TODAS las mesas de esa zona de una (corrige
@@ -303,7 +289,11 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
               </select>
             )}
           </Field>
-          <Field label="Capacidad" className="w-24">
+          <Field label="Mín." className="w-20">
+            <input type="number" min={1} value={capMin} onChange={(e) => setCapMin(e.target.value)}
+                   placeholder="1" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Máx." className="w-20">
             <input type="number" min={1} value={capacidad} onChange={(e) => setCapacidad(e.target.value)}
                    className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
           </Field>
@@ -320,61 +310,37 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         </div>
       </div>
 
-      {/* Sectores (resumen + renombrar + combinar + límites) */}
+      {/* Sectores (solo nombre + renombrar) */}
       {sectores.length > 0 && (
         <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
           <p className="font-medium mb-1">Sectores <span className="text-ink-muted font-normal">({sectores.length})</span></p>
-          <p className="text-xs text-ink-muted mb-3">Lo que ve el cliente al elegir dónde sentarse. Renombralos para corregir duplicados. Podés poner un mín/máx de personas por reserva en cada sector (vacío = sin límite).</p>
+          <p className="text-xs text-ink-muted mb-3">Es lo que ve el cliente al elegir dónde sentarse. Renombralos para corregir duplicados. El cupo (mín/máx de personas) se define en cada mesa, más abajo.</p>
 
-          {settings && (
-            <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-ink/5">
-              <div>
-                <p className="text-sm font-medium">Combinar mesas</p>
-                <p className="text-xs text-ink-muted mt-0.5">Si un grupo no entra en una mesa, junta dos (ej. dos de 4 para un grupo de 6).</p>
-              </div>
-              <div className="shrink-0"><Toggle checked={settings.permiteCombinar} onChange={(v) => void toggleCombinar(v)} /></div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center px-1 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
-              <span>Sector</span><span className="w-20 text-center">mín</span><span className="w-20 text-center">máx</span>
-            </div>
+          <div className="divide-y divide-ink/5">
             {porSector.map(([zona, ms]) => {
               const cub = ms.filter((m) => m.reservable).reduce((s, m) => s + (m.capacidad ?? 0), 0);
               const esRen = renombrar === zona;
-              const lim = limiteDe(zona);
               const esSinSector = zona === 'Sin sector';
               return (
-                <div key={zona} className="grid grid-cols-[1fr_auto_auto] gap-3 items-center px-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {esRen ? (
-                      <>
-                        <input value={renombreVal} autoFocus onChange={(e) => setRenombreVal(e.target.value)}
-                               onKeyDown={(e) => { if (e.key === 'Enter') void guardarRenombre(zona); if (e.key === 'Escape') setRenombrar(null); }}
-                               className="w-32 rounded border border-ink/15 px-1.5 py-1 text-sm" />
-                        <button onClick={() => void guardarRenombre(zona)} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-4 w-4" /></button>
-                        <button onClick={() => setRenombrar(null)} className="text-ink-muted hover:text-ink p-0.5"><X className="h-4 w-4" /></button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-medium text-sm truncate">{zona}</span>
-                        <span className="text-ink-muted text-xs shrink-0">· {ms.length} mesa{ms.length !== 1 ? 's' : ''} · {cub} cub.</span>
-                        {!esSinSector && (
-                          <button onClick={() => { setRenombrar(zona); setRenombreVal(zona); }} title="Renombrar sector"
-                                  className="text-ink-muted hover:text-brand-600 p-0.5 ml-0.5 shrink-0"><Pencil className="h-3.5 w-3.5" /></button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <input type="number" min={1} value={lim.min} disabled={!settings || esSinSector} placeholder="sin límite"
-                         onChange={(e) => setLimite(zona, 'min', e.target.value)}
-                         onBlur={() => { if (settings) void persistirLimites(settings.limites); }}
-                         className="w-20 rounded-lg border border-ink/15 px-2 py-1.5 text-sm text-center disabled:bg-ink/5 disabled:text-ink-muted" />
-                  <input type="number" min={1} value={lim.max} disabled={!settings || esSinSector} placeholder="sin límite"
-                         onChange={(e) => setLimite(zona, 'max', e.target.value)}
-                         onBlur={() => { if (settings) void persistirLimites(settings.limites); }}
-                         className="w-20 rounded-lg border border-ink/15 px-2 py-1.5 text-sm text-center disabled:bg-ink/5 disabled:text-ink-muted" />
+                <div key={zona} className="flex items-center gap-1.5 min-w-0 py-2">
+                  {esRen ? (
+                    <>
+                      <input value={renombreVal} autoFocus onChange={(e) => setRenombreVal(e.target.value)}
+                             onKeyDown={(e) => { if (e.key === 'Enter') void guardarRenombre(zona); if (e.key === 'Escape') setRenombrar(null); }}
+                             className="w-32 rounded border border-ink/15 px-1.5 py-1 text-sm" />
+                      <button onClick={() => void guardarRenombre(zona)} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-4 w-4" /></button>
+                      <button onClick={() => setRenombrar(null)} className="text-ink-muted hover:text-ink p-0.5"><X className="h-4 w-4" /></button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-sm truncate">{zona}</span>
+                      <span className="text-ink-muted text-xs shrink-0">· {ms.length} mesa{ms.length !== 1 ? 's' : ''} · {cub} cub.</span>
+                      {!esSinSector && (
+                        <button onClick={() => { setRenombrar(zona); setRenombreVal(zona); }} title="Renombrar sector"
+                                className="text-ink-muted hover:text-brand-600 p-0.5 ml-0.5 shrink-0"><Pencil className="h-3.5 w-3.5" /></button>
+                      )}
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -385,8 +351,14 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
       {/* Combinar mesas — grupos + combinaciones fijas */}
       {mesas.length >= 2 && (
         <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
-          <p className="font-medium flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-500" /> Combinar mesas</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-medium flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-500" /> Combinar mesas</p>
+            {settings && <Toggle checked={settings.permiteCombinar} onChange={(v) => void toggleCombinar(v)} />}
+          </div>
           <p className="text-xs text-ink-muted mt-1 mb-4">Dos formas de juntar mesas. Un <b>grupo</b>: marcás las mesas de una fila (la barra, los sillones) y el sistema arma solo la combinación libre que alcance. Una <b>combinación fija</b>: mesas puntuales para un rango de personas. Las mesas que no ponés en ninguna, nunca se combinan.</p>
+          {settings && !settings.permiteCombinar && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">Las combinaciones están <b>desactivadas</b>: las reservas solo entran en mesas sueltas. Activá el interruptor de arriba para usarlas.</p>
+          )}
 
           {/* Selector de modo */}
           <div className="inline-flex rounded-lg border border-ink/10 p-0.5 mb-3">
@@ -489,11 +461,11 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
           <p className="px-5 py-10 text-center text-sm text-ink-muted">Todavía no hay mesas. Cargá el salón arriba para habilitar la asignación por mesa y los sectores.</p>
         ) : (
           <div className="divide-y divide-ink/5">
-            <div className="grid grid-cols-[1fr_1.4fr_0.8fr_1fr_auto_auto] gap-3 px-5 py-2 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
-              <span>Mesa</span><span>Sector</span><span>Capac.</span><span>Forma</span><span>Reservable</span><span></span>
+            <div className="grid grid-cols-[1fr_1.4fr_0.55fr_0.55fr_1fr_auto_auto] gap-3 px-5 py-2 text-[11px] uppercase tracking-wide text-ink-muted font-medium">
+              <span>Mesa</span><span>Sector</span><span>Mín</span><span>Máx</span><span>Forma</span><span>Reservable</span><span></span>
             </div>
             {mesas.map((m) => (
-              <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.8fr_1fr_auto_auto] gap-3 px-5 py-2.5 items-center">
+              <div key={m.id} className="grid grid-cols-[1fr_1.4fr_0.55fr_0.55fr_1fr_auto_auto] gap-3 px-5 py-2.5 items-center">
                 <input defaultValue={m.numero} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.numero) void patch(m.id, { numero: v }); }}
                        className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
                 <select value={m.zona ?? ''} onChange={(e) => void patch(m.id, { zona: e.target.value || null })}
@@ -501,8 +473,12 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
                   {m.zona == null && <option value="">Sin sector</option>}
                   {sectores.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <input type="number" min={1} defaultValue={m.capacidad ?? ''} onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.capacidad) void patch(m.id, { capacidad: v }); }}
-                       className="w-16 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <input type="number" min={1} defaultValue={m.min_personas ?? ''} placeholder="1" title="Mínimo de personas para usar esta mesa"
+                       onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.min_personas) void patch(m.id, { min_personas: v }); }}
+                       className="w-14 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
+                <input type="number" min={1} defaultValue={m.capacidad ?? ''} title="Máximo de personas (capacidad)"
+                       onBlur={(e) => { const v = e.target.value ? Number(e.target.value) : null; if (v !== m.capacidad) void patch(m.id, { capacidad: v }); }}
+                       className="w-14 rounded-lg border border-ink/10 px-2 py-1.5 text-sm" />
                 <select value={m.forma} onChange={(e) => void patch(m.id, { forma: e.target.value as Forma })}
                         className="rounded-lg border border-ink/10 px-2 py-1.5 text-sm bg-white">
                   {FORMAS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
