@@ -212,6 +212,9 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
       min = comboMin.trim() ? Number(comboMin) : null;
       max = comboMax.trim() ? Number(comboMax) : null;
       if (min != null && max != null && min > max) { toast.error('El "desde" no puede ser mayor que el "hasta"'); return; }
+    } else {
+      // Grupo: "combinar desde N" opcional (mínimo para ofrecer la combinación).
+      min = comboMin.trim() ? Number(comboMin) : null;
     }
     // Para un grupo el orden importa (adyacencia): guardamos las mesas ordenadas
     // por su número/nombre, así "Banqueta 1..8" queda en secuencia física.
@@ -393,6 +396,12 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
               </p>
             )}
             <div className="flex flex-wrap items-end gap-2">
+              {comboModo === 'grupo' && (
+                <Field label="Combinar desde" className="w-28">
+                  <input type="number" min={2} value={comboMin} onChange={(e) => setComboMin(e.target.value)}
+                         placeholder="apenas haga falta" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                </Field>
+              )}
               {comboModo === 'fija' && (
                 <>
                   <Field label="Desde" className="w-20">
@@ -424,7 +433,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
               {combos.map((c) => {
                 const sum = capacidadDeGrupo(c.mesa_ids);
                 const rango = c.tipo === 'grupo'
-                  ? `hasta ${sum} personas`
+                  ? (c.min_personas ? `de ${c.min_personas} a ${sum} personas` : `hasta ${sum} personas`)
                   : `${c.min_personas ?? 1} a ${c.max_personas ?? sum} personas`;
                 return (
                   <div key={c.id} className="flex items-center gap-3 py-2.5">
