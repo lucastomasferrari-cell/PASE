@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
@@ -194,56 +194,76 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
           })}
         </nav>
 
-        {/* ── Usuario ─────────────────────────────────────────────── */}
-        <div className="sb-foot">
-          <div className="sb-foot-row">
-            <div className="sb-avatar" title={collapsed ? user.nombre : undefined}>{user.nombre?.[0]?.toUpperCase() ?? "?"}</div>
-            {!collapsed && (
-              <div className="sb-foot-info">
-                <div className="sb-uname">{user.nombre}</div>
-                <div className="sb-urole">{ROLES[user.rol]?.label}</div>
-              </div>
-            )}
-            {!collapsed && (
-              <div className="sb-foot-actions">
-                <BandejaEntradaBoton user={user} />
-                <ThemeToggle />
-              </div>
-            )}
-          </div>
-          {!collapsed && (
+        <div style={{ flex: 1 }} />
+      </div>
+    </>
+  );
+}
+
+// ── Header bar (arriba a la derecha del main) ──────────────────────────
+interface TopBarProps {
+  user: Usuario;
+  onLogout: () => Promise<void> | void;
+}
+
+export function TopBar({ user, onLogout }: TopBarProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const initial = user.nombre?.[0]?.toUpperCase() ?? "?";
+  const rolLabel = ROLES[user.rol]?.label ?? user.rol;
+
+  return (
+    <div className="pase-topbar">
+      <BandejaEntradaBoton user={user} />
+      <ThemeToggle />
+      <div ref={ref} style={{ position: "relative" }}>
+        <button
+          className="pase-topbar-avatar"
+          onClick={() => setOpen(o => !o)}
+          title={`${user.nombre} · ${rolLabel}`}
+        >
+          {initial}
+        </button>
+        {open && (
+          <div className="pase-topbar-dropdown">
+            <div className="pase-topbar-dd-header">
+              <div className="pase-topbar-dd-name">{user.nombre}</div>
+              <div className="pase-topbar-dd-role">{rolLabel}</div>
+            </div>
+            <div className="pase-topbar-dd-sep" />
             <button
-              className="sb-actualizar"
+              className="pase-topbar-dd-item"
               onClick={() => {
+                setOpen(false);
                 if (confirm("Recargar con la última versión y limpiar la caché. Guardá lo que estés cargando (tocá Confirmar) antes de seguir. ¿Continuar?")) {
                   void limpiarCacheYRecargar();
                 }
               }}
-              title="Traer la última versión y limpiar la caché del navegador"
-            >
-              ↻ Actualizar app
-            </button>
-          )}
-          {!collapsed && (
-            <button className="sb-logout" onClick={onLogout}>Cerrar sesión</button>
-          )}
-          {collapsed && (
-            <button
-              className="sb-logout-icon"
-              onClick={() => { if (confirm("Recargar con la última versión y limpiar la caché. ¿Continuar?")) void limpiarCacheYRecargar(); }}
-              title="Actualizar app (limpiar caché)"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7A6 6 0 1 1 7 1a6 6 0 0 1 5 2.5"/><polyline points="12,1 12,4 9,4"/></svg>
+              Actualizar app
             </button>
-          )}
-          {collapsed && (
-            <button className="sb-logout-icon" onClick={onLogout} title="Cerrar sesión">
+            <button
+              className="pase-topbar-dd-item pase-topbar-dd-logout"
+              onClick={() => { setOpen(false); void onLogout(); }}
+            >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12H3a1 1 0 01-1-1V3a1 1 0 011-1h2"/><polyline points="8,9 11,7 8,5"/><line x1="11" y1="7" x2="4" y2="7"/></svg>
+              Cerrar sesión
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -365,22 +385,7 @@ body{
 .sb.sb-rail .nav-item{justify-content:center;padding:8px;margin:1px 8px;border-radius:8px}
 .sb.sb-rail .nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:16px;border-radius:0 3px 3px 0;background:var(--pase-celeste)}
 
-/* User section */
-.sb-foot{padding:12px;border-top:0.5px solid var(--pase-border)}
-.sb-foot-row{display:flex;align-items:center;gap:10px}
-.sb-avatar{width:30px;height:30px;border-radius:8px;background:var(--pase-celeste-100);color:var(--pase-text);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0;letter-spacing:-0.02em}
-.sb-foot-info{flex:1;min-width:0;overflow:hidden}
-.sb-uname{font-size:12px;font-weight:500;color:var(--pase-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-urole{font-size:10px;color:var(--pase-text-muted)}
-.sb-foot-actions{display:flex;align-items:center;gap:2px;flex-shrink:0}
-.sb-logout{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
-.sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
-.sb-actualizar{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
-.sb-actualizar:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
-.sb-logout-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:8px auto 0;border:none;background:transparent;color:var(--pase-text-muted);cursor:pointer;border-radius:8px;transition:all 0.15s}
-.sb-logout-icon:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
-.sb.sb-rail .sb-avatar{margin:0 auto}
-.sb.sb-rail .sb-foot{padding:10px 8px}
+/* User section — moved to TopBar (top-right header) */
 
 /* ─── MAIN ─────────────────────────────────────────────────────────── */
 .main{margin-left:220px;flex:1;padding:28px 36px 36px;min-height:100vh;background:var(--pase-bg-page);transition:margin-left 0.2s ease}
@@ -750,4 +755,18 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
   }
   .overlay-sb.open { display: block; }
 }
+
+/* ─── TOP BAR (perfil arriba a la derecha) ──────────────────────────── */
+.pase-topbar{position:fixed;top:0;right:0;z-index:15;display:flex;align-items:center;gap:6px;padding:12px 20px}
+.pase-topbar-avatar{width:32px;height:32px;border-radius:50%;background:var(--pase-celeste);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:opacity 0.15s;letter-spacing:-0.02em}
+.pase-topbar-avatar:hover{opacity:0.85}
+.pase-topbar-dropdown{position:absolute;top:calc(100% + 6px);right:0;width:220px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;z-index:50}
+.pase-topbar-dd-header{padding:12px 14px}
+.pase-topbar-dd-name{font-size:13px;font-weight:500;color:var(--pase-text)}
+.pase-topbar-dd-role{font-size:11px;color:var(--pase-text-muted);margin-top:2px}
+.pase-topbar-dd-sep{height:0.5px;background:var(--pase-border);margin:0 10px}
+.pase-topbar-dd-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:none;background:none;color:var(--pase-text-muted);font-size:12px;font-family:var(--pase-font);cursor:pointer;transition:all 0.12s;text-align:left}
+.pase-topbar-dd-item:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
+.pase-topbar-dd-logout:hover{color:#dc2626}
+@media(max-width:1024px){.pase-topbar{top:0;right:0;padding:14px 60px 14px 56px}}
 ` + polishCss;

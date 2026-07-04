@@ -11,7 +11,7 @@ initConsoleCapture();
 import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso, mergeLocales, debeReintentarLocales, unirPermisos } from "./lib/auth";
 import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
-import { Sidebar, css } from "./components/Layout";
+import { Sidebar, TopBar, css } from "./components/Layout";
 import { SoporteWidget } from "./components/SoporteWidget";
 import Login from "./pages/Login";
 // Nota 2026-05-20: el chunk load error está cubierto via listener global en
@@ -863,6 +863,7 @@ function AppMain() {
             locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}
             tenant={tenant} tenantOverride={tenantOverride} onClearOverride={clearTenantOverride}/>
         </div>
+        <TopBar user={user} onLogout={logout} />
         <main className="main" style={{position:"relative",zIndex:1}}>
           <Suspense fallback={<PageLoader/>}>
             <Routes>

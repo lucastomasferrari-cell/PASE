@@ -6,7 +6,7 @@ import { listLocalesAccesibles, type LocalSimple } from '@/services/configServic
 import { useEffect, useState } from 'react';
 import { AdminCategoryItem } from './AdminCategoryItem';
 import { cn } from '@/lib/utils';
-import { db } from '@/lib/supabase';
+
 
 interface Props {
   onItemClick?: () => void;
@@ -67,27 +67,7 @@ export function AdminSidebar({ onItemClick, className }: Props) {
         ))}
       </nav>
 
-      {/* Footer usuario */}
-      <div className="cm-sb-foot">
-        <div className="cm-sb-foot-row">
-          <div className="cm-sb-avatar">
-            {user?.nombre?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div className="cm-sb-foot-info">
-            <div className="cm-sb-uname">{user?.nombre ?? 'Usuario'}</div>
-            <div className="cm-sb-urole">{user?.rol_pos ?? ''}</div>
-          </div>
-        </div>
-        <Link to="/pos" onClick={onItemClick} className="cm-sb-link">
-          ← Volver al POS
-        </Link>
-        <button
-          className="cm-sb-link"
-          onClick={() => void db.auth.signOut()}
-        >
-          Cerrar sesión
-        </button>
-      </div>
+      <div style={{ flex: 1 }} />
     </aside>
   );
 }

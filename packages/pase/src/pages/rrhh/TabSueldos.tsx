@@ -349,8 +349,7 @@ export function TabSueldos({
     let novDB: NovDB[] = [];
     let liqsArr: LiqEstado[] = [];
     if (empIds.length > 0) {
-      // Cambio Lucas 31-may: traer TODOS los adelantos pendientes del empleado,
-      // sin filtro de fecha (descontado=false ordenados por fecha).
+      // Adelantos pendientes (descontado=false).
       const { data: adsData } = await db.from("rrhh_adelantos")
         .select("id, empleado_id, fecha, monto, cuenta, descontado, auto_aplicar, concepto")
         .in("empleado_id", empIds)
@@ -380,6 +379,20 @@ export function TabSueldos({
           pagos_realizados: Number(liqAny?.pagos_realizados ?? 0),
         } as LiqEstado;
       });
+
+      // Bug fix: adelantos ya descontados (descontado=true) que están en
+      // adelantos_seleccionados de alguna novedad del mes. Sin ellos el total
+      // se recalcula sin restarlos y muestra un "falta" fantasma.
+      const adsIds = new Set(ads.map(a => a.id));
+      const missingIds = novDB
+        .flatMap(n => n.adelantos_seleccionados ?? [])
+        .filter(id => !adsIds.has(id));
+      if (missingIds.length > 0) {
+        const { data: adsExtra } = await db.from("rrhh_adelantos")
+          .select("id, empleado_id, fecha, monto, cuenta, descontado, auto_aplicar, concepto")
+          .in("id", missingIds);
+        if (adsExtra?.length) ads = [...ads, ...(adsExtra as Adel[])];
+      }
     }
 
     // ── Set TODO junto (sin await en el medio) → batched → init consistente ──
