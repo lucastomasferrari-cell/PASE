@@ -316,43 +316,7 @@ export function AdminMesas({ localId, tenantId }: { localId: number; tenantId: s
         </div>
       </div>
 
-      {/* Sectores (solo nombre + renombrar) */}
-      {sectores.length > 0 && (
-        <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
-          <p className="font-medium mb-1">Sectores <span className="text-ink-muted font-normal">({sectores.length})</span></p>
-          <p className="text-xs text-ink-muted mb-3">Es lo que ve el cliente al elegir dónde sentarse. Renombralos para corregir duplicados. El cupo (mín/máx de personas) se define en cada mesa, más abajo.</p>
-
-          <div className="divide-y divide-ink/5">
-            {porSector.map(([zona, ms]) => {
-              const cub = ms.filter((m) => m.reservable).reduce((s, m) => s + (m.capacidad ?? 0), 0);
-              const esRen = renombrar === zona;
-              const esSinSector = zona === 'Sin sector';
-              return (
-                <div key={zona} className="flex items-center gap-1.5 min-w-0 py-2">
-                  {esRen ? (
-                    <>
-                      <input value={renombreVal} autoFocus onChange={(e) => setRenombreVal(e.target.value)}
-                             onKeyDown={(e) => { if (e.key === 'Enter') void guardarRenombre(zona); if (e.key === 'Escape') setRenombrar(null); }}
-                             className="w-32 rounded border border-ink/15 px-1.5 py-1 text-sm" />
-                      <button onClick={() => void guardarRenombre(zona)} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-4 w-4" /></button>
-                      <button onClick={() => setRenombrar(null)} className="text-ink-muted hover:text-ink p-0.5"><X className="h-4 w-4" /></button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium text-sm truncate">{zona}</span>
-                      <span className="text-ink-muted text-xs shrink-0">· {ms.length} mesa{ms.length !== 1 ? 's' : ''} · {cub} cub.</span>
-                      {!esSinSector && (
-                        <button onClick={() => { setRenombrar(zona); setRenombreVal(zona); }} title="Renombrar sector"
-                                className="text-ink-muted hover:text-brand-600 p-0.5 ml-0.5 shrink-0"><Pencil className="h-3.5 w-3.5" /></button>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Sectores: renombrar inline (sin tarjeta separada) se hace desde la lista de mesas */}
 
       {/* Combinar mesas — grupos + combinaciones fijas */}
       {mesas.length >= 2 && (
