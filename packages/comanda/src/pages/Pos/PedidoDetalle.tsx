@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, MapPin, Home, Clock, CreditCard,
   Printer, MoreVertical, CheckCircle2, ChefHat, X, MessageSquareWarning, Edit3,
-  MessageCircle,
+  MessageCircle, Percent, Unlock,
 } from 'lucide-react';
 import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 import {
@@ -13,6 +13,7 @@ import {
   cancelarPedidoService, calcularEstadoPago,
   type PedidoDetalleData,
 } from '@/services/pedidosService';
+import { reabrirVenta } from '@/services/ventasService';
 import {
   notificarPedidoListo, notificarPedidoEntregado, notificarPedidoRechazado,
 } from '@/services/tiendaService';
@@ -24,6 +25,11 @@ import { VentaTimeline } from '@/components/VentaTimeline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
+import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { useAuthPos } from '@/lib/authPos';
 import { cn } from '@/lib/utils';
@@ -42,6 +48,8 @@ export function PedidoDetalle() {
   const [loading, setLoading] = useState(true);
   const [accionLoading, setAccionLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [reabrirOpen, setReabrirOpen] = useState(false);
 
   const reload = useCallback(async () => {
     if (!Number.isFinite(id) || id <= 0) {
@@ -158,6 +166,27 @@ export function PedidoDetalle() {
       navigate('/pos/pedidos');
     }
   };
+  const handleReabrirConfirmado = async (managerId: string, motivo: string) => {
+    setAccionLoading(true);
+    const r = await reabrirVenta(venta.id, managerId, motivo);
+    setAccionLoading(false);
+    setReabrirOpen(false);
+    if (r.error) toast.error(r.error);
+    else {
+      toast.success('Venta reabierta');
+      reload();
+    }
+  };
+
+  // Estados donde el pedido admite ediciones sin reabrir primero.
+  // Cobrada / entregada / anulada quedan bloqueadas para modificar+descuento
+  // (Reabrir es el camino para editar una cobrada).
+  const editable =
+    venta.estado !== 'cobrada' &&
+    venta.estado !== 'entregada' &&
+    venta.estado !== 'anulada';
+  const puedeReabrir = venta.estado === 'cobrada' || venta.estado === 'entregada';
+  const puedeAnular = venta.estado !== 'anulada';
 
   // ─── Cálculo total con comisión ────────────────────────────────────────────
   const subtotalItems = Number(venta.subtotal);
@@ -206,9 +235,47 @@ export function PedidoDetalle() {
             <Printer className="h-4 w-4 mr-1" />
             Reimprimir
           </Button>
-          <Button variant="outline" size="sm" disabled title="Próximamente">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" title="Más acciones">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => navigate(`/pos/venta/${venta.id}`)}
+                disabled={!editable}
+              >
+                <Edit3 className="h-4 w-4 mr-2" />
+                Modificar items
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setDiscountOpen(true)}
+                disabled={!editable}
+              >
+                <Percent className="h-4 w-4 mr-2" />
+                Aplicar descuento
+              </DropdownMenuItem>
+              {puedeReabrir && (
+                <DropdownMenuItem onClick={() => setReabrirOpen(true)}>
+                  <Unlock className="h-4 w-4 mr-2" />
+                  Reabrir venta
+                </DropdownMenuItem>
+              )}
+              {puedeAnular && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setCancelOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Anular pedido
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -479,6 +546,27 @@ export function PedidoDetalle() {
         onAuthorized={async ({ managerId, motivo }) => {
           await handleCancelarConfirmado(managerId, motivo);
         }}
+      />
+
+      {/* DIALOG: Reabrir venta cobrada/entregada requiere PIN manager. */}
+      <ManagerOverrideDialog
+        open={reabrirOpen}
+        onOpenChange={setReabrirOpen}
+        accion="Reabrir venta"
+        descripcion={`Reabrir pedido #${venta.numero_local}. Vuelve a estado editable y revierte el cobro (los pagos quedan pendientes).`}
+        onAuthorized={async ({ managerId, motivo }) => {
+          await handleReabrirConfirmado(managerId, motivo);
+        }}
+      />
+
+      {/* DIALOG: Aplicar descuento. Puede pedir PIN manager según monto/pct. */}
+      <DiscountDialog
+        open={discountOpen}
+        onOpenChange={setDiscountOpen}
+        ventaId={venta.id}
+        subtotal={Number(venta.subtotal)}
+        total={Number(venta.total)}
+        onAplicado={() => { setDiscountOpen(false); reload(); }}
       />
     </div>
   );
