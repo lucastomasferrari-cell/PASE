@@ -12,6 +12,17 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(dirname, './src') },
   },
+  server: {
+    // En prod, vercel.json reescribe /api/* → pase-yndx.vercel.app (ahí viven
+    // los endpoints serverless). En dev replicamos eso con un proxy para que
+    // el flujo de reserva pública funcione igual que en producción.
+    proxy: {
+      '/api': {
+        target: 'https://pase-yndx.vercel.app',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],

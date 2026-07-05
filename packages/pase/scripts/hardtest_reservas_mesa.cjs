@@ -65,12 +65,13 @@ async function expectErr(codeSubstr, fn) {
 
   console.log("\n── G1. Disponibilidad / límites por sector ──");
   await test("check Privado 4p → OK", async () => { const r = await check({ fh: T20, personas: 4, zona: PRIV }); assert(r.disponible === true, "no dispo: " + r.motivo); });
-  await test("check Privado 3p → SIN_MESA (min 4)", async () => { const r = await check({ fh: T20, personas: 3, zona: PRIV }); assert(r.disponible === false && r.motivo === "SIN_MESA", r.motivo); });
+  // (modelo nuevo 03-jul: mín por MESA blando + grupos con max_sillas_vacias — el sector ya no limita)
+  await test("check Privado 3p → OK (mín 4 por mesa es blando; grupo tolera 3 vacías)", async () => { const r = await check({ fh: T20, personas: 3, zona: PRIV }); assert(r.disponible === true, r.motivo); });
   await test("check Privado 7p → SIN_MESA (max 6)", async () => { const r = await check({ fh: T20, personas: 7, zona: PRIV }); assert(r.disponible === false, r.motivo); });
   await test("check Mesas Altas 2p → OK", async () => { const r = await check({ fh: T20, personas: 2, zona: ALTAS }); assert(r.disponible === true, r.motivo); });
   await test("check Mesas Altas 3p → SIN_MESA (max 2)", async () => { const r = await check({ fh: T20, personas: 3, zona: ALTAS }); assert(r.disponible === false && r.motivo === "SIN_MESA", r.motivo); });
   await test("check Barra 3p → OK", async () => { const r = await check({ fh: T20, personas: 3, zona: BARRA }); assert(r.disponible === true, r.motivo); });
-  await test("check Barra 4p → SIN_MESA (max 3)", async () => { const r = await check({ fh: T20, personas: 4, zona: BARRA }); assert(r.disponible === false, r.motivo); });
+  await test("check Barra 4p → OK (grupo barra: 4 banquetas contiguas, 0 vacías)", async () => { const r = await check({ fh: T20, personas: 4, zona: BARRA }); assert(r.disponible === true, r.motivo); });
   await test("check sin zona 2p → OK", async () => { const r = await check({ fh: T20, personas: 2 }); assert(r.disponible === true, r.motivo); });
   await test("check anticipación insuficiente", async () => { const r = await check({ fh: `${D} 20:00:00-03:00`, personas: 2 }); assert(true); /* covered abajo */
     const near = await one(`select * from fn_check_disponibilidad_reserva($1, now()+interval '30 min',2,null)`, [SLUG]); assert(near.motivo === "ANTICIPACION_INSUFICIENTE", near.motivo); });
@@ -300,6 +301,83 @@ async function expectErr(codeSubstr, fn) {
     await q(`select fn_editar_reserva($1,$2)`, [a, "A editado"]); // solo nombre
     const st = await one(`select mesa_id from reservas where id=$1`, [a]);
     assert(String(st.mesa_id) === String(b1), "perdió la mesa sin motivo");
+  });
+
+  console.log("\n── G11. Grupos combinables + máx sillas vacías (config real Maneki) ──");
+  // Privado: 3 sillones cap 6 (mín 4), grupo máx 3 vacías. Barra: 8 banquetas cap 1, grupo 0 vacías.
+  await test("Privado 7p → SIN_MESA (2 sillones=12, 5 vacías > 3)", async () => {
+    await expectErr("SIN_MESA", () => crearPub({ fh: T20, personas: 7, zona: PRIV }));
+  });
+  await test("Privado 9p → combina 2 sillones (3 vacías = tope)", async () => {
+    const r = await crearPub({ fh: T20, personas: 9, zona: PRIV });
+    const row = await one(`select array_length(mesas_ids,1) n from reservas where id=$1`, [r.id]);
+    assert(row.n === 2, "mesas=" + row.n);
+  });
+  await test("Privado 12p → 2 sillones justos (0 vacías)", async () => {
+    const r = await crearPub({ fh: T20, personas: 12, zona: PRIV });
+    const row = await one(`select array_length(mesas_ids,1) n from reservas where id=$1`, [r.id]);
+    assert(row.n === 2, "mesas=" + row.n);
+  });
+  await test("Privado 13p → SIN_MESA (3 sillones=18, 5 vacías > 3)", async () => {
+    await expectErr("SIN_MESA", () => crearPub({ fh: T20, personas: 13, zona: PRIV }));
+  });
+  await test("Privado 15p → combina los 3 sillones (3 vacías = tope)", async () => {
+    const r = await crearPub({ fh: T20, personas: 15, zona: PRIV });
+    const row = await one(`select array_length(mesas_ids,1) n from reservas where id=$1`, [r.id]);
+    assert(row.n === 3, "mesas=" + row.n);
+  });
+  await test("Barra 5p → 5 banquetas contiguas (0 vacías exacto)", async () => {
+    const r = await crearPub({ fh: T20, personas: 5, zona: BARRA });
+    const row = await one(`select mesas_ids from reservas where id=$1`, [r.id]);
+    assert((row.mesas_ids || []).length === 5, "banquetas=" + (row.mesas_ids || []).length);
+    // contiguas: ids consecutivos en el orden del grupo (Banqueta 1..8 = ids crecientes)
+    const ids = row.mesas_ids.map(Number).sort((a, b) => a - b);
+    assert(ids[ids.length - 1] - ids[0] === 4, "no contiguas: " + JSON.stringify(ids));
+  });
+  await test("banqueta del medio ocupada corta el tramo: 6p → SIN_MESA", async () => {
+    // ocupo Banqueta 4 → tramos libres: B1-B3 (3) y B5-B8 (4). Nadie alcanza 6.
+    const b4 = (await one(`select id from mesas where local_id=$1 and zona=$2 and numero='Banqueta 4'`, [LOCAL, BARRA])).id;
+    await asUser(DUENO);
+    const occ = (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "Occ", "1190001111", null, T20, 1, null, null])).id;
+    await q(`select fn_asignar_mesa_reserva($1,$2)`, [occ, b4]);
+    await expectErr("SIN_MESA", () => crearPub({ fh: T20, personas: 6, zona: BARRA }));
+    // pero 4p sí entra (B5-B8)
+    const r4 = await crearPub({ tel: "1190002222", fh: T20, personas: 4, zona: BARRA });
+    const row = await one(`select mesas_ids from reservas where id=$1`, [r4.id]);
+    assert((row.mesas_ids || []).length === 4, "4p no entró en B5-B8");
+  });
+  await test("grupo desactivado (activa=false) → no combina", async () => {
+    await q(`update reservas_combinaciones set activa=false where local_id=$1 and tipo='grupo'`, [LOCAL]);
+    await expectErr("SIN_MESA", () => crearPub({ fh: T20, personas: 9, zona: PRIV }));
+  });
+  await test("toggle permite_combinar OFF → no combina aunque haya grupos", async () => {
+    await q(`update comanda_local_settings set reservas_permite_combinar=false where local_id=$1`, [LOCAL]);
+    await expectErr("SIN_MESA", () => crearPub({ fh: T20, personas: 9, zona: PRIV }));
+  });
+
+  console.log("\n── G12. Fechas / timezone (borde UTC) ──");
+  await test("reserva 22:00 AR (=01:00 UTC día sig.) queda en el día correcto para slots", async () => {
+    // creo a las 22:00 del día D; el slot 22:00 del día D debe reflejar la ocupación
+    for (let i = 0; i < 3; i++) await crearPub({ tel: "1160001" + i, fh: T22, personas: 1, zona: BARRA });
+    const s = await rows(`select * from fn_slots_disponibilidad_publico($1,$2,$3,$4)`, [SLUG, D, 6, BARRA]);
+    const s22 = s.find(r => r.hora === "22:00");
+    assert(s22, "no vino slot 22:00: " + JSON.stringify(s.map(r => r.hora)));
+    // quedan 5 banquetas libres → 6 personas NO deberían entrar
+    assert(s22.disponible === false, "22:00 con 3 banquetas tomadas dice disponible para 6p");
+    const s20 = s.find(r => r.hora === "20:00");
+    assert(s20 && s20.disponible === true, "20:00 debería estar libre para 6p");
+  });
+  await test("reserva 22:00 AR aparece al filtrar por fecha AR (no por fecha UTC)", async () => {
+    const r = await crearPub({ tel: "1160009999", fh: T22, personas: 1, zona: BARRA });
+    // el filtro correcto es por rango AR — así filtra el admin (Diario / Reservas)
+    const enDia = await one(
+      `select count(*)::int n from reservas where id=$1
+        and fecha_hora >= ($2 || ' 00:00:00-03:00')::timestamptz
+        and fecha_hora <  ($2 || ' 00:00:00-03:00')::timestamptz + interval '1 day'`, [r.id, D]);
+    assert(enDia.n === 1, "no aparece en el día AR");
+    // trampa clásica: ::date en UTC lo tira al día siguiente — documentado que NO hay que filtrar así
+    const utcDate = await one(`select (fecha_hora at time zone 'UTC')::date d from reservas where id=$1`, [r.id]);
+    assert(String(utcDate.d.toISOString()).slice(0, 10) !== D, "(sanity) 22:00-03 es día sig. en UTC");
   });
 
   await q("ROLLBACK");
