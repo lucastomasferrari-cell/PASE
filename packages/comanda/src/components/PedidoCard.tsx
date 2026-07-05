@@ -6,8 +6,32 @@ import { CanalBadge } from './CanalBadge';
 import { BadgePago } from './BadgePago';
 import { UrgencyTimer } from './UrgencyTimer';
 import { formatARS } from '@/lib/format';
-import { calcularEstadoPago } from '@/services/pedidosService';
-import type { Canal, VentaPos, VentaPosItem, VentaPosPago } from '@/types/database';
+import { calcularEstadoPago, grupoDePedido, type PedidoGrupo } from '@/services/pedidosService';
+import type { Canal, EstadoVenta, VentaPos, VentaPosItem, VentaPosPago } from '@/types/database';
+
+// Label + color del badge de estado que se pinta al lado del #número.
+// Mismo criterio en las 5 tabs — en "Todos" es la señal visual clave; en las
+// tabs filtradas es redundante pero consistente y ayuda a distinguir sub-estados
+// dentro de "Aceptadas" (en carga vs en cocina vs listo vs en camino).
+const ESTADO_BADGE: Record<EstadoVenta, { label: string; classes: string }> = {
+  abierta:             { label: 'En carga',   classes: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' },
+  necesita_aprobacion: { label: 'Por aceptar', classes: 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border-amber-200 dark:border-amber-900' },
+  programada:          { label: 'Programada', classes: 'bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-200 border-sky-200 dark:border-sky-900' },
+  enviada:             { label: 'En cocina',  classes: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' },
+  lista:               { label: 'Lista',      classes: 'bg-green-200 text-green-900 dark:bg-green-900/60 dark:text-green-100 border-green-300 dark:border-green-800' },
+  en_camino:           { label: 'En camino',  classes: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' },
+  entregada:           { label: 'Entregada',  classes: 'bg-muted text-muted-foreground border-border' },
+  cobrada:             { label: 'Cobrada',    classes: 'bg-muted text-muted-foreground border-border' },
+  anulada:             { label: 'Anulada',    classes: 'bg-destructive/10 text-destructive border-destructive/30' },
+};
+
+// Cuando programada_para es futuro el grupo lógico es "programadas" (aunque el
+// estado sea 'necesita_aprobacion' o 'abierta'): mostramos ese label para que la
+// card sea coherente con la tab en la que aparece.
+function badgeEstado(estado: EstadoVenta, grupo: PedidoGrupo): { label: string; classes: string } {
+  if (grupo === 'programadas') return ESTADO_BADGE.programada;
+  return ESTADO_BADGE[estado] ?? ESTADO_BADGE.abierta;
+}
 
 // Mapeo de slug de canal a tonalidad del HEADER de la card (no del badge — la card
 // entera se "tinta" en suave para identificación instantánea).
@@ -79,6 +103,17 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
         <div className="flex items-center gap-2 min-w-0">
           {canal && <CanalBadge slug={canal.slug} label={canal.nombre} emoji={canal.emoji} />}
           <strong className="text-sm font-semibold tabular-nums">#{pedido.numero_local}</strong>
+          {(() => {
+            const b = badgeEstado(pedido.estado, grupoDePedido(pedido.estado, pedido.programada_para));
+            return (
+              <span className={cn(
+                'inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium border shrink-0',
+                b.classes,
+              )}>
+                {b.label}
+              </span>
+            );
+          })()}
         </div>
         <BadgePago estadoPago={estadoPago} tipoEntrega={pedido.tipo_entrega} />
       </div>

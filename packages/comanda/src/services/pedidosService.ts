@@ -2,17 +2,44 @@ import { db } from '../lib/supabase';
 import type { VentaPos, EstadoVenta, VentaPosItem, VentaPosPago, Canal } from '../types/database';
 import { translateError } from '../lib/errors';
 
-// Mapeo lógico de "tab" a estado de venta para el feed Pedidos.
-// Nota: 'activos' = enviada (en preparación). 'listos' = lista (esperando retiro/entrega).
-// 'completados' = entregada/cobrada.
-export type PedidoTab = 'necesita_aprobacion' | 'programados' | 'activos' | 'listos' | 'completados';
+// Mapeo lógico de tab → estado de venta para el feed Pedidos.
+// Taxonomía nueva (2026-07-05): 4 estados operativos + "Todos".
+//  - por_aceptar → necesita_aprobacion (esperando ok del comerciante).
+//  - programadas → cualquier pedido con programada_para futura.
+//  - aceptadas   → abierta / enviada / lista / en_camino (todo el ciclo activo).
+//  - cerradas    → entregada / cobrada.
+// Anuladas se excluyen por default en todas las tabs (se veran en un filtro
+// aparte cuando exista).
+export type PedidoTab = 'todos' | 'por_aceptar' | 'programadas' | 'aceptadas' | 'cerradas';
 
-const TAB_TO_ESTADOS: Record<PedidoTab, EstadoVenta[]> = {
-  necesita_aprobacion: ['necesita_aprobacion'],
-  programados:         ['programada'],
-  activos:             ['enviada'],
-  listos:              ['lista'],
-  completados:         ['entregada', 'cobrada'],
+const ESTADOS_ACEPTADAS: EstadoVenta[] = ['abierta', 'enviada', 'lista', 'en_camino'];
+const ESTADOS_CERRADAS: EstadoVenta[] = ['entregada', 'cobrada'];
+// Estados que "Todos" considera visibles (todo menos anulada).
+const ESTADOS_VISIBLES: EstadoVenta[] = [
+  'abierta', 'necesita_aprobacion', 'programada',
+  'enviada', 'lista', 'en_camino',
+  'entregada', 'cobrada',
+];
+
+// Grupo lógico de un pedido → drive del color/tag en la card y del orden en "Todos".
+export type PedidoGrupo = 'por_aceptar' | 'programadas' | 'aceptadas' | 'cerradas';
+
+export function grupoDePedido(estado: EstadoVenta, programadaPara: string | null): PedidoGrupo {
+  const futuro = programadaPara && new Date(programadaPara).getTime() > Date.now();
+  if (futuro) return 'programadas';
+  if (estado === 'necesita_aprobacion') return 'por_aceptar';
+  if (ESTADOS_ACEPTADAS.includes(estado)) return 'aceptadas';
+  if (ESTADOS_CERRADAS.includes(estado)) return 'cerradas';
+  // 'programada' con fecha pasada o nula: la tratamos como aceptada (ya
+  // vencio la programacion, hay que operarla).
+  return 'aceptadas';
+}
+
+const GRUPO_PRIORIDAD: Record<PedidoGrupo, number> = {
+  por_aceptar: 1,
+  programadas: 2,
+  aceptadas: 3,
+  cerradas: 4,
 };
 
 // Pedido enriquecido con items embebidos — usado para resumen en cards (mostrar 3 items + "y N más").
@@ -26,6 +53,7 @@ export async function listPedidosPorTab(
   localId: number,
   tab: PedidoTab,
 ): Promise<{ data: PedidoConItems[]; error: string | null }> {
+  const ahoraIso = new Date().toISOString();
   let q = db
     .from('ventas_pos')
     .select('*, items:ventas_pos_items(*, item:items(nombre, emoji))')
@@ -33,37 +61,55 @@ export async function listPedidosPorTab(
     .eq('modo', 'pedidos')
     .is('deleted_at', null);
 
-  // Tab "programados" (Lucas 2026-05-19): un pedido es "programado" si
-  // tiene programada_para futuro Y todavía no fue entregado/cobrado.
-  // Esto incluye los que están en 'necesita_aprobacion' con fecha futura
-  // (caso típico del marketplace: cliente pidió para mañana, comerciante
-  // todavía no aprobó).
-  // El tab "necesita_aprobacion" excluye los programados — solo muestra
-  // los que son para AHORA (sin programada_para o vencida).
-  if (tab === 'programados') {
-    q = q.in('estado', ['necesita_aprobacion', 'programada', 'enviada', 'lista'])
-         .gt('programada_para', new Date().toISOString())
+  if (tab === 'todos') {
+    // Todo lo visible (no anuladas). Se ordena en cliente por grupo + created_at.
+    q = q.in('estado', ESTADOS_VISIBLES).order('created_at', { ascending: false });
+  } else if (tab === 'programadas') {
+    // Cualquier pedido con programada_para futura, sin importar el estado
+    // (salvo cerradas — si ya se cobró/entregó no está "programado").
+    q = q.in('estado', [...ESTADOS_ACEPTADAS, 'necesita_aprobacion', 'programada'])
+         .gt('programada_para', ahoraIso)
          .order('programada_para', { ascending: true });
-  } else if (tab === 'necesita_aprobacion') {
-    // Solo pedidos para AHORA (sin programada_para futura).
+  } else if (tab === 'por_aceptar') {
+    // Sólo pedidos para AHORA (sin programada_para futura). Los que tienen
+    // fecha futura viven en "Programadas" hasta que llega el momento.
     q = q.eq('estado', 'necesita_aprobacion')
-         .or(`programada_para.is.null,programada_para.lte.${new Date().toISOString()}`)
+         .or(`programada_para.is.null,programada_para.lte.${ahoraIso}`)
+         .order('created_at', { ascending: false });
+  } else if (tab === 'aceptadas') {
+    // En ciclo activo Y no programada a futuro. Incluye 'abierta' (cajero
+    // cargando items) — con esto ya no se pierden pedidos post-Nuevo.
+    q = q.in('estado', ESTADOS_ACEPTADAS)
+         .or(`programada_para.is.null,programada_para.lte.${ahoraIso}`)
          .order('created_at', { ascending: false });
   } else {
-    const estados = TAB_TO_ESTADOS[tab];
-    q = q.in('estado', estados).order('created_at', { ascending: false });
+    // cerradas: sin filtro de programada_para (ya se resolvió).
+    q = q.in('estado', ESTADOS_CERRADAS).order('created_at', { ascending: false });
   }
 
-  const { data, error } = await q.limit(100);
+  const { data, error } = await q.limit(tab === 'todos' ? 200 : 100);
   if (error) return { data: [], error: translateError(error) };
   const cleaned = (data ?? []).map((row) => {
     const r = row as PedidoConItems;
     return { ...r, items: (r.items ?? []).filter((it) => it.deleted_at === null) };
   });
+  // "Todos" reordena por grupo (por_aceptar → programadas → aceptadas →
+  // cerradas) manteniendo created_at desc dentro de cada grupo. Los otros
+  // tabs ya vienen ordenados por SQL.
+  if (tab === 'todos') {
+    cleaned.sort((a, b) => {
+      const ga = GRUPO_PRIORIDAD[grupoDePedido(a.estado, a.programada_para)];
+      const gb = GRUPO_PRIORIDAD[grupoDePedido(b.estado, b.programada_para)];
+      if (ga !== gb) return ga - gb;
+      return new Date(b.abierta_at).getTime() - new Date(a.abierta_at).getTime();
+    });
+  }
   return { data: cleaned, error: null };
 }
 
 // Counters por tab (para badges en navegación).
+// "cerradas" no lleva contador (rutinariamente grande; no aporta info accionable).
+// "todos" tampoco — su valor es el total activo, ya visible sumando los tres.
 export async function getCountersPedidos(localId: number): Promise<Record<PedidoTab, number>> {
   const { data } = await db
     .from('ventas_pos')
@@ -71,26 +117,15 @@ export async function getCountersPedidos(localId: number): Promise<Record<Pedido
     .eq('local_id', localId)
     .eq('modo', 'pedidos')
     .is('deleted_at', null)
-    .in('estado', ['necesita_aprobacion', 'programada', 'enviada', 'lista']);
+    .in('estado', [...ESTADOS_ACEPTADAS, 'necesita_aprobacion', 'programada']);
   const out: Record<PedidoTab, number> = {
-    necesita_aprobacion: 0, programados: 0, activos: 0, listos: 0, completados: 0,
+    todos: 0, por_aceptar: 0, programadas: 0, aceptadas: 0, cerradas: 0,
   };
-  const ahora = Date.now();
   for (const row of data ?? []) {
     const r = row as { estado: EstadoVenta; programada_para: string | null };
-    const esFuturo = r.programada_para && new Date(r.programada_para).getTime() > ahora;
-    // Si tiene programada_para futuro, va al tab "programados" (sin importar estado).
-    if (esFuturo) {
-      out.programados++;
-      continue;
-    }
-    // Sino, va al tab que corresponda a su estado.
-    for (const [tab, estados] of Object.entries(TAB_TO_ESTADOS)) {
-      if (tab === 'programados') continue;
-      if (estados.includes(r.estado)) {
-        out[tab as PedidoTab] = (out[tab as PedidoTab] ?? 0) + 1;
-      }
-    }
+    const g = grupoDePedido(r.estado, r.programada_para);
+    if (g === 'cerradas') continue;
+    out[g]++;
   }
   return out;
 }

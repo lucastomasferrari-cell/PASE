@@ -82,15 +82,18 @@ describe('calcularEstadoPago', () => {
 });
 
 describe('getCountersPedidos', () => {
-  it('agrupa estados a tabs y devuelve counters', async () => {
+  it('agrupa estados a la taxonomía nueva (por_aceptar / programadas / aceptadas)', async () => {
+    const futuro = new Date(Date.now() + 3_600_000).toISOString();
     const inFn = vi.fn().mockResolvedValue({
       data: [
-        { estado: 'necesita_aprobacion' },
-        { estado: 'necesita_aprobacion' },
-        { estado: 'enviada' },
-        { estado: 'lista' },
-        { estado: 'lista' },
-        { estado: 'lista' },
+        { estado: 'necesita_aprobacion', programada_para: null },
+        { estado: 'necesita_aprobacion', programada_para: null },
+        { estado: 'necesita_aprobacion', programada_para: futuro }, // → programadas
+        { estado: 'abierta', programada_para: null },   // → aceptadas
+        { estado: 'enviada', programada_para: null },   // → aceptadas
+        { estado: 'lista', programada_para: null },     // → aceptadas
+        { estado: 'lista', programada_para: null },     // → aceptadas
+        { estado: 'programada', programada_para: futuro }, // → programadas
       ],
       error: null,
     });
@@ -100,9 +103,10 @@ describe('getCountersPedidos', () => {
     mockFrom.mockReturnValue({ select });
 
     const counters = await getCountersPedidos(1);
-    expect(counters.necesita_aprobacion).toBe(2);
-    expect(counters.activos).toBe(1);
-    expect(counters.listos).toBe(3);
-    expect(counters.programados).toBe(0);
+    expect(counters.por_aceptar).toBe(2);
+    expect(counters.programadas).toBe(2);
+    expect(counters.aceptadas).toBe(4);
+    expect(counters.cerradas).toBe(0);
+    expect(counters.todos).toBe(0);
   });
 });

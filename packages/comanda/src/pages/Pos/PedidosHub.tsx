@@ -32,11 +32,11 @@ import { cn } from '@/lib/utils';
 // Las cards navegan a `/pos/pedidos/:ventaId` (vista detallada con sidebar + cálculo + footer).
 
 const TABS: Array<{ key: PedidoTab; label: string }> = [
-  { key: 'necesita_aprobacion', label: 'Por aprobar' },
-  { key: 'programados',         label: 'Programados' },
-  { key: 'activos',             label: 'En cocina' },
-  { key: 'listos',              label: 'Listos' },
-  { key: 'completados',         label: 'Completados' },
+  { key: 'todos',       label: 'Todos' },
+  { key: 'por_aceptar', label: 'Por aceptar' },
+  { key: 'programadas', label: 'Programadas' },
+  { key: 'aceptadas',   label: 'Aceptadas' },
+  { key: 'cerradas',    label: 'Cerradas' },
 ];
 
 // Sprint optim egress 2026-05-16 (sesión 2): subido de 30s a 120s.
@@ -49,11 +49,11 @@ export function PedidosHub() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
-  const [tab, setTab] = useState<PedidoTab>('activos');
+  const [tab, setTab] = useState<PedidoTab>('todos');
   const [pedidos, setPedidos] = useState<PedidoConItems[]>([]);
   const [canales, setCanales] = useState<Canal[]>([]);
   const [counters, setCounters] = useState<Record<PedidoTab, number>>({
-    necesita_aprobacion: 0, programados: 0, activos: 0, listos: 0, completados: 0,
+    todos: 0, por_aceptar: 0, programadas: 0, aceptadas: 0, cerradas: 0,
   });
   const [loading, setLoading] = useState(true);
   const [nuevoPedidoOpen, setNuevoPedidoOpen] = useState(false);
@@ -103,11 +103,11 @@ export function PedidosHub() {
     setCanales(cRes.data);
 
     const aprobacionPrev = prevAprobacionCountRef.current;
-    const aprobacionNuevo = ctsRes.necesita_aprobacion;
+    const aprobacionNuevo = ctsRes.por_aceptar;
     if (aprobacionPrev !== null && aprobacionNuevo > aprobacionPrev) {
       const delta = aprobacionNuevo - aprobacionPrev;
       notify(
-        `🛵 ${delta} pedido${delta > 1 ? 's' : ''} nuevo${delta > 1 ? 's' : ''} por aprobar`,
+        `🛵 ${delta} pedido${delta > 1 ? 's' : ''} nuevo${delta > 1 ? 's' : ''} por aceptar`,
         'Tocá para revisar y aceptar.',
       );
     }
@@ -131,11 +131,11 @@ export function PedidosHub() {
     setPedidos(pRes.data);
 
     const aprobacionPrev = prevAprobacionCountRef.current;
-    const aprobacionNuevo = ctsRes.necesita_aprobacion;
+    const aprobacionNuevo = ctsRes.por_aceptar;
     if (aprobacionPrev !== null && aprobacionNuevo > aprobacionPrev) {
       const delta = aprobacionNuevo - aprobacionPrev;
       notify(
-        `🛵 ${delta} pedido${delta > 1 ? 's' : ''} nuevo${delta > 1 ? 's' : ''} por aprobar`,
+        `🛵 ${delta} pedido${delta > 1 ? 's' : ''} nuevo${delta > 1 ? 's' : ''} por aceptar`,
         'Tocá para revisar y aceptar.',
       );
     }
@@ -244,10 +244,10 @@ export function PedidosHub() {
                   {c > 0 && (
                     <span className={cn(
                       'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold relative',
-                      t.key === 'necesita_aprobacion' ? 'bg-warning text-warning-foreground' : 'bg-muted text-muted-foreground',
+                      t.key === 'por_aceptar' ? 'bg-warning text-warning-foreground' : 'bg-muted text-muted-foreground',
                     )}>
                       {c}
-                      {t.key === 'necesita_aprobacion' && (
+                      {t.key === 'por_aceptar' && (
                         <span className="absolute inset-0 rounded-full bg-warning/40 animate-ping pointer-events-none" />
                       )}
                     </span>
@@ -362,7 +362,7 @@ export function PedidosHub() {
                     key={p.id}
                     pedido={p}
                     canales={canales}
-                    variant={t.key === 'listos' ? 'listo' : 'default'}
+                    variant={p.estado === 'lista' ? 'listo' : 'default'}
                     onClick={() => navigate(`/pos/pedidos/${p.id}`)}
                     onAccion={async () => {
                       let r;
@@ -526,11 +526,11 @@ function NotifierToggle({ muted, setMuted, permState, askPermission }: {
 // ─── Empty States ────────────────────────────────────────────────────────────
 function EmptyState({ tab }: { tab: PedidoTab }) {
   const messages: Record<PedidoTab, { titulo: string; subtitulo: string }> = {
-    necesita_aprobacion: { titulo: 'Todo al día', subtitulo: 'No hay pedidos esperando aprobación.' },
-    programados:         { titulo: 'Sin programados', subtitulo: 'No hay pedidos programados para más tarde.' },
-    activos:             { titulo: 'Cocina libre', subtitulo: 'No hay pedidos en preparación.' },
-    listos:              { titulo: 'Sin pedidos listos', subtitulo: 'Cuando un pedido esté listo aparecerá acá.' },
-    completados:         { titulo: 'Sin completados', subtitulo: 'Los pedidos entregados van apareciendo acá.' },
+    todos:       { titulo: 'Sin pedidos', subtitulo: 'Todavía no hay pedidos en el turno.' },
+    por_aceptar: { titulo: 'Todo al día', subtitulo: 'No hay pedidos esperando aceptación.' },
+    programadas: { titulo: 'Sin programados', subtitulo: 'No hay pedidos programados para más tarde.' },
+    aceptadas:   { titulo: 'Cocina libre', subtitulo: 'No hay pedidos activos.' },
+    cerradas:    { titulo: 'Sin cerrados', subtitulo: 'Los pedidos entregados y cobrados van apareciendo acá.' },
   };
   const m = messages[tab];
   return (
