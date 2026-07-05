@@ -75,7 +75,20 @@ import { listMesasConVentas, type MesaConVenta } from '../../services/mesasServi
 import { abrirVenta } from '../../services/ventasService';
 import { listCanales } from '../../services/canalesService';
 import { Stepper } from '../../components/Stepper';
-import { formatARS, relativoCorto } from '../../lib/format';
+import { formatARS } from '../../lib/format';
+
+// Formato compacto para el tile de mesa: 43m / 1h05 / 2h. "hace 43 min" era
+// muy largo para el ancho de la tile y wrapeaba escapándose de los rounded
+// corners (bug 05-jul, ver screenshot Lucas).
+function relativoCortoMesa(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return '<1m';
+  const minTot = Math.floor(ms / 60_000);
+  if (minTot < 60) return `${minTot}m`;
+  const h = Math.floor(minTot / 60);
+  const m = minTot % 60;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`;
+}
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -449,7 +462,7 @@ function MesaTile({ mesa, onClick, density = 'normal', fill = false }: { mesa: M
       onClick={onClick}
       title={styles.label}
       className={cn(
-        'border-2 flex flex-col justify-center items-center text-center relative',
+        'border-2 flex flex-col justify-center items-center text-center relative overflow-hidden',
         cfg.padding,
         // En el plano (fill) la tile ocupa la caja con el tamaño por mesa; en el
         // grid (sin posición) usa el minHeight de la densidad.
@@ -461,22 +474,22 @@ function MesaTile({ mesa, onClick, density = 'normal', fill = false }: { mesa: M
         styles.border,
       )}
     >
-      <div className={cn('font-semibold', cfg.numero)}>{mesa.numero}</div>
-      {mesa.zona && <div className={cn('opacity-70', cfg.zona)}>{mesa.zona}</div>}
+      <div className={cn('font-semibold leading-tight', cfg.numero)}>{mesa.numero}</div>
+      {mesa.zona && <div className={cn('opacity-70 leading-tight', cfg.zona)}>{mesa.zona}</div>}
       {mesa.venta_abierta_id !== null && (
         <>
-          <div className={cn('font-medium mt-1 tabular-nums', cfg.meta)}>
+          <div className={cn('font-medium mt-1 tabular-nums whitespace-nowrap leading-tight', cfg.meta)}>
             {formatARS(mesa.venta_total)}
           </div>
           {mesa.venta_abierta_at && (
             <div className={cn(
-              'tabular-nums',
+              'tabular-nums whitespace-nowrap leading-tight',
               cfg.meta,
               bucket === 'urgente' && 'font-bold',
               bucket === 'atencion' && 'font-semibold',
             )}>
               {styles.icon && <span className="mr-0.5">{styles.icon}</span>}
-              {relativoCorto(mesa.venta_abierta_at)}
+              {relativoCortoMesa(mesa.venta_abierta_at)}
             </div>
           )}
         </>
