@@ -120,6 +120,26 @@ export async function crearReservaPublica(args: {
   }
 }
 
+// Anotarse en la LISTA DE ESPERA pública: cuando el widget no tiene lugar,
+// el cliente deja nombre + teléfono y la anotación cae en el panel del local
+// (MESA → Lista de espera). RPC DEFINER con anti-spam propio (3 activas por
+// teléfono + ráfaga 10/5min por local).
+export async function anotarseEspera(args: {
+  slug: string; nombre: string; telefono: string; personas: number;
+  fechaDeseada?: string | null; notas?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await db().rpc('fn_waitlist_publica', {
+    p_slug: args.slug,
+    p_nombre: args.nombre,
+    p_telefono: args.telefono,
+    p_personas: args.personas,
+    p_fecha_deseada: args.fechaDeseada ?? null,
+    p_notas: args.notas ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 // Dispara la confirmación automática al cliente (email vía Resend; WA cuando
 // esté la plantilla Meta). Fire-and-forget: si falla, no rompe la reserva.
 export async function notificarConfirmacionReserva(reservaId: number): Promise<void> {

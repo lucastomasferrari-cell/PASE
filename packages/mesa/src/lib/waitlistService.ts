@@ -17,6 +17,9 @@ export interface WaitlistEntry {
   created_at: string;
   llamado_at: string | null;
   sentado_at: string | null;
+  // Anotación online (widget público): qué día quería el cliente. Walk-ins NULL.
+  fecha_deseada: string | null;
+  origen: 'walkin' | 'online';
 }
 
 export async function listWaitlistActiva(localId: number): Promise<{ data: WaitlistEntry[]; error: string | null }> {

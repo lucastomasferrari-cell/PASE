@@ -73,10 +73,16 @@ export function AdminEspera({ localId, tenantId, localNombre }: Props) {
                   {w.estado === 'llamado' && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Llamado</span>
                   )}
+                  {w.origen === 'online' && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 border border-brand-500/20">Online</span>
+                  )}
                 </div>
                 <div className="text-xs text-ink-muted flex items-center gap-2 mt-0.5">
                   <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{esperaMin(w.created_at)} min</span>
                   {w.cliente_telefono && <span>· {w.cliente_telefono}</span>}
+                  {w.fecha_deseada && (
+                    <span>· pidió el {new Date(`${w.fecha_deseada}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                  )}
                 </div>
                 {w.notas && <div className="text-xs text-ink-soft italic mt-0.5">{w.notas}</div>}
               </div>

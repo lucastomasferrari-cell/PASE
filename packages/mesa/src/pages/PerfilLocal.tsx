@@ -15,7 +15,7 @@ import {
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { supabaseConfigurado } from '@/lib/supabase';
 import {
-  getPerfil, crearReservaPublica, notificarConfirmacionReserva,
+  getPerfil, crearReservaPublica, notificarConfirmacionReserva, anotarseEspera,
   getZonasReservables, getSlotsDisponibilidad, inscribirEventoYPagar, comprarGiftcardYPagar,
   type PerfilLocalData, type SlotDisponibilidad,
 } from '@/lib/perfilService';
@@ -265,6 +265,8 @@ const MOTIVOS_RESERVA: Record<string, string> = {
   NOMBRE_REQUERIDO: 'Ingresá tu nombre.',
   DEMASIADAS_RESERVAS: 'Ya tenés varias reservas activas con ese teléfono.',
   DEMASIADO_RAPIDO: 'Estamos recibiendo muchas reservas. Probá en un momento.',
+  DEMASIADAS_ANOTACIONES: 'Ya estás anotado en la lista de espera con ese teléfono.',
+  FECHA_INVALIDA: 'Revisá la fecha elegida.',
 };
 function traducirMotivoReserva(codigo?: string | null): string {
   if (!codigo) return 'No se pudo completar la reserva. Probá otro horario.';
@@ -281,7 +283,8 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   const [hora, setHora] = useState('21:00');
   const [zonas, setZonas] = useState<string[]>([]);
   const [zona, setZona] = useState<string | null>(null); // null = cualquier sector
-  const [paso, setPaso] = useState<'buscar' | 'datos' | 'lista'>('buscar');
+  const [paso, setPaso] = useState<'buscar' | 'datos' | 'lista' | 'espera' | 'espera_ok'>('buscar');
+  const [anotando, setAnotando] = useState(false);
   const [slots, setSlots] = useState<SlotDisponibilidad[]>([]);
   const [cargandoSlots, setCargandoSlots] = useState(false);
   const [nombre, setNombre] = useState('');
@@ -364,6 +367,25 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   function elegirSlot(h: string) { setHora(h); setPaso('datos'); }
 
   const slotsLibres = slots.filter((s) => s.disponible);
+  // "Sin lugar": el día no tiene ningún turno tomable (vacío o todo LLENO).
+  const sinLugar = !cargandoSlots && slotsLibres.length === 0;
+  const fechaLegible = new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // Anotarse en la lista de espera (cae en el panel del local).
+  async function anotarme(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nombre.trim()) { toast.error('Tu nombre es obligatorio'); return; }
+    if (!telefono.trim()) { toast.error('Dejanos un teléfono así te avisamos si se libera lugar'); return; }
+    setAnotando(true);
+    try {
+      const r = await anotarseEspera({
+        slug, nombre: nombre.trim(), telefono: telefono.trim(), personas,
+        fechaDeseada: fecha, notas: zona ? `Sector pedido: ${zona}` : null,
+      });
+      if (!r.ok) { toast.error(traducirMotivoReserva(r.error)); return; }
+      setPaso('espera_ok');
+    } finally { setAnotando(false); }
+  }
 
   async function confirmar(e: React.FormEvent) {
     e.preventDefault();
@@ -389,6 +411,31 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
       if (r.cancelToken) setCancelToken(r.cancelToken);
       setPaso('lista');
     } finally { setConfirmando(false); }
+  }
+
+  if (paso === 'espera_ok') {
+    return (
+      <div className="bg-white border-2 border-neutral-900 p-8 text-center">
+        <CalendarCheck className="h-10 w-10 text-neutral-900 mx-auto" />
+        <p className="mt-4 font-display uppercase tracking-tight text-3xl text-neutral-900">¡Anotado!</p>
+        <p className="font-serif italic text-neutral-400 text-lg">{nombre.split(' ')[0]}</p>
+        <p className="mt-4 text-sm text-neutral-600 font-medium">
+          {personas} {personas === 1 ? 'persona' : 'personas'} · {fechaLegible}
+        </p>
+        <p className="mt-3 text-xs text-neutral-400 uppercase tracking-widest">En lista de espera</p>
+        <p className="mt-3 text-[11px] text-neutral-500">Si se libera lugar, el restaurante te contacta al teléfono que dejaste.</p>
+        {(() => {
+          const waUrl = whatsAppUrl(perfil.local.telefono, `Hola! Me anoté en la lista de espera para ${personas} ${personas === 1 ? 'persona' : 'personas'} el ${fechaLegible} (a nombre de ${nombre.trim()}). ¿Tendrán algo?`);
+          if (!waUrl) return null;
+          return (
+            <a href={waUrl} target="_blank" rel="noopener noreferrer"
+               className="mt-6 inline-flex items-center justify-center gap-2 w-full bg-neutral-900 text-white px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors">
+              <MessageCircle className="h-4 w-4" /> Escribir por WhatsApp
+            </a>
+          );
+        })()}
+      </div>
+    );
   }
 
   if (paso === 'lista') {
@@ -520,8 +567,60 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
                 })}
               </div>
             )}
+
+            {/* Sin lugar ese día → salida: WhatsApp o lista de espera */}
+            {sinLugar && (
+              <div className="mt-3 border border-neutral-900/15 p-4 text-center space-y-3">
+                <p className="text-sm text-neutral-600">
+                  ¿Sin lugar para {personas === 1 ? '1 persona' : `${personas} personas`} el {fechaLegible}? No te quedes afuera:
+                </p>
+                <div className="flex flex-col gap-2">
+                  {(() => {
+                    const waUrl = whatsAppUrl(perfil.local.telefono, `Hola! Quería reservar para ${personas} ${personas === 1 ? 'persona' : 'personas'} el ${fechaLegible} y no encontré lugar online. ¿Tendrán algo?`);
+                    if (!waUrl) return null;
+                    return (
+                      <a href={waUrl} target="_blank" rel="noopener noreferrer"
+                         className="inline-flex items-center justify-center gap-2 bg-neutral-900 text-white px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors">
+                        <MessageCircle className="h-4 w-4" /> Escribir al local
+                      </a>
+                    );
+                  })()}
+                  <button type="button" onClick={() => setPaso('espera')}
+                          className="border border-neutral-900/30 text-neutral-900 px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-900/5 transition-colors">
+                    Anotarme en la lista de espera
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {paso === 'espera' && (
+        <form onSubmit={anotarme} className="p-6 pt-2 space-y-3">
+          <p className="text-[11px] uppercase tracking-widest font-bold text-neutral-900 border border-neutral-900/20 px-3 py-2 flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" /> Lista de espera · {personas} {personas === 1 ? 'persona' : 'personas'} · {fecha.split('-').reverse().slice(0, 2).join('/')}
+          </p>
+          <p className="text-xs text-neutral-500">Dejanos tus datos: si se libera lugar, el restaurante te contacta.</p>
+          <div>
+            <label htmlFor="rw-esp-nombre" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Tu nombre *</label>
+            <input id="rw-esp-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus
+                   className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
+          </div>
+          <div>
+            <label htmlFor="rw-esp-tel" className="font-display text-[10px] uppercase tracking-widest text-neutral-400">Teléfono *</label>
+            <input id="rw-esp-tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)}
+                   className="mt-1 w-full border border-neutral-900/20 px-3 py-2 text-sm focus:border-neutral-900 outline-none" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={() => setPaso('buscar')}
+                    className="border border-neutral-900/25 text-neutral-900 px-4 py-3.5 text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-900/5">Volver</button>
+            <button type="submit" disabled={anotando}
+                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white py-3.5 text-[11px] font-bold uppercase tracking-[0.2em] disabled:opacity-60">
+              {anotando ? 'Anotando…' : 'Anotarme'}
+            </button>
+          </div>
+        </form>
       )}
 
       {paso === 'datos' && (
