@@ -212,6 +212,7 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     requiredPermission: 'comanda.configuracion.editar',
     subItems: [
       { slug: 'local',          label: 'Local',                 href: '/configuracion/local' },
+      { slug: 'cubiertos',      label: 'Cubierto por sector',   href: '/configuracion/cubiertos' },
       { slug: 'integraciones',  label: 'Integraciones (WhatsApp, Email, Stripe…)', href: '/configuracion/integraciones' },
       { slug: 'afip',           label: 'Factura electrónica AFIP', href: '/configuracion/afip' },
       { slug: 'afip-pendientes', label: 'AFIP pendientes (reintentar)', href: '/configuracion/afip-pendientes' },

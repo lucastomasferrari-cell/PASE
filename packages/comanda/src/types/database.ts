@@ -79,6 +79,7 @@ export interface Item {
   visible_qr: boolean;
   visible_tienda: boolean;
   es_open_item: boolean;
+  es_cubierto?: boolean;
 }
 
 export interface Canal {

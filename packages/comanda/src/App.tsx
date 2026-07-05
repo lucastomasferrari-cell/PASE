@@ -95,6 +95,7 @@ const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReporteP
 const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').then(m => ({ default: m.TrackingDelivery })));
 const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').then(m => ({ default: m.ConciliacionMpView })));
 const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
+const SettingsCubiertos = lazy(() => import('./pages/Configuracion/SettingsCubiertos').then(m => ({ default: m.SettingsCubiertos })));
 const IntegracionWhatsapp = lazy(() => import('./pages/Integraciones/IntegracionWhatsapp').then(m => ({ default: m.IntegracionWhatsapp })));
 const MateriasPrimasLista = lazy(() => import('./pages/Catalogo/MateriasPrimasLista').then(m => ({ default: m.MateriasPrimasLista })));
 const CombosLista = lazy(() => import('./pages/Catalogo/CombosLista').then(m => ({ default: m.CombosLista })));
@@ -370,6 +371,7 @@ export default function App() {
                   <Route path="/configuracion/afip-pendientes" element={<AfipPendientes />} />
                   <Route path="/configuracion/integraciones" element={<SettingsIntegraciones />} />
                   <Route path="/configuracion/branding" element={<SettingsBranding />} />
+                  <Route path="/configuracion/cubiertos" element={<SettingsCubiertos />} />
                   <Route path="/configuracion/notificaciones" element={<SettingsRecibos />} />
                   <Route path="/configuracion/recibos" element={<SettingsRecibos />} />
                   <Route path="/configuracion/idioma" element={<StubRoute />} />

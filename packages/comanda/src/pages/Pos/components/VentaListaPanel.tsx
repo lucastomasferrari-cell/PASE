@@ -77,6 +77,9 @@ function CheckRow({
               {item.modificadores.map((m) => m.nombre).join(' · ')}
             </span>
           )}
+          {it?.es_cubierto && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-primary/15 text-primary font-bold uppercase ml-1.5">Cubierto</span>
+          )}
           {item.es_cortesia && (
             <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-bold uppercase ml-1.5">Cortesía</span>
           )}
