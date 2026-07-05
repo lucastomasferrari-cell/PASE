@@ -73,7 +73,7 @@ export function PerfilLocal() {
   const fotos = (local.fotos ?? []).filter(Boolean);
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 overflow-x-clip">
       {/* nav */}
       <header className="container py-4 flex items-center justify-between">
         <Link to="/" className="text-xl font-medium text-brand-600">mesa.</Link>
@@ -215,7 +215,7 @@ export function PerfilLocal() {
                 {local.direccion && <InfoRow icon={<MapPin className="h-4 w-4" />}>{local.direccion}</InfoRow>}
                 {local.telefono && <InfoRow icon={<Phone className="h-4 w-4" />}><a href={`tel:${local.telefono}`} className="hover:underline">{local.telefono}</a></InfoRow>}
                 {local.instagram && <InfoRow icon={<AtSign className="h-4 w-4" />}><a href={`https://instagram.com/${local.instagram.replace('@', '')}`} target="_blank" rel="noopener" className="hover:underline">@{local.instagram.replace('@', '')}</a></InfoRow>}
-                {local.web && <InfoRow icon={<Globe className="h-4 w-4" />}><a href={local.web} target="_blank" rel="noopener" className="hover:underline">{local.web.replace(/^https?:\/\//, '')}</a></InfoRow>}
+                {local.web && <InfoRow icon={<Globe className="h-4 w-4" />}><a href={local.web} target="_blank" rel="noopener" className="hover:underline break-all">{local.web.replace(/^https?:\/\//, '').replace(/\/?\?.*$/, '').replace(/\/$/, '')}</a></InfoRow>}
               </div>
               <div className="text-sm">
                 <p className="font-medium mb-2">Horarios</p>
@@ -236,7 +236,7 @@ export function PerfilLocal() {
         </div>
 
         {/* ── Sidebar: widget de reserva ────────────────────────────────── */}
-        <aside className="lg:sticky lg:top-6 self-start">
+        <aside className="lg:sticky lg:top-6 self-start min-w-0">
           <ReservaWidget slug={slug} perfil={perfil} />
         </aside>
       </main>
@@ -879,5 +879,10 @@ function Titulo({ icon, children }: { icon: React.ReactNode; children: React.Rea
   );
 }
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return <p className="flex items-center gap-2 text-ink-soft">{icon}{children}</p>;
+  return (
+    <p className="flex items-start gap-2 text-ink-soft min-w-0">
+      <span className="shrink-0 mt-0.5">{icon}</span>
+      <span className="min-w-0 break-words">{children}</span>
+    </p>
+  );
 }
