@@ -1,10 +1,25 @@
-import { Phone, MapPin, Home, MessageSquareWarning, Clock, Timer } from 'lucide-react';
+import { Phone, MapPin, Home, MessageSquareWarning, Clock, Timer, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BadgePago } from './BadgePago';
 import { UrgencyTimer } from './UrgencyTimer';
 import { formatARS } from '@/lib/format';
 import { calcularEstadoPago, grupoDePedido, type PedidoGrupo } from '@/services/pedidosService';
 import type { Canal, EstadoVenta, VentaPos, VentaPosItem, VentaPosPago } from '@/types/database';
+
+// Formatea la duración total del pedido de forma humana (25 min / 1h 12).
+function formatDuracion(desde: string, hasta: string): string {
+  const ms = Math.max(0, new Date(hasta).getTime() - new Date(desde).getTime());
+  const minTot = Math.floor(ms / 60_000);
+  if (minTot < 60) return `${minTot} min`;
+  const h = Math.floor(minTot / 60);
+  const m = minTot % 60;
+  return m === 0 ? `${h} h` : `${h}h ${m}`;
+}
+
+// Timestamp de cierre según cómo terminó el pedido (cobrada > entregada > anulada).
+function timestampCierre(v: VentaPos): string | null {
+  return v.cobrada_at ?? v.entregada_at ?? v.anulada_at ?? null;
+}
 
 // Overline de estado — mismo color que el badge de la versión anterior, ahora
 // como uppercase text-[10px] arriba del #N para no pisarse con el pago.
@@ -164,12 +179,27 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick }: Pr
           </div>
         )}
 
-        {/* TIMER + TOTAL — separados por hairline */}
+        {/* TIMER + TOTAL — separados por hairline. Si el pedido ya cerró,
+            muestra la duración total en vez del contador dinámico. */}
         <div className="pt-2.5 border-t border-border/40 flex items-center justify-between">
-          <div className="flex items-center gap-1 text-xs">
-            <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-            <UrgencyTimer desdeIso={pedido.created_at} />
-          </div>
+          {(() => {
+            const cerradoAt = timestampCierre(pedido);
+            if (cerradoAt) {
+              const duracion = formatDuracion(pedido.created_at, cerradoAt);
+              return (
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                  <Check className="h-3 w-3" />
+                  <span>Duró {duracion}</span>
+                </div>
+              );
+            }
+            return (
+              <div className="flex items-center gap-1 text-xs">
+                <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+                <UrgencyTimer desdeIso={pedido.created_at} />
+              </div>
+            );
+          })()}
           <strong className="text-base font-bold text-foreground tabular-nums">{formatARS(Number(pedido.total))}</strong>
         </div>
       </div>
