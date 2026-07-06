@@ -312,6 +312,8 @@ export interface VentaPos {
   // Sprint 16/05
   coursing_auto?: boolean;
   tab_nombre?: string | null;
+  /** Hint del método de pago cargado al crear el pedido. NULL = definir al cobrar. */
+  metodo_pago_previsto?: string | null;
   // Sprint 16/05 — geocoding cliente (delivery)
   cliente_lat?: number | null;
   cliente_lon?: number | null;

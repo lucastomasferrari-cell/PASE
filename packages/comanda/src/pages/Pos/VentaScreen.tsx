@@ -465,6 +465,22 @@ export function VentaScreen() {
     }
   }
 
+  // Handler del botón "Listo" (solo aparece en modo pedidos):
+  // - Marcha automáticamente todo lo que quedó en hold (por si el cajero se olvidó).
+  // - Después vuelve al listado de pedidos.
+  async function handleListoPedido() {
+    if (!venta) return;
+    const { marcharTodoPedidoService } = await import('@/services/pedidosService');
+    const r = await marcharTodoPedidoService(venta.id);
+    if (r.error) { toast.error(r.error); return; }
+    if (r.marchados > 0) {
+      toast.success(`${r.marchados} item${r.marchados > 1 ? 's' : ''} marchado${r.marchados > 1 ? 's' : ''} a cocina`);
+    } else {
+      toast.success('Pedido listo');
+    }
+    navigate('/pos/pedidos');
+  }
+
   // Imprime la PRE-CUENTA (sin validez fiscal) en la impresora térmica del
   // cajero. No registra pago — es el resumen que se muestra al cliente antes
   // de cobrar. Sin CAE → sale como "DOCUMENTO NO FISCAL".
@@ -637,6 +653,7 @@ export function VentaScreen() {
           onHold={() => void handleHoldTodos()}
           onMesa={() => setShowMesaControl(true)}
           onCobrar={() => setShowCobro(true)}
+          onListo={() => void handleListoPedido()}
         />
       </aside>
 

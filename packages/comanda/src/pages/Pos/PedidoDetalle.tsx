@@ -1,22 +1,22 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, MapPin, Home, Clock, CreditCard,
-  Printer, MoreVertical, CheckCircle2, ChefHat, X, MessageSquareWarning, Edit3,
-  MessageCircle, Percent, Unlock,
+  Printer, MoreVertical, CheckCircle2, X, MessageSquareWarning, Edit3,
+  MessageCircle, Percent, Unlock, FileText, Package, Wallet,
 } from 'lucide-react';
 import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 import {
   getPedidoDetalle,
-  aprobarPedidoService, marcarListoService, marcarEntregadoService,
+  aprobarPedidoService,
   cancelarPedidoService, calcularEstadoPago,
+  finalizarPedidoService,
   type PedidoDetalleData,
 } from '@/services/pedidosService';
-import { reabrirVenta } from '@/services/ventasService';
-import {
-  notificarPedidoListo, notificarPedidoEntregado, notificarPedidoRechazado,
-} from '@/services/tiendaService';
+import { reabrirVenta, reimprimirComanda, listVentasItems } from '@/services/ventasService';
+import { listItems, type ItemConGrupo } from '@/services/itemsService';
+import { notificarPedidoRechazado } from '@/services/tiendaService';
 import { formatARS, formatHora } from '@/lib/format';
 import { CanalBadge } from '@/components/CanalBadge';
 import { BadgePago } from '@/components/BadgePago';
@@ -26,13 +26,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
 import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
+import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
+import { EmitirFacturaDialog } from '@/components/dialogs/EmitirFacturaDialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import type { VentaPosItem } from '@/types/database';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { useAuthPos } from '@/lib/authPos';
-import { cn } from '@/lib/utils';
 
 // Vista detallada de pedido — patrón Toast Storefront Orders.
 // Sidebar 280px con 4 secciones (Cliente / Entrega / Tiempo / Pago).
@@ -50,6 +52,18 @@ export function PedidoDetalle() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
   const [reabrirOpen, setReabrirOpen] = useState(false);
+  const [cobroOpen, setCobroOpen] = useState(false);
+  const [facturaOpen, setFacturaOpen] = useState(false);
+  // Data que necesita PaymentDialog. Se carga lazy cuando el cajero apreta
+  // Cobrar o Cobrar y entregar (evita traerla siempre — la mayoría de los
+  // pedidos se cierran sin abrir el detalle).
+  const [ventaItems, setVentaItems] = useState<VentaPosItem[]>([]);
+  const [catalogo, setCatalogo] = useState<ItemConGrupo[]>([]);
+  const [cobroLoading, setCobroLoading] = useState(false);
+  // Flag para saber si el PaymentDialog se abrió vía "Cobrar y entregar" —
+  // en ese caso, al confirmar el pago volvemos al listado. En "Cobrar" solo,
+  // el cajero se queda viendo el detalle.
+  const cobroFinalizaRef = useRef(false);
 
   const reload = useCallback(async () => {
     if (!Number.isFinite(id) || id <= 0) {
@@ -127,30 +141,6 @@ export function PedidoDetalle() {
     if (r.error) toast.error(r.error);
     else { toast.success('Pedido aprobado'); reload(); }
   };
-  const handleMarcarListo = async () => {
-    setAccionLoading(true);
-    const r = await marcarListoService(venta.id);
-    setAccionLoading(false);
-    if (r.error) toast.error(r.error);
-    else {
-      toast.success('Pedido marcado como listo');
-      // Gap #4: avisar al cliente. Fire-and-forget — idempotente server-side.
-      if (venta.origen === 'tienda_online') void notificarPedidoListo({ ventaId: venta.id });
-      reload();
-    }
-  };
-  const handleEntregado = async () => {
-    setAccionLoading(true);
-    const r = await marcarEntregadoService(venta.id);
-    setAccionLoading(false);
-    if (r.error) toast.error(r.error);
-    else {
-      toast.success('Pedido entregado');
-      // Gap #4: invitación a calificar — solo si era pedido del marketplace.
-      if (venta.origen === 'tienda_online') void notificarPedidoEntregado({ ventaId: venta.id });
-      navigate('/pos/pedidos');
-    }
-  };
   const handleCancelarConfirmado = async (managerId: string, motivo: string) => {
     setAccionLoading(true);
     const r = await cancelarPedidoService(venta.id, managerId, motivo);
@@ -177,6 +167,47 @@ export function PedidoDetalle() {
       reload();
     }
   };
+  // Reimprimir el ticket de comanda de cocina.
+  const handleImprimirComanda = async () => {
+    const r = await reimprimirComanda(venta.id);
+    if (r.error) toast.error(r.error);
+    else toast.success('Comanda reenviada a impresora(s) de cocina');
+  };
+  // Carga el catálogo + items enteros de la venta — necesarios para PaymentDialog
+  // (que los usa para dibujar la lista al costado del cobro).
+  const cargarDataParaCobro = async () => {
+    if (catalogo.length > 0 && ventaItems.length > 0) return;
+    setCobroLoading(true);
+    const [itemsR, catR] = await Promise.all([
+      listVentasItems(venta.id),
+      listItems({ tenantId: venta.tenant_id }),
+    ]);
+    setVentaItems(itemsR.data);
+    setCatalogo(catR.data);
+    setCobroLoading(false);
+  };
+  // Cobrar solo — abre PaymentDialog sin volver al listado después.
+  // El cajero se queda mirando el detalle (útil si aún tiene que entregar físicamente).
+  const handleCobrarSolo = async () => {
+    cobroFinalizaRef.current = false;
+    await cargarDataParaCobro();
+    setCobroOpen(true);
+  };
+  // Botón principal contextual: entrega el pedido y cobra si falta pago.
+  // - Ya cobrado (marketplace o cobrado antes): solo finaliza + navigate.
+  // - Sin cobrar: abre PaymentDialog pre-seleccionado con `metodo_pago_previsto`
+  //   si lo hay. Al confirmar el pago, se cierra automáticamente + navigate.
+  const handleCobrarYEntregar = async () => {
+    if (estadoPago === 'pagado') {
+      const r = await finalizarPedidoService(venta.id);
+      if (r.error) toast.error(r.error);
+      else { toast.success('Pedido entregado'); navigate('/pos/pedidos'); }
+      return;
+    }
+    cobroFinalizaRef.current = true;
+    await cargarDataParaCobro();
+    setCobroOpen(true);
+  };
 
   // Estados donde el pedido admite ediciones sin reabrir primero.
   // Cobrada / entregada / anulada quedan bloqueadas para modificar+descuento
@@ -194,14 +225,6 @@ export function PedidoDetalle() {
   const comisionPct = Number(canal?.comision_externa_pct ?? 0);
   const comisionMonto = totalCobrado * (comisionPct / 100);
   const cobramos = totalCobrado - comisionMonto;
-
-  // Botón principal del footer cambia según estado.
-  // Capitalizo el nombre del campo `Icon` para que JSX lo trate como componente.
-  const accionPrincipal =
-    venta.estado === 'necesita_aprobacion' ? { label: 'Aprobar pedido', Icon: CheckCircle2, onClick: handleAprobar } :
-    venta.estado === 'enviada' ? { label: 'Marcar listo', Icon: ChefHat, onClick: handleMarcarListo } :
-    venta.estado === 'lista' ? { label: 'Marcar entregado', Icon: CheckCircle2, onClick: handleEntregado } :
-    null;
 
   // Pago: cuál fue el método (si pagó online).
   const pagoOnline = pagos[0] ?? null;
@@ -506,33 +529,67 @@ export function PedidoDetalle() {
         </main>
       </div>
 
-      {/* FOOTER FIJO con 3 botones */}
-      {accionPrincipal && (
+      {/* FOOTER FIJO — botonera nueva de 4 (Comanda / Factura / Cobrar / Entregar).
+          Si el pedido está anulado, no mostramos el footer (no hay nada que hacer). */}
+      {venta.estado !== 'anulada' && (
         <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg px-4 py-3 z-10">
-          <div className="container flex items-center gap-2 justify-end">
-            <Button variant="outline" size="lg" disabled className="hidden sm:inline-flex" title="Próximamente">
-              <Edit3 className="h-4 w-4 mr-2" />
-              Editar
-            </Button>
+          <div className="container grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Button
-              variant="destructive"
+              variant="outline"
               size="lg"
-              onClick={() => setCancelOpen(true)}
+              onClick={() => void handleImprimirComanda()}
               disabled={accionLoading}
             >
-              <X className="h-4 w-4 mr-2" />
-              Cancelar
+              <Printer className="h-4 w-4 mr-2" />
+              Comanda
             </Button>
             <Button
-              variant="success"
+              variant="outline"
               size="lg"
-              className={cn('sm:min-w-[220px]')}
-              onClick={accionPrincipal.onClick}
+              onClick={() => setFacturaOpen(true)}
               disabled={accionLoading}
             >
-              <accionPrincipal.Icon className="h-4 w-4 mr-2" />
-              {accionPrincipal.label}
+              <FileText className="h-4 w-4 mr-2" />
+              Factura
             </Button>
+            {venta.estado === 'necesita_aprobacion' ? (
+              // Marketplace flow: primero aprobar, después ya vuelve a mostrarse Cobrar/Entregar.
+              <Button
+                variant="success"
+                size="lg"
+                className="col-span-2"
+                onClick={handleAprobar}
+                disabled={accionLoading}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Aprobar pedido
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => void handleCobrarSolo()}
+                  disabled={accionLoading || cobroLoading || estadoPago === 'pagado' || venta.estado === 'cobrada'}
+                >
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Cobrar
+                </Button>
+                <Button
+                  variant="success"
+                  size="lg"
+                  onClick={() => void handleCobrarYEntregar()}
+                  disabled={accionLoading || cobroLoading || venta.estado === 'entregada' || venta.estado === 'cobrada'}
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  {estadoPago === 'pagado'
+                    ? 'Entregar'
+                    : venta.metodo_pago_previsto
+                      ? 'Cobrar y entregar'
+                      : 'Cobrar y entregar'}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -567,6 +624,36 @@ export function PedidoDetalle() {
         subtotal={Number(venta.subtotal)}
         total={Number(venta.total)}
         onAplicado={() => { setDiscountOpen(false); reload(); }}
+      />
+
+      {/* DIALOG: Cobrar — payment con métodos + cuotas + vuelto. */}
+      {cobroOpen && empleado && (
+        <PaymentDialog
+          open={cobroOpen}
+          onOpenChange={setCobroOpen}
+          venta={venta}
+          items={ventaItems}
+          catalogo={catalogo}
+          empleadoId={empleado.id}
+          onCobrado={() => {
+            setCobroOpen(false);
+            if (cobroFinalizaRef.current) {
+              toast.success('Cobrado y entregado');
+              navigate('/pos/pedidos');
+            } else {
+              toast.success('Cobrado');
+              reload();
+            }
+          }}
+        />
+      )}
+
+      {/* DIALOG: Emitir factura AFIP. */}
+      <EmitirFacturaDialog
+        open={facturaOpen}
+        onOpenChange={setFacturaOpen}
+        venta={venta}
+        onClose={() => setFacturaOpen(false)}
       />
     </div>
   );

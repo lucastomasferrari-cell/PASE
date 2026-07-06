@@ -235,6 +235,21 @@ export async function marcarEntregadoService(ventaId: number): Promise<{ error: 
   return { error: error?.message ?? null };
 }
 
+// Marcha todo lo que quedó en 'hold' de una venta y pasa venta a 'enviada'.
+// Idempotente. Se llama al apretar "Marchar" o "Listo" en la pantalla de carga.
+export async function marcharTodoPedidoService(ventaId: number): Promise<{ marchados: number; error: string | null }> {
+  const { data, error } = await db.rpc('fn_pedido_marchar_todo_comanda', { p_venta_id: ventaId });
+  if (error) return { marchados: 0, error: error.message };
+  return { marchados: Number(data ?? 0), error: null };
+}
+
+// Avanza el pedido directo a 'entregada' desde cualquier estado activo.
+// Items en hold/enviado/listo pasan a 'entregado'. No cobra.
+export async function finalizarPedidoService(ventaId: number): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_pedido_finalizar_comanda', { p_venta_id: ventaId });
+  return { error: error?.message ?? null };
+}
+
 // Cancelar pedido = anular venta. Requiere manager_id + motivo (PIN ya validado por
 // ManagerOverrideDialog antes de invocar).
 export async function cancelarPedidoService(

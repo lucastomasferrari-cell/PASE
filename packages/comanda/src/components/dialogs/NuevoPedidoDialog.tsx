@@ -13,11 +13,12 @@ import {
 } from '@/components/ui/select';
 import { abrirVenta } from '@/services/ventasService';
 import { listCanales } from '@/services/canalesService';
+import { listMetodosCobroActivos } from '@/services/configService';
 import { listClientes, createCliente } from '@/services/clientesService';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useDebouncedValue } from '@pase/shared/utils';
-import type { Canal, Cliente, TipoEntrega } from '@/types/database';
+import type { Canal, Cliente, MetodoCobro, TipoEntrega } from '@/types/database';
 import { cn } from '@/lib/utils';
 
 // Dialog para crear un pedido manual (cliente llamó por WhatsApp / teléfono).
@@ -50,6 +51,11 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
   // Programar para horario futuro (ej. "para las 21:00"). Default: ya (inmediato).
   const [programado, setProgramado] = useState(false);
   const [programadaPara, setProgramadaPara] = useState('');
+  // Forma de pago pre-cargada (opcional). Si NULL, el cajero lo define al cobrar.
+  // Sirve para el botón "Entregar" del detalle: si hay método → cobra automático;
+  // si no → botón dice "Cobrar y entregar" y abre PaymentDialog.
+  const [metodosCobro, setMetodosCobro] = useState<MetodoCobro[]>([]);
+  const [metodoPago, setMetodoPago] = useState<string | null>(null);
 
   // Reset on open
   useEffect(() => {
@@ -58,8 +64,17 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       setTelefono(''); setNombre(''); setDireccion(''); setAclaracion(''); setNotas('');
       setMatches([]); setSaving(false); setClienteIdExistente(null);
       setProgramado(false); setProgramadaPara('');
+      setMetodoPago(null);
     }
   }, [open]);
+
+  // Cargar métodos de cobro activos del local — solo cuando abre el dialog.
+  useEffect(() => {
+    if (!open || localId === null) return;
+    listMetodosCobroActivos(localId).then(({ data }) => {
+      setMetodosCobro(data);
+    });
+  }, [open, localId]);
 
   // Cargar canales de modo "pedidos" cuando se abre
   useEffect(() => {
@@ -155,6 +170,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       origen: 'pos',
       programadaPara: esProgramado ? new Date(programadaPara).toISOString() : null,
       clienteId: clienteIdFinal,
+      metodoPagoPrevisto: metodoPago,
       // Si tiene programada_para, va a la tab "Programados". Sino, "abierta"
       // = visible normal en Pedidos para cargar items.
       estado: esProgramado ? 'programada' : 'abierta',
@@ -348,6 +364,43 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
             rows={2}
             placeholder="Sin cebolla, alergias, etc."
           />
+        </div>
+
+        {/* Forma de pago (opcional) — si se define acá, al entregar cobra */}
+        {/* automático. Si no, el botón dice "Cobrar y entregar" y pide método. */}
+        <div className="space-y-2">
+          <Label>Cómo paga <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMetodoPago(null)}
+              className={cn(
+                'h-10 rounded-md border text-xs font-medium transition-colors flex items-center justify-center gap-1',
+                metodoPago === null
+                  ? 'border-primary bg-primary/5 text-primary'
+                  : 'border-border bg-background hover:bg-accent text-muted-foreground',
+              )}
+            >
+              Al cobrar
+            </button>
+            {metodosCobro.map((m) => (
+              <button
+                key={m.slug}
+                type="button"
+                onClick={() => setMetodoPago(m.slug)}
+                className={cn(
+                  'h-10 rounded-md border text-xs font-medium transition-colors flex items-center justify-center gap-1 truncate px-1',
+                  metodoPago === m.slug
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-border bg-background hover:bg-accent',
+                )}
+                title={m.nombre}
+              >
+                {m.emoji && <span>{m.emoji}</span>}
+                <span className="truncate">{m.nombre}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         </div>
