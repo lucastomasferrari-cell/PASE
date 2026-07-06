@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 // Las cards navegan a `/pos/pedidos/:ventaId` (vista detallada con sidebar + cálculo + footer).
 
 const TABS: Array<{ key: PedidoTab; label: string }> = [
-  { key: 'todos',       label: 'Todos' },
+  { key: 'activos',     label: 'Activos' },
   { key: 'por_aceptar', label: 'Por aceptar' },
   { key: 'programadas', label: 'Programadas' },
   { key: 'aceptadas',   label: 'Aceptadas' },
@@ -47,11 +47,11 @@ export function PedidosHub() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
-  const [tab, setTab] = useState<PedidoTab>('todos');
+  const [tab, setTab] = useState<PedidoTab>('activos');
   const [pedidos, setPedidos] = useState<PedidoConItems[]>([]);
   const [canales, setCanales] = useState<Canal[]>([]);
   const [counters, setCounters] = useState<Record<PedidoTab, number>>({
-    todos: 0, por_aceptar: 0, programadas: 0, aceptadas: 0, cerradas: 0,
+    activos: 0, por_aceptar: 0, programadas: 0, aceptadas: 0, cerradas: 0,
   });
   const [loading, setLoading] = useState(true);
   const [nuevoPedidoOpen, setNuevoPedidoOpen] = useState(false);
@@ -500,11 +500,11 @@ function NotifierToggle({ muted, setMuted, permState, askPermission }: {
 // ─── Empty States ────────────────────────────────────────────────────────────
 function EmptyState({ tab }: { tab: PedidoTab }) {
   const messages: Record<PedidoTab, { titulo: string; subtitulo: string }> = {
-    todos:       { titulo: 'Sin pedidos', subtitulo: 'Todavía no hay pedidos en el turno.' },
+    activos:     { titulo: 'Sin pedidos activos', subtitulo: 'Cuando entre un pedido nuevo aparece acá.' },
     por_aceptar: { titulo: 'Todo al día', subtitulo: 'No hay pedidos esperando aceptación.' },
     programadas: { titulo: 'Sin programados', subtitulo: 'No hay pedidos programados para más tarde.' },
     aceptadas:   { titulo: 'Cocina libre', subtitulo: 'No hay pedidos activos.' },
-    cerradas:    { titulo: 'Sin cerrados', subtitulo: 'Los pedidos entregados y cobrados van apareciendo acá.' },
+    cerradas:    { titulo: 'Sin cerrados', subtitulo: 'Los pedidos entregados, cobrados y anulados van apareciendo acá.' },
   };
   const m = messages[tab];
   return (

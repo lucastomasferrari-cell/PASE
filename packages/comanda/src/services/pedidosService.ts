@@ -3,22 +3,21 @@ import type { VentaPos, EstadoVenta, VentaPosItem, VentaPosPago, Canal } from '.
 import { translateError } from '../lib/errors';
 
 // Mapeo lógico de tab → estado de venta para el feed Pedidos.
-// Taxonomía nueva (2026-07-05): 4 estados operativos + "Todos".
+// Taxonomía (2026-07-06, refinada):
+//  - activos     → por_aceptar + programadas + aceptadas (todo lo NO cerrado).
+//                  Es la pantalla default — lo que el cajero necesita ver.
 //  - por_aceptar → necesita_aprobacion (esperando ok del comerciante).
 //  - programadas → cualquier pedido con programada_para futura.
 //  - aceptadas   → abierta / enviada / lista / en_camino (todo el ciclo activo).
-//  - cerradas    → entregada / cobrada.
-// Anuladas se excluyen por default en todas las tabs (se veran en un filtro
-// aparte cuando exista).
-export type PedidoTab = 'todos' | 'por_aceptar' | 'programadas' | 'aceptadas' | 'cerradas';
+//  - cerradas    → entregada / cobrada / anulada (histórico).
+export type PedidoTab = 'activos' | 'por_aceptar' | 'programadas' | 'aceptadas' | 'cerradas';
 
 const ESTADOS_ACEPTADAS: EstadoVenta[] = ['abierta', 'enviada', 'lista', 'en_camino'];
-const ESTADOS_CERRADAS: EstadoVenta[] = ['entregada', 'cobrada'];
-// Estados que "Todos" considera visibles (todo menos anulada).
-const ESTADOS_VISIBLES: EstadoVenta[] = [
+const ESTADOS_CERRADAS: EstadoVenta[] = ['entregada', 'cobrada', 'anulada'];
+// Estados que "Activos" considera: todo lo NO cerrado (ni anulado).
+const ESTADOS_ACTIVOS: EstadoVenta[] = [
   'abierta', 'necesita_aprobacion', 'programada',
   'enviada', 'lista', 'en_camino',
-  'entregada', 'cobrada',
 ];
 
 // Grupo lógico de un pedido → drive del color/tag en la card y del orden en "Todos".
@@ -61,9 +60,9 @@ export async function listPedidosPorTab(
     .eq('modo', 'pedidos')
     .is('deleted_at', null);
 
-  if (tab === 'todos') {
-    // Todo lo visible (no anuladas). Se ordena en cliente por grupo + created_at.
-    q = q.in('estado', ESTADOS_VISIBLES).order('created_at', { ascending: false });
+  if (tab === 'activos') {
+    // Todo lo NO cerrado ni anulado. Se ordena en cliente por grupo + created_at.
+    q = q.in('estado', ESTADOS_ACTIVOS).order('created_at', { ascending: false });
   } else if (tab === 'programadas') {
     // Cualquier pedido con programada_para futura, sin importar el estado
     // (salvo cerradas — si ya se cobró/entregó no está "programado").
@@ -87,16 +86,16 @@ export async function listPedidosPorTab(
     q = q.in('estado', ESTADOS_CERRADAS).order('created_at', { ascending: false });
   }
 
-  const { data, error } = await q.limit(tab === 'todos' ? 200 : 100);
+  const { data, error } = await q.limit(tab === 'activos' ? 200 : 100);
   if (error) return { data: [], error: translateError(error) };
   const cleaned = (data ?? []).map((row) => {
     const r = row as PedidoConItems;
     return { ...r, items: (r.items ?? []).filter((it) => it.deleted_at === null) };
   });
-  // "Todos" reordena por grupo (por_aceptar → programadas → aceptadas →
-  // cerradas) manteniendo created_at desc dentro de cada grupo. Los otros
-  // tabs ya vienen ordenados por SQL.
-  if (tab === 'todos') {
+  // "Activos" reordena por grupo (por_aceptar → programadas → aceptadas)
+  // manteniendo created_at desc dentro de cada grupo. Los otros tabs ya
+  // vienen ordenados por SQL.
+  if (tab === 'activos') {
     cleaned.sort((a, b) => {
       const ga = GRUPO_PRIORIDAD[grupoDePedido(a.estado, a.programada_para)];
       const gb = GRUPO_PRIORIDAD[grupoDePedido(b.estado, b.programada_para)];
@@ -109,7 +108,7 @@ export async function listPedidosPorTab(
 
 // Counters por tab (para badges en navegación).
 // "cerradas" no lleva contador (rutinariamente grande; no aporta info accionable).
-// "todos" tampoco — su valor es el total activo, ya visible sumando los tres.
+// "activos" muestra la suma total de los 3 grupos activos.
 export async function getCountersPedidos(localId: number): Promise<Record<PedidoTab, number>> {
   const { data } = await db
     .from('ventas_pos')
@@ -119,13 +118,14 @@ export async function getCountersPedidos(localId: number): Promise<Record<Pedido
     .is('deleted_at', null)
     .in('estado', [...ESTADOS_ACEPTADAS, 'necesita_aprobacion', 'programada']);
   const out: Record<PedidoTab, number> = {
-    todos: 0, por_aceptar: 0, programadas: 0, aceptadas: 0, cerradas: 0,
+    activos: 0, por_aceptar: 0, programadas: 0, aceptadas: 0, cerradas: 0,
   };
   for (const row of data ?? []) {
     const r = row as { estado: EstadoVenta; programada_para: string | null };
     const g = grupoDePedido(r.estado, r.programada_para);
     if (g === 'cerradas') continue;
     out[g]++;
+    out.activos++;
   }
   return out;
 }

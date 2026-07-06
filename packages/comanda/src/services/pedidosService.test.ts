@@ -107,6 +107,6 @@ describe('getCountersPedidos', () => {
     expect(counters.programadas).toBe(2);
     expect(counters.aceptadas).toBe(4);
     expect(counters.cerradas).toBe(0);
-    expect(counters.todos).toBe(0);
+    expect(counters.activos).toBe(8);
   });
 });
