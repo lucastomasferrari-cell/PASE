@@ -11,11 +11,9 @@ import {
 } from '@/components/ui/select';
 import {
   listPedidosPorTab, getCountersPedidos,
-  aprobarPedidoService, marcarListoService, marcarEntregadoService,
   getQuoteTimes, updateQuoteTimes,
   type PedidoTab, type PedidoConItems,
 } from '@/services/pedidosService';
-import { notificarPedidoListo, notificarPedidoEntregado } from '@/services/tiendaService';
 import { listCanales } from '@/services/canalesService';
 import type { Canal } from '@/types/database';
 import { PedidoCard } from '@/components/PedidoCard';
@@ -142,9 +140,6 @@ export function PedidosHub() {
     prevAprobacionCountRef.current = aprobacionNuevo;
     setCounters(ctsRes);
   }, [localId, tab, notify]);
-
-  // Mantiene compatibilidad: cuando algo llama reload() del scope viejo
-  const reload = reloadLight;
 
   useEffect(() => { reloadFull(); }, [reloadFull]);
 
@@ -364,27 +359,6 @@ export function PedidosHub() {
                     canales={canales}
                     variant={p.estado === 'lista' ? 'listo' : 'default'}
                     onClick={() => navigate(`/pos/pedidos/${p.id}`)}
-                    onAccion={async () => {
-                      let r;
-                      let notify: 'listo' | 'entregado' | null = null;
-                      if (p.estado === 'necesita_aprobacion') r = await aprobarPedidoService(p.id);
-                      else if (p.estado === 'enviada') { r = await marcarListoService(p.id); notify = 'listo'; }
-                      else if (p.estado === 'lista') { r = await marcarEntregadoService(p.id); notify = 'entregado'; }
-                      if (r?.error) toast.error(r.error);
-                      else {
-                        toast.success('Pedido actualizado');
-                        // Gap #4 marketplace: avisar al cliente por email. Fire-and-forget;
-                        // idempotente server-side (chequea notif_email_*_at). Solo tiene
-                        // sentido cuando es pedido de tienda online.
-                        if (notify && p.origen === 'tienda_online') {
-                          void (notify === 'listo'
-                            ? notificarPedidoListo({ ventaId: p.id })
-                            : notificarPedidoEntregado({ ventaId: p.id })
-                          );
-                        }
-                        reload();
-                      }
-                    }}
                   />
                 ))}
               </div>

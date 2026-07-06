@@ -1,7 +1,6 @@
-import { Phone, MapPin, Home, CheckCircle2, ChefHat, MessageSquareWarning, Clock } from 'lucide-react';
+import { Phone, MapPin, Home, MessageSquareWarning, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { CanalBadge } from './CanalBadge';
 import { BadgePago } from './BadgePago';
 import { UrgencyTimer } from './UrgencyTimer';
@@ -50,9 +49,8 @@ const FALLBACK_HEADER_BG = 'bg-muted/50';
 interface Props {
   pedido: VentaPos & { items: VentaPosItem[]; pagos?: VentaPosPago[] };
   canales: Canal[];
-  variant?: 'default' | 'listo'; // tab 'Listos' usa borde verde sólido
+  variant?: 'default' | 'listo'; // pedido en 'lista' usa borde verde sólido
   onClick: () => void;
-  onAccion: () => Promise<void>;
 }
 
 // Resumen de items para la card: max 2 nombres + "y N más".
@@ -68,7 +66,7 @@ function resumenItems(items: (VentaPosItem & { item?: { nombre: string | null; e
   return { lineas, resto: Math.max(0, activos.length - 2) };
 }
 
-export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAccion }: Props) {
+export function PedidoCard({ pedido, canales, variant = 'default', onClick }: Props) {
   const canal = canales.find((c) => c.id === pedido.canal_id);
   const headerBg = canal ? (CANAL_HEADER_BG[canal.slug] ?? FALLBACK_HEADER_BG) : FALLBACK_HEADER_BG;
 
@@ -76,19 +74,6 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
 
   const estadoPago = calcularEstadoPago(Number(pedido.total), pedido.pagos ?? []);
   const aclaracion = pedido.notas?.trim();
-
-  // Botón único contextual según estado (Toast-style: una sola acción visible).
-  const accionLabel =
-    pedido.estado === 'necesita_aprobacion' ? 'Aprobar' :
-    pedido.estado === 'enviada' ? 'Marcar listo' :
-    pedido.estado === 'lista' ? 'Entregado' :
-    null;
-  const AccionIcon =
-    pedido.estado === 'necesita_aprobacion' ? CheckCircle2 :
-    pedido.estado === 'enviada' ? ChefHat :
-    CheckCircle2;
-  const accionVariant: 'success' | 'default' =
-    pedido.estado === 'necesita_aprobacion' || pedido.estado === 'lista' ? 'success' : 'default';
 
   return (
     <Card
@@ -182,20 +167,6 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
           <UrgencyTimer desdeIso={pedido.created_at} />
           <strong className="text-base tabular-nums">{formatARS(Number(pedido.total))}</strong>
         </div>
-
-        {/* BOTÓN ÚNICO CONTEXTUAL */}
-        {accionLabel && (
-          <Button
-            type="button"
-            size="sm"
-            variant={accionVariant}
-            className="w-full mt-0.5"
-            onClick={(e) => { e.stopPropagation(); void onAccion(); }}
-          >
-            <AccionIcon className="h-3.5 w-3.5 mr-1.5" />
-            {accionLabel}
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

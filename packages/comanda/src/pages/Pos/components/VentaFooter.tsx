@@ -56,26 +56,13 @@ export const VentaFooter = React.memo(function VentaFooter({
         </div>
       </div>
 
-      {/* Barra de acciones — 2 botones en pedidos, 4 en el resto */}
+      {/* Barra de acciones — 2 botones en pedidos (Listo + Cobrar), 4 en mesa/mostrador.
+          En pedidos los items se auto-marchan al agregarlos, por eso Marchar
+          desaparece — el cajero solo elige salir al listado o cobrar. */}
       {esModoPedidos ? (
         <div className="grid grid-cols-2 gap-1.5 px-2 pb-2.5">
           <Button
             variant="outline"
-            size="sm"
-            onClick={onMarchar}
-            disabled={!editable || totalHold === 0}
-            className="gap-1.5"
-          >
-            <Send className="h-3.5 w-3.5" />
-            Marchar
-            {totalHold > 0 && (
-              <span className="inline-flex items-center justify-center h-4 min-w-[1rem] rounded-full bg-muted text-[10px] font-bold px-1 tabular-nums">
-                {totalHold}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant="default"
             size="sm"
             onClick={onListo}
             disabled={!editable}
@@ -83,6 +70,16 @@ export const VentaFooter = React.memo(function VentaFooter({
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Listo
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onCobrar}
+            disabled={!editable || venta.total <= 0}
+            className="gap-1.5"
+          >
+            <Wallet className="h-3.5 w-3.5" />
+            Cobrar
           </Button>
         </div>
       ) : (
