@@ -55,17 +55,17 @@ interface Props {
   onAccion: () => Promise<void>;
 }
 
-// Resumen de items para la card: max 3 nombres + "y N más".
+// Resumen de items para la card: max 2 nombres + "y N más".
 // listPedidosPorTab hace JOIN a items para resolver nombre + emoji.
 function resumenItems(items: (VentaPosItem & { item?: { nombre: string | null; emoji: string | null } | null })[]): { lineas: { qty: number; nombre: string; emoji: string | null }[]; resto: number } {
   const activos = items.filter((it) => it.estado !== 'anulado');
-  const top = activos.slice(0, 3);
+  const top = activos.slice(0, 2);
   const lineas = top.map((it) => ({
     qty: Number(it.cantidad),
     nombre: it.item?.nombre ?? `Item #${it.item_id}`,
     emoji: it.item?.emoji ?? null,
   }));
-  return { lineas, resto: Math.max(0, activos.length - 3) };
+  return { lineas, resto: Math.max(0, activos.length - 2) };
 }
 
 export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAccion }: Props) {
@@ -99,8 +99,8 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
       onClick={onClick}
     >
       {/* HEADER coloreado por canal */}
-      <div className={cn('px-4 py-2.5 border-b flex items-center justify-between gap-2', headerBg)}>
-        <div className="flex items-center gap-2 min-w-0">
+      <div className={cn('px-3 py-1.5 border-b flex items-center justify-between gap-2', headerBg)}>
+        <div className="flex items-center gap-1.5 min-w-0">
           {canal && <CanalBadge slug={canal.slug} label={canal.nombre} emoji={canal.emoji} />}
           <strong className="text-sm font-semibold tabular-nums">#{pedido.numero_local}</strong>
           {(() => {
@@ -118,35 +118,35 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
         <BadgePago estadoPago={estadoPago} tipoEntrega={pedido.tipo_entrega} />
       </div>
 
-      <CardContent className="p-4 space-y-2.5">
-        {/* CLIENTE */}
-        <div>
-          <div className="text-sm font-medium truncate">{pedido.cliente_nombre ?? 'Sin nombre'}</div>
+      <CardContent className="p-3 space-y-1.5">
+        {/* CLIENTE — nombre + teléfono en una sola línea */}
+        <div className="flex items-baseline justify-between gap-2 min-w-0">
+          <div className="text-sm font-medium truncate flex-1 min-w-0">{pedido.cliente_nombre ?? 'Sin nombre'}</div>
           {pedido.cliente_telefono && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-              <Phone className="h-3 w-3" /> {pedido.cliente_telefono}
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 tabular-nums">
+              <Phone className="h-2.5 w-2.5" /> {pedido.cliente_telefono}
             </div>
           )}
         </div>
 
-        {/* ENTREGA */}
+        {/* ENTREGA — una línea, truncada */}
         {pedido.tipo_entrega === 'delivery' && pedido.cliente_direccion && (
-          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
-            <span className="line-clamp-2">{pedido.cliente_direccion}</span>
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground min-w-0">
+            <MapPin className="h-2.5 w-2.5 flex-shrink-0" />
+            <span className="truncate">{pedido.cliente_direccion}</span>
           </div>
         )}
         {pedido.tipo_entrega === 'retiro' && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Home className="h-3 w-3" /> Retiro en local
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Home className="h-2.5 w-2.5" /> Retiro en local
           </div>
         )}
 
-        {/* PROGRAMADO PARA hora futura — banner destacado */}
+        {/* PROGRAMADO PARA hora futura — banner destacado (compacto) */}
         {pedido.programada_para && (
-          <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5 text-xs">
-            <Clock className="h-3.5 w-3.5 text-primary" />
-            <span className="text-primary font-medium">
+          <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/30 px-2 py-1 text-[11px]">
+            <Clock className="h-3 w-3 text-primary" />
+            <span className="text-primary font-medium truncate">
               Para {new Date(pedido.programada_para).toLocaleString('es-AR', {
                 weekday: 'short', hour: '2-digit', minute: '2-digit',
               })}
@@ -154,11 +154,11 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
           </div>
         )}
 
-        {/* ITEMS RESUMEN */}
+        {/* ITEMS RESUMEN (máx 2) */}
         {lineas.length > 0 && (
-          <ul className="text-xs space-y-0.5 pt-1 border-t border-border/50">
+          <ul className="text-[11px] space-y-0 pt-1 border-t border-border/50 leading-snug">
             {lineas.map((l, i) => (
-              <li key={i} className="text-muted-foreground">
+              <li key={i} className="text-muted-foreground truncate">
                 <span className="font-medium text-foreground">{l.qty}×</span>
                 {l.emoji && <span className="ml-1">{l.emoji}</span>} {l.nombre}
               </li>
@@ -171,27 +171,28 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
 
         {/* ACLARACIÓN CLIENTE (banner amarillo, imposible no verla — Toast pattern) */}
         {aclaracion && (
-          <div className="rounded-md bg-warning/15 border border-warning/30 px-2.5 py-1.5 flex items-start gap-1.5">
-            <MessageSquareWarning className="h-3.5 w-3.5 text-warning flex-shrink-0 mt-px" />
-            <p className="text-xs text-warning-foreground italic line-clamp-2">{aclaracion}</p>
+          <div className="rounded-md bg-warning/15 border border-warning/30 px-2 py-1 flex items-start gap-1">
+            <MessageSquareWarning className="h-3 w-3 text-warning flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-warning-foreground italic line-clamp-1">{aclaracion}</p>
           </div>
         )}
 
         {/* TIMER + TOTAL */}
-        <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center justify-between pt-0.5">
           <UrgencyTimer desdeIso={pedido.created_at} />
-          <strong className="text-lg tabular-nums">{formatARS(Number(pedido.total))}</strong>
+          <strong className="text-base tabular-nums">{formatARS(Number(pedido.total))}</strong>
         </div>
 
         {/* BOTÓN ÚNICO CONTEXTUAL */}
         {accionLabel && (
           <Button
             type="button"
+            size="sm"
             variant={accionVariant}
-            className="w-full mt-1"
+            className="w-full mt-0.5"
             onClick={(e) => { e.stopPropagation(); void onAccion(); }}
           >
-            <AccionIcon className="h-4 w-4 mr-2" />
+            <AccionIcon className="h-3.5 w-3.5 mr-1.5" />
             {accionLabel}
           </Button>
         )}
