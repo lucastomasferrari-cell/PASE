@@ -21,7 +21,6 @@ import { formatARS, formatHora } from '@/lib/format';
 import { CanalBadge } from '@/components/CanalBadge';
 import { BadgePago } from '@/components/BadgePago';
 import { UrgencyTimer } from '@/components/UrgencyTimer';
-import { VentaTimeline } from '@/components/VentaTimeline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
@@ -411,14 +410,6 @@ export function PedidoDetalle() {
                   <span className="font-medium">{formatHora(venta.programada_para)}</span>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Timeline — Plan Fase 1 Brainstorm #8 (2026-06-01) */}
-          <Card>
-            <CardContent className="p-3 space-y-2">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Timeline</div>
-              <VentaTimeline venta={venta} />
             </CardContent>
           </Card>
 
