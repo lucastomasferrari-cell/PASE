@@ -68,7 +68,7 @@ export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemCo
       tax_rate_id, estacion, estado,
       agotado_motivo, agotado_at, agotado_hasta, es_combo,
       tiempo_prep_min,
-      visible_pos, visible_qr, visible_tienda, es_open_item, es_cubierto,
+      visible_pos, visible_qr, visible_tienda, es_open_item, es_cubierto, modos_pos_visibles,
       grupo:item_grupos(id, nombre, emoji, color)
     `)
     .is('deleted_at', null)

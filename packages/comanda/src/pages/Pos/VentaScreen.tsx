@@ -183,9 +183,15 @@ export function VentaScreen() {
   );
 
   const catalogoFiltrado = useMemo(() => {
+    const modoVenta = venta?.modo ?? null;
     return catalogo.filter((it) => {
       if (it.estado !== 'disponible' && it.estado !== 'agotado') return false;
       if (!it.visible_pos) return false;
+      // Filtro por modo POS: si el item tiene modos_pos_visibles definido,
+      // solo aparece si el modo actual está incluido. NULL/[] = todos.
+      if (modoVenta && it.modos_pos_visibles && it.modos_pos_visibles.length > 0) {
+        if (!it.modos_pos_visibles.includes(modoVenta)) return false;
+      }
       if (grupoSel === 'favoritos') {
         if (!favoritosSet.has(it.id)) return false;
       } else if (grupoSel !== null && it.grupo_id !== grupoSel) {
@@ -194,7 +200,7 @@ export function VentaScreen() {
       if (search.trim() && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [catalogo, grupoSel, search, favoritosSet]);
+  }, [catalogo, grupoSel, search, favoritosSet, venta?.modo]);
 
   // Hook #2: derivar agrupaciones por curso (puro, useMemo)
   const { itemsPorCurso, tiempoEstimadoMin, holdCount, stayCount } = useVentaCursos(items, catalogo);

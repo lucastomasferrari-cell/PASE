@@ -80,6 +80,8 @@ export interface Item {
   visible_tienda: boolean;
   es_open_item: boolean;
   es_cubierto?: boolean;
+  /** Modos POS donde el item aparece en el catálogo. NULL/vacío = todos. */
+  modos_pos_visibles?: string[] | null;
 }
 
 export interface Canal {
