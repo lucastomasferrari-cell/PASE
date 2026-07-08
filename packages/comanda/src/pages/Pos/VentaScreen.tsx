@@ -471,6 +471,32 @@ export function VentaScreen() {
     }
   }
 
+  // Handler del botón "Aplicar 10% descuento efectivo":
+  // - Aplica el 10% sobre el subtotal actual como descuento porcentual.
+  // - Motivo pre-cargado. 10% no requiere manager override (umbral es 15%).
+  // - Idempotente por venta+tipo mientras el flag esté activo.
+  async function handleDescuentoEfectivo() {
+    if (!venta) return;
+    if (Number(venta.descuento_total) > 0) {
+      toast.info('Ya hay un descuento aplicado. Sacalo primero desde el diálogo de descuento.');
+      return;
+    }
+    const { aplicarDescuento } = await import('@/services/descuentosService');
+    const r = await aplicarDescuento(
+      {
+        ventaId: venta.id,
+        tipo: 'porcentaje',
+        valor: 10,
+        motivo: 'Descuento efectivo',
+        idempotencyKey: `dto-efvo-${venta.id}`,
+      },
+      Number(venta.subtotal),
+    );
+    if (r.error) { toast.error(r.error); return; }
+    toast.success('10% descuento efectivo aplicado');
+    void reloadVenta();
+  }
+
   // Handler del botón "Listo" (solo aparece en modo pedidos):
   // - Marcha automáticamente todo lo que quedó en hold (por si el cajero se olvidó).
   // - Después vuelve al listado de pedidos.
@@ -660,6 +686,7 @@ export function VentaScreen() {
           onMesa={() => setShowMesaControl(true)}
           onCobrar={() => setShowCobro(true)}
           onListo={() => void handleListoPedido()}
+          onDescuentoEfectivo={() => void handleDescuentoEfectivo()}
         />
       </aside>
 
