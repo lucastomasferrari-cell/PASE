@@ -680,7 +680,7 @@ export default async function handler(req, res) {
         }
         authUserId = newAuth.user.id;
 
-        // Crear comanda_usuarios ligado al auth
+        // Crear comanda_usuarios ligado al auth (para login de COMANDA)
         const { error: cuErr } = await db.from('comanda_usuarios').insert({
           auth_id: authUserId,
           tenant_id: local.tenant_id,
@@ -693,6 +693,30 @@ export default async function handler(req, res) {
         if (cuErr) {
           return res.status(500).json({ ok: false, error: 'comanda_usuarios_create_failed: ' + cuErr.message });
         }
+
+        // Crear usuarios (PASE) para que pase las policies RLS de tablas
+        // como mesas, ventas_pos, etc. rol='admin' hace bypass en
+        // auth_tiene_permiso. apps_permitidas=['comanda'] impide entrar a
+        // PASE. usuario_locales limita el scope al local.
+        const { data: uRow, error: uErr } = await db.from('usuarios').insert({
+          tenant_id: local.tenant_id,
+          email: loginEmail,
+          nombre: `${local.nombre} POS`,
+          rol: 'admin',
+          activo: true,
+          password: '__supabase_auth_only__',
+          password_temporal: false,
+          apps_permitidas: ['comanda'],
+          auth_id: authUserId,
+        }).select('id').single();
+        if (uErr) {
+          return res.status(500).json({ ok: false, error: 'usuarios_create_failed: ' + uErr.message });
+        }
+        await db.from('usuario_locales').insert({
+          usuario_id: uRow.id,
+          local_id: localId,
+          tenant_id: local.tenant_id,
+        });
       } else {
         // Rotación: encontrar el auth user existente por email y updatear la password.
         const emailAuth = loginEmail.includes('@') ? loginEmail : `${loginEmail}@pase.local`;
