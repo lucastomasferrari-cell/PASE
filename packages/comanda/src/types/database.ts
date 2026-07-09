@@ -316,6 +316,8 @@ export interface VentaPos {
   tab_nombre?: string | null;
   /** Hint del método de pago cargado al crear el pedido. NULL = definir al cobrar. */
   metodo_pago_previsto?: string | null;
+  /** % del descuento efectivo activo. NULL = sin descuento efectivo automático. */
+  descuento_efectivo_pct?: number | null;
   // Sprint 16/05 — geocoding cliente (delivery)
   cliente_lat?: number | null;
   cliente_lon?: number | null;

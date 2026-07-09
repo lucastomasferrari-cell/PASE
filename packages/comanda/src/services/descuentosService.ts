@@ -48,3 +48,26 @@ export async function aplicarDescuento(
   });
   return { error: error?.message ?? null };
 }
+
+// Descuento efectivo con auto-recalc: guarda el % en la venta, y cada vez
+// que cambian los items la RPC de recalc de totales lo recomputa. NO usa
+// el flujo de aplicarDescuento (que guarda monto fijo).
+export async function aplicarDescuentoEfectivo(
+  ventaId: number,
+  pct: number,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_aplicar_descuento_efectivo', {
+    p_venta_id: ventaId,
+    p_pct: pct,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function quitarDescuentoEfectivo(
+  ventaId: number,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_quitar_descuento_efectivo', {
+    p_venta_id: ventaId,
+  });
+  return { error: error?.message ?? null };
+}

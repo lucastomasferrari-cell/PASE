@@ -498,26 +498,20 @@ export function VentaScreen() {
 
   // Handler del descuento efectivo:
   // - % configurable por local (comanda_local_settings.descuento_efectivo_pct).
-  // - Motivo pre-cargado. Percentages <= 15% no requieren manager override.
-  // - Idempotency key por venta.
+  // - Guarda el % en la venta (ventas_pos.descuento_efectivo_pct). La RPC
+  //   fn_recalc_total_venta lo recomputa automáticamente cada vez que
+  //   cambian los items (agregar/anular/etc), así el descuento sigue el
+  //   subtotal.
   async function handleDescuentoEfectivo() {
     if (!venta) return;
     if (descuentoEfectivoPct <= 0) return;
-    if (Number(venta.descuento_total) > 0) {
+    // Si ya hay un descuento (efectivo o manual), avisar.
+    if (Number(venta.descuento_total) > 0 && !venta.descuento_efectivo_pct) {
       toast.info('Ya hay un descuento aplicado. Sacalo primero desde "Aplicar descuento".');
       return;
     }
-    const { aplicarDescuento } = await import('@/services/descuentosService');
-    const r = await aplicarDescuento(
-      {
-        ventaId: venta.id,
-        tipo: 'porcentaje',
-        valor: descuentoEfectivoPct,
-        motivo: 'Descuento efectivo',
-        idempotencyKey: `dto-efvo-${venta.id}`,
-      },
-      Number(venta.subtotal),
-    );
+    const { aplicarDescuentoEfectivo } = await import('@/services/descuentosService');
+    const r = await aplicarDescuentoEfectivo(venta.id, descuentoEfectivoPct);
     if (r.error) { toast.error(r.error); return; }
     toast.success(`${descuentoEfectivoPct}% descuento efectivo aplicado`);
     void reloadVenta();
