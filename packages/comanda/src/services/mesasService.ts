@@ -87,6 +87,8 @@ export interface MesaDraft {
   alto?: number;
   tenant_id: string;
   local_id: number;
+  pos_x?: number;
+  pos_y?: number;
 }
 
 export async function estadoMesasLive(localId: number): Promise<{ data: MesaEstadoLive[]; error: string | null }> {

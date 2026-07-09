@@ -159,6 +159,7 @@ export function SettingsMesas() {
           mesa={editing === 'new' ? null : editing}
           tenantId={user?.tenant_id ?? ''}
           localId={localId}
+          mesasExistentes={mesas}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); reload(); }}
         />
@@ -167,10 +168,11 @@ export function SettingsMesas() {
   );
 }
 
-function MesaDialog({ mesa, tenantId, localId, onClose, onSaved }: {
+function MesaDialog({ mesa, tenantId, localId, mesasExistentes, onClose, onSaved }: {
   mesa: Mesa | null;
   tenantId: string;
   localId: number;
+  mesasExistentes: Mesa[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -179,6 +181,17 @@ function MesaDialog({ mesa, tenantId, localId, onClose, onSaved }: {
   const [capacidad, setCapacidad] = useState(mesa?.capacidad ?? 4);
   const [forma, setForma] = useState<FormaMesa>(mesa?.forma ?? 'cuadrado');
   const [saving, setSaving] = useState(false);
+
+  // Auto-posición para mesas nuevas: grilla 6 por fila (120px × 100px cada
+  // celda) empezando en (10, 10). Así la mesa nace en el plano y se puede
+  // arrastrar de una — antes quedaba en "Sin ubicar" no-draggable.
+  function calcularPosicionDefault(): { pos_x: number; pos_y: number } {
+    const ubicadas = mesasExistentes.filter((m) => m.pos_x !== null && m.pos_y !== null);
+    const idx = ubicadas.length;
+    const col = idx % 6;
+    const row = Math.floor(idx / 6);
+    return { pos_x: 10 + col * 120, pos_y: 10 + row * 100 };
+  }
 
   async function guardar() {
     if (!numero.trim()) { toast.error('Número requerido'); return; }
@@ -189,6 +202,7 @@ function MesaDialog({ mesa, tenantId, localId, onClose, onSaved }: {
       zona: zona.trim() || null,
       capacidad,
       forma,
+      ...(mesa ? {} : calcularPosicionDefault()),
     };
     const { error } = mesa ? await updateMesa(mesa.id, draft) : await createMesa(draft);
     setSaving(false);
