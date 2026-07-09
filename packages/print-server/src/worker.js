@@ -120,8 +120,13 @@ export class PrintWorker {
     if (job.target_kind === 'printer_id') {
       return printers.find((p) => p.id === job.target_value);
     }
-    // estacion
-    return printers.find((p) => p.estacion === job.target_value);
+    // estacion — matcheamos por array nuevo o campo legacy.
+    // Si múltiples impresoras cubren la misma estación, agarra la primera
+    // (típicamente esto no pasa; el usuario asigna 1 impresora por estación).
+    return printers.find((p) =>
+      (Array.isArray(p.estaciones) && p.estaciones.includes(job.target_value)) ||
+      p.estacion === job.target_value,
+    );
   }
 }
 

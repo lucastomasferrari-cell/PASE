@@ -1,6 +1,6 @@
 {
   "name": "@pase/print-agent",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "COMANDA Print Agent — Electron wrapper que corre el print-server localmente con UI tray + auto-start.",
   "main": "src/main/main.js",
   "type": "commonjs",

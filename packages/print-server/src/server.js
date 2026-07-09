@@ -153,7 +153,7 @@ app.get('/printers', async (req, res) => {
 
 // ── Agregar / actualizar impresora
 app.post('/printers', (req, res) => {
-  const { id, nombre, estacion, transporte, config: printerConfig } = req.body || {};
+  const { id, nombre, estacion, estaciones, transporte, config: printerConfig } = req.body || {};
   if (!nombre || !transporte) {
     return res.status(400).json({ error: 'nombre y transporte requeridos' });
   }
@@ -161,12 +161,24 @@ app.post('/printers', (req, res) => {
     return res.status(400).json({ error: 'transporte debe ser usb | network | serial' });
   }
 
+  // Nuevo modelo (09-jul): estaciones = array de strings. Backward compat:
+  // aceptamos `estacion` (string legacy) y lo convertimos al array.
+  let estacionesFinal = null;
+  if (Array.isArray(estaciones)) {
+    estacionesFinal = estaciones.filter((e) => typeof e === 'string' && e.length > 0);
+    if (estacionesFinal.length === 0) estacionesFinal = null;
+  } else if (typeof estacion === 'string' && estacion.length > 0) {
+    estacionesFinal = [estacion];
+  }
+
   const printerId = id || `printer_${Date.now()}`;
   const existing = config.printers.findIndex((p) => p.id === printerId);
   const entry = {
     id: printerId,
     nombre,
-    estacion: estacion || null,
+    // Guardamos ambos por compat con builds viejos del agent.
+    estacion: estacionesFinal ? estacionesFinal[0] : null,
+    estaciones: estacionesFinal,
     transporte,
     config: printerConfig || {},
   };
@@ -283,7 +295,10 @@ app.post('/print-by-estacion', async (req, res) => {
   }
   // Verificamos al menos que haya alguna impresora con esa estación antes
   // de encolar — feedback inmediato al cliente si configuró mal.
-  const hasOne = config.printers.some((p) => p.estacion === estacion);
+  const hasOne = config.printers.some((p) =>
+    (Array.isArray(p.estaciones) && p.estaciones.includes(estacion)) ||
+    p.estacion === estacion,
+  );
   if (!hasOne) {
     return res.status(404).json({
       error: `Sin impresora asignada a estación "${estacion}"`,

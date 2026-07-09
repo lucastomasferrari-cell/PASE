@@ -16,7 +16,10 @@ export interface PrintServerStatus {
 export interface PrintServerPrinter {
   id: string;
   nombre: string;
+  /** Legacy single estación. Nuevo modelo usa `estaciones` (array). */
   estacion: string | null;
+  /** Array de estaciones que imprime esta impresora (nuevo, 09-jul). */
+  estaciones?: string[] | null;
   transporte: 'usb' | 'network' | 'serial';
   config: Record<string, unknown>;
   status?: { ok: boolean; error?: string };
@@ -25,7 +28,9 @@ export interface PrintServerPrinter {
 export interface UpsertPrinterArgs {
   id?: string;
   nombre: string;
-  estacion: string | null;
+  /** @deprecated usar `estaciones`. Sigue soportado por back-compat. */
+  estacion?: string | null;
+  estaciones?: string[] | null;
   transporte: 'usb' | 'network' | 'serial';
   config: Record<string, unknown>;
 }

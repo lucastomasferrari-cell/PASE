@@ -47,7 +47,8 @@ const TRANSPORTES = [
 interface FormState {
   id?: string;
   nombre: string;
-  estacion: string;
+  /** Multi-select: una impresora puede cubrir varias estaciones a la vez. */
+  estaciones: string[];
   transporte: 'usb' | 'network' | 'serial';
   // USB
   vendor_id: string;
@@ -65,7 +66,7 @@ interface FormState {
 
 const EMPTY: FormState = {
   nombre: '',
-  estacion: 'cliente',
+  estaciones: ['cliente'],
   transporte: 'usb',
   vendor_id: '',
   product_id: '',
@@ -125,10 +126,14 @@ export function HardwareImpresoras() {
 
   function abrirModalEditar(p: PrintServerPrinter) {
     const cfg = p.config as Record<string, string | number>;
+    // Nuevo modelo: `estaciones` (array). Fallback al legacy `estacion` (single).
+    const estacionesIniciales = Array.isArray(p.estaciones) && p.estaciones.length > 0
+      ? p.estaciones
+      : (p.estacion ? [p.estacion] : ['cliente']);
     setForm({
       id: p.id,
       nombre: p.nombre,
-      estacion: p.estacion || 'cliente',
+      estaciones: estacionesIniciales,
       transporte: p.transporte,
       vendor_id: String(cfg.vendor_id ?? ''),
       product_id: String(cfg.product_id ?? ''),
@@ -165,10 +170,17 @@ export function HardwareImpresoras() {
       config.path = form.path.trim();
     }
 
+    if (form.estaciones.length === 0) {
+      toast.error('Elegí al menos una categoría de impresión');
+      return;
+    }
     const args: UpsertPrinterArgs = {
       id: form.id,
       nombre: form.nombre.trim(),
-      estacion: form.estacion === 'cliente' ? null : form.estacion, // cliente = sin estación (default)
+      // Nuevo formato: array de estaciones. `estacion` (single) queda en null;
+      // el server lo derivará por back-compat.
+      estaciones: form.estaciones,
+      estacion: null,
       transporte: form.transporte,
       config,
     };
@@ -350,9 +362,15 @@ export function HardwareImpresoras() {
               <div className="space-y-2">
                 {printers.map((p) => {
                   const TransporteIcon = TRANSPORTES.find((t) => t.value === p.transporte)?.icon ?? Usb;
-                  const estacionLabel = p.estacion
-                    ? ESTACIONES.find((e) => e.value === p.estacion)?.label ?? p.estacion
-                    : 'Cliente / Caja';
+                  // Nuevo modelo: array. Fallback al legacy `estacion`.
+                  const estacionesRaw = Array.isArray(p.estaciones) && p.estaciones.length > 0
+                    ? p.estaciones
+                    : (p.estacion ? [p.estacion] : []);
+                  const estacionLabel = estacionesRaw.length > 0
+                    ? estacionesRaw
+                        .map((e) => ESTACIONES.find((x) => x.value === e)?.label ?? e)
+                        .join(' · ')
+                    : 'Sin estación asignada';
                   return (
                     <div key={p.id} className="flex items-center gap-3 p-3 rounded-md border border-border hover:bg-accent/30 transition-colors">
                       <TransporteIcon className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -411,15 +429,33 @@ export function HardwareImpresoras() {
               <Input value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Cocina principal" />
             </div>
             <div className="space-y-1.5">
-              <Label>Estación (a qué pedidos imprime)</Label>
-              <Select value={form.estacion} onValueChange={(v) => setForm((f) => ({ ...f, estacion: v }))}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ESTACIONES.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Categorías que imprime</Label>
+              <div className="rounded-md border border-input p-2 space-y-1.5">
+                {ESTACIONES.map((e) => {
+                  const checked = form.estaciones.includes(e.value);
+                  return (
+                    <label key={e.value} className="flex items-center gap-2 cursor-pointer hover:bg-accent/50 rounded px-1.5 py-1 select-none">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(ev) => {
+                          const on = ev.target.checked;
+                          setForm((f) => ({
+                            ...f,
+                            estaciones: on
+                              ? [...f.estaciones.filter((x) => x !== e.value), e.value]
+                              : f.estaciones.filter((x) => x !== e.value),
+                          }));
+                        }}
+                        className="h-4 w-4 accent-primary"
+                      />
+                      <span className="text-sm">{e.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
               <p className="text-[10px] text-muted-foreground">
-                "Cliente" recibe los tickets de venta al cobrar. Las otras reciben tickets de cocina cuando se manda curso.
+                Marcá <strong>todas</strong> las categorías que imprime esta impresora. Ej: una comandera de barra puede hacer "Cocina caliente" + "Cocina fría" a la vez. "Cliente" son los tickets de venta al cobrar.
               </p>
             </div>
             <div className="space-y-1.5">
