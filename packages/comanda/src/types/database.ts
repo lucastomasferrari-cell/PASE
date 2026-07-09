@@ -459,6 +459,8 @@ export interface ComandaLocalSettings extends HorariosLocal {
   acepta_delivery: boolean;
   autolock_minutos: number;
   features_pos_modos: PosModo[];
+  /** % del descuento por pago en efectivo aplicable desde el POS. 0 = deshabilitado. */
+  descuento_efectivo_pct?: number;
   /** Si true, el POS muestra cursos (Curso 1/2/3 + Stay + Enviar solo). Si
    * false (sushi/fast casual), oculta toda esa UI y manda todo en una tanda. */
   usar_cursos: boolean;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, PauseCircle, LayoutGrid, Wallet, CheckCircle2, Banknote } from 'lucide-react';
+import { Send, PauseCircle, LayoutGrid, Wallet, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
@@ -16,8 +16,6 @@ export interface VentaFooterProps {
   onCobrar: () => void;
   /** Solo se usa en modo 'pedidos'. Si se pasa, el footer muestra Marchar + Listo. */
   onListo?: () => void;
-  /** Aplicar 10% descuento efectivo. Si undefined, no muestra el botón. */
-  onDescuentoEfectivo?: () => void;
 }
 
 export const VentaFooter = React.memo(function VentaFooter({
@@ -30,33 +28,10 @@ export const VentaFooter = React.memo(function VentaFooter({
   onMesa,
   onCobrar,
   onListo,
-  onDescuentoEfectivo,
 }: VentaFooterProps) {
   const esModoPedidos = venta.modo === 'pedidos';
-  const tieneDescuento = venta.descuento_total > 0;
   return (
     <div className="shrink-0 border-t border-border/40 bg-card">
-      {/* Botón rápido: descuento 10% efectivo. Se muestra solo si hay total.
-          Se desactiva si ya hay descuento aplicado (para no acumular). */}
-      {onDescuentoEfectivo && editable && venta.subtotal > 0 && (
-        <div className="px-3 pt-2 pb-1">
-          <Button
-            type="button"
-            variant={tieneDescuento ? 'outline' : 'secondary'}
-            size="sm"
-            onClick={onDescuentoEfectivo}
-            disabled={tieneDescuento}
-            className={cn(
-              'w-full gap-1.5',
-              tieneDescuento && 'text-success border-success/40 bg-success/5',
-            )}
-          >
-            <Banknote className="h-4 w-4" />
-            {tieneDescuento ? 'Descuento efectivo aplicado' : 'Aplicar 10% descuento efectivo'}
-          </Button>
-        </div>
-      )}
-
       {/* Resumen de totales */}
       <div className="px-3 pt-2.5 pb-2 space-y-0.5">
         <div className="flex justify-between text-sm text-muted-foreground">

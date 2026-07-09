@@ -34,6 +34,7 @@ export interface LocalSettingsPatch {
   autolock_minutos?: number;
   features_pos_modos?: PosModo[];
   usar_cursos?: boolean;
+  descuento_efectivo_pct?: number;
   horario_lun?: string | null;
   horario_mar?: string | null;
   horario_mie?: string | null;

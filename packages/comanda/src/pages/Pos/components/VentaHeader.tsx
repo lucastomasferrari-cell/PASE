@@ -29,6 +29,9 @@ export interface VentaHeaderProps {
   tiempoEstimadoMin: number;
   coursingAuto: boolean;
   onToggleCoursingAuto: () => void;
+  /** % del descuento efectivo configurado en el local. 0 = deshabilitado. */
+  descuentoEfectivoPct?: number;
+  onDescuentoEfectivo?: () => void;
 }
 
 export const VentaHeader = React.memo(function VentaHeader({
@@ -52,6 +55,8 @@ export const VentaHeader = React.memo(function VentaHeader({
   tiempoEstimadoMin,
   coursingAuto,
   onToggleCoursingAuto,
+  descuentoEfectivoPct,
+  onDescuentoEfectivo,
 }: VentaHeaderProps) {
   return (
     <div className="px-2 py-1.5 border-b border-border/40 bg-card space-y-1">
@@ -94,6 +99,13 @@ export const VentaHeader = React.memo(function VentaHeader({
               <DropdownMenuItem onClick={onDescuento}>
                 Aplicar descuento
               </DropdownMenuItem>
+              {onDescuentoEfectivo && descuentoEfectivoPct && descuentoEfectivoPct > 0 && (
+                <DropdownMenuItem onClick={onDescuentoEfectivo} disabled={venta.descuento_total > 0}>
+                  {venta.descuento_total > 0
+                    ? 'Descuento efectivo aplicado'
+                    : `Aplicar descuento en efectivo (${descuentoEfectivoPct}%)`}
+                </DropdownMenuItem>
+              )}
               {venta.modo === 'salon' && (
                 <>
                   <DropdownMenuItem onClick={onTransfer}>

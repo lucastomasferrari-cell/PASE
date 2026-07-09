@@ -317,6 +317,13 @@ export function SettingsLocal() {
                 Min sin tocar el POS antes de pedir PIN otra vez. <strong>0 = nunca</strong> (recomendado para servicio).
               </p>
             </Field>
+            <Field label="Descuento efectivo (%)">
+              <Input type="number" min={0} max={100} step={0.5} value={merged.descuento_efectivo_pct ?? 0}
+                onChange={(e) => setField('descuento_efectivo_pct', Number(e.target.value))} className="h-11" />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Aparece como opción "Aplicar descuento en efectivo" en el menú Opciones del POS. <strong>0 = deshabilitado</strong> (no aparece la opción).
+              </p>
+            </Field>
           </div>
           <div className="space-y-2">
             <ToggleField
