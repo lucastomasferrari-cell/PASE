@@ -622,8 +622,111 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ ok: testOk, error: testError });
 
+    } else if (action === 'local_login_rotate') {
+      // Genera / rota las credenciales del login del local (COMANDA/MESA).
+      // Modelo PIN-first: la tablet se loguea 1 vez con este mail ficticio +
+      // password aleatoria y queda eternamente logueada. Cada persona se
+      // identifica con su PIN en el POS.
+      //
+      // Params: local_id
+      // Auth: admin/dueño del tenant que es dueño del local.
+      // Return: { email, password } — one-time (no se guarda en DB).
+      const { local_id: localIdRaw } = req.body || {};
+      const localId = Number(localIdRaw);
+      if (!Number.isFinite(localId) || localId <= 0) {
+        return res.status(400).json({ ok: false, error: 'Falta local_id' });
+      }
+
+      // Verificar que el local pertenece al tenant del caller (o caller es superadmin)
+      const { data: local, error: localErr } = await db.from('locales')
+        .select('id, nombre, tenant_id, login_email')
+        .eq('id', localId)
+        .maybeSingle();
+      if (localErr || !local) {
+        return res.status(404).json({ ok: false, error: 'local_not_found' });
+      }
+      if (auth.row.rol !== 'superadmin' && local.tenant_id !== auth.row.tenant_id) {
+        return res.status(403).json({ ok: false, error: 'cross_tenant_denied' });
+      }
+
+      // Generar password aleatoria (12 chars fáciles de leer).
+      const { randomBytes } = await import('crypto');
+      const newPassword = randomBytes(9).toString('base64')
+        .replace(/[+/=]/g, '')
+        .slice(0, 12);
+
+      let loginEmail = local.login_email;
+      let authUserId;
+
+      if (!loginEmail) {
+        // Primer uso: autogenerar mail ficticio y crear auth user + comanda_usuarios.
+        const slug = (local.nombre || 'local').toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 24) || 'local';
+        const hash = randomBytes(3).toString('hex');
+        loginEmail = `${slug}_${hash}`;
+
+        const emailAuth = `${loginEmail}@pase.local`;
+        const { data: newAuth, error: authErr } = await db.auth.admin.createUser({
+          email: emailAuth,
+          password: newPassword,
+          email_confirm: true,
+          user_metadata: { username: loginEmail, kind: 'local_login', local_id: localId },
+        });
+        if (authErr) {
+          return res.status(500).json({ ok: false, error: 'auth_create_failed: ' + authErr.message });
+        }
+        authUserId = newAuth.user.id;
+
+        // Crear comanda_usuarios ligado al auth
+        const { error: cuErr } = await db.from('comanda_usuarios').insert({
+          auth_id: authUserId,
+          tenant_id: local.tenant_id,
+          nombre: `${local.nombre} POS`,
+          email: loginEmail,
+          rol_pos: 'admin',
+          locales: [localId],
+          activo: true,
+        });
+        if (cuErr) {
+          return res.status(500).json({ ok: false, error: 'comanda_usuarios_create_failed: ' + cuErr.message });
+        }
+      } else {
+        // Rotación: encontrar el auth user existente por email y updatear la password.
+        const emailAuth = loginEmail.includes('@') ? loginEmail : `${loginEmail}@pase.local`;
+        const { data: usersList, error: listErr } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
+        if (listErr) {
+          return res.status(500).json({ ok: false, error: 'auth_list_failed: ' + listErr.message });
+        }
+        const found = usersList.users.find((u) => u.email === emailAuth);
+        if (!found) {
+          return res.status(500).json({ ok: false, error: 'auth_user_not_found_for_login_email' });
+        }
+        authUserId = found.id;
+        const { error: updErr } = await db.auth.admin.updateUserById(authUserId, { password: newPassword });
+        if (updErr) {
+          return res.status(500).json({ ok: false, error: 'auth_update_failed: ' + updErr.message });
+        }
+      }
+
+      // Actualizar tracking en locales
+      await db.from('locales').update({
+        login_email: loginEmail,
+        login_password_rotated_at: new Date().toISOString(),
+        login_password_rotated_by: auth.row.auth_id ?? null,
+      }).eq('id', localId);
+
+      return res.status(200).json({
+        ok: true,
+        email: loginEmail,
+        password: newPassword,
+        note: 'Anotá la contraseña ahora — no se puede recuperar. Después solo se puede rotar (crea una nueva).',
+      });
+
     } else {
-      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | change_password_self | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send | stripe-checkout' });
+      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | change_password_self | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send | stripe-checkout | local_login_rotate' });
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

@@ -20,6 +20,13 @@
       "runtimeArgs": ["--filter", "mesa", "dev"],
       "port": 5175,
       "autoPort": true
+    },
+    {
+      "name": "accesos",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "accesos", "dev"],
+      "port": 5176,
+      "autoPort": true
     }
   ]
 }

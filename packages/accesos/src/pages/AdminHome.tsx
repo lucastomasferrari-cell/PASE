@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  LogOut, ShieldCheck, Users, Grid3x3, KeyRound, ScrollText, User, MapPin, ChevronDown, Check, Tags,
+  LogOut, ShieldCheck, Users, Grid3x3, KeyRound, ScrollText, User, MapPin, ChevronDown, Check, Tags, Tablet as TabletIcon,
 } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Personas } from './Personas';
@@ -12,10 +12,11 @@ import { Marcas } from './Marcas';
 import { Roles } from './Roles';
 import { Accesos } from './Accesos';
 import { PinPos } from './PinPos';
+import { Tablet } from './Tablet';
 import { Auditoria } from './Auditoria';
 import { MiCuenta } from './MiCuenta';
 
-type Seccion = 'personas' | 'marcas' | 'roles' | 'accesos' | 'pin' | 'audit' | 'mi_cuenta';
+type Seccion = 'personas' | 'marcas' | 'roles' | 'accesos' | 'pin' | 'tablet' | 'audit' | 'mi_cuenta';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'personas', label: 'Personas', icon: <Users className="h-[18px] w-[18px]" /> },
@@ -23,6 +24,7 @@ const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'roles', label: 'Roles y permisos', icon: <ShieldCheck className="h-[18px] w-[18px]" /> },
   { key: 'accesos', label: 'Accesos por app', icon: <Grid3x3 className="h-[18px] w-[18px]" /> },
   { key: 'pin', label: 'PIN del POS', icon: <KeyRound className="h-[18px] w-[18px]" /> },
+  { key: 'tablet', label: 'Tablet del local', icon: <TabletIcon className="h-[18px] w-[18px]" /> },
   { key: 'audit', label: 'Auditoría', icon: <ScrollText className="h-[18px] w-[18px]" /> },
   { key: 'mi_cuenta', label: 'Mi cuenta', icon: <User className="h-[18px] w-[18px]" /> },
 ];
@@ -197,6 +199,7 @@ export function AdminHome() {
             : seccion === 'roles' ? <Roles />
             : seccion === 'accesos' ? <Accesos />
             : seccion === 'pin' ? <PinPos localId={localSel} locales={locales} />
+            : seccion === 'tablet' ? <Tablet localId={localSel} locales={locales} />
             : seccion === 'audit' ? <Auditoria />
             : <MiCuenta email={sesion.email} />}
         </main>
