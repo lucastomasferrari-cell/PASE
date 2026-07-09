@@ -152,6 +152,11 @@ export function PedidosHub() {
     return () => clearInterval(id);
   }, [reloadLight]);
 
+  // Persistimos el modo activo para el highlight del sidebar.
+  useEffect(() => {
+    void import('@/lib/lastPosModo').then(({ setLastPosModo }) => setLastPosModo('pedidos'));
+  }, []);
+
   useEffect(() => {
     if (editingQuote && editInputRef.current) {
       editInputRef.current.focus();

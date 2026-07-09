@@ -65,6 +65,14 @@ export function VentaScreen() {
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
   const { venta, setVenta, items, setItems, catalogo, grupos, loading, reloadVenta, reloadFull, addOptimistic, reconcileAdd } = useVentaData(ventaId);
 
+  // Persistimos el modo de la venta activa para que el sidebar sepa qué icono
+  // marcar (la URL /pos/venta/:id no incluye el slug del modo).
+  useEffect(() => {
+    if (venta?.modo) {
+      void import('@/lib/lastPosModo').then(({ setLastPosModo }) => setLastPosModo(venta.modo));
+    }
+  }, [venta?.modo]);
+
   // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
   const [search, setSearch] = useState('');
@@ -182,16 +190,29 @@ export function VentaScreen() {
     [empleado?.pos_favoritos],
   );
 
-  const catalogoFiltrado = useMemo(() => {
+  // Catálogo válido para el modo actual — antes de filtros de UI (grupo, búsqueda).
+  // Se usa para (a) filtrar el catálogo mostrado y (b) computar qué grupos tienen
+  // items en este modo, para no mostrar categorías vacías (ej. Postres/Cocktelería
+  // no aparecen en Mostrador porque son solo del Salón).
+  const catalogoDelModo = useMemo(() => {
     const modoVenta = venta?.modo ?? null;
     return catalogo.filter((it) => {
       if (it.estado !== 'disponible' && it.estado !== 'agotado') return false;
       if (!it.visible_pos) return false;
-      // Filtro por modo POS: si el item tiene modos_pos_visibles definido,
-      // solo aparece si el modo actual está incluido. NULL/[] = todos.
       if (modoVenta && it.modos_pos_visibles && it.modos_pos_visibles.length > 0) {
         if (!it.modos_pos_visibles.includes(modoVenta)) return false;
       }
+      return true;
+    });
+  }, [catalogo, venta?.modo]);
+
+  const gruposDisponibles = useMemo(() => {
+    const grupoIdsConItems = new Set(catalogoDelModo.map((it) => it.grupo_id).filter((id): id is number => id != null));
+    return grupos.filter((g) => grupoIdsConItems.has(g.id));
+  }, [grupos, catalogoDelModo]);
+
+  const catalogoFiltrado = useMemo(() => {
+    return catalogoDelModo.filter((it) => {
       if (grupoSel === 'favoritos') {
         if (!favoritosSet.has(it.id)) return false;
       } else if (grupoSel !== null && it.grupo_id !== grupoSel) {
@@ -200,7 +221,7 @@ export function VentaScreen() {
       if (search.trim() && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [catalogo, grupoSel, search, favoritosSet, venta?.modo]);
+  }, [catalogoDelModo, grupoSel, search, favoritosSet]);
 
   // Hook #2: derivar agrupaciones por curso (puro, useMemo)
   const { itemsPorCurso, tiempoEstimadoMin, holdCount, stayCount } = useVentaCursos(items, catalogo);
@@ -861,7 +882,7 @@ export function VentaScreen() {
       {editCatalogoItem && user && (
         <ItemForm
           user={user}
-          grupos={grupos}
+          grupos={gruposDisponibles}
           marcas={marcas}
           defaultMarcaId={null}
           item={editCatalogoItem}

@@ -134,6 +134,10 @@ export function SalonView() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  useEffect(() => {
+    void import('@/lib/lastPosModo').then(({ setLastPosModo }) => setLastPosModo('salon'));
+  }, []);
+
   // F0.3 Realtime: cuando otra computadora cambia mesas o ventas_pos del
   // mismo local, refrescamos automático. Fallback a polling si Realtime
   // se desconecta (manejado por el hook).

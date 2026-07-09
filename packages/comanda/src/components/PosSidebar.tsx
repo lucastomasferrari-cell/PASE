@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useFeaturesPosModos } from '@/lib/useFeaturesPosModos';
 import { useAuthPos } from '@/lib/authPos';
+import { useLastPosModo } from '@/lib/lastPosModo';
 import { getConsoleErrors } from '@/lib/consoleCapture';
 import { AdminAccessDialog } from './dialogs/AdminAccessDialog';
 import type { PosModo, RolPos } from '@/types/database';
@@ -28,8 +29,15 @@ export function PosSidebar() {
   const navigate = useNavigate();
   const { empleado } = useAuthPos();
   const enabledModos = useFeaturesPosModos();
+  const lastPosModo = useLastPosModo();
   const [tieneErrores, setTieneErrores] = useState(false);
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+
+  // Sabemos en qué modo estamos si la URL contiene su slug (/pos/salon, etc)
+  // O si estamos en una venta/pedido detalle — ahí el modo lo persistieron esas
+  // pantallas en sessionStorage vía lastPosModo.
+  const enVentaOPedidoDetalle = /^\/pos\/(venta|pedidos)\//.test(pathname);
+  const modoContextual: PosModo | null = enVentaOPedidoDetalle ? (lastPosModo ?? null) : null;
 
   useEffect(() => {
     function check() { setTieneErrores(getConsoleErrors().length > 0); }
@@ -59,7 +67,7 @@ export function PosSidebar() {
     <aside className="w-[72px] bg-card border-r border-border flex flex-col items-center py-3 gap-1 flex-shrink-0">
       {/* Modos POS */}
       {MODOS.filter((m) => enabledModos.includes(m.slug)).map(({ slug, label, Icon }) => {
-        const active = pathname.startsWith(`/pos/${slug}`);
+        const active = pathname.startsWith(`/pos/${slug}`) || modoContextual === slug;
         return (
           <Link
             key={slug}

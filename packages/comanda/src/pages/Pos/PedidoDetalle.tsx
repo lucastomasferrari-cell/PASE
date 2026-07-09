@@ -82,6 +82,10 @@ export function PedidoDetalle() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  useEffect(() => {
+    void import('@/lib/lastPosModo').then(({ setLastPosModo }) => setLastPosModo('pedidos'));
+  }, []);
+
   // Realtime: si la cocina marca un item listo (KDS) o el cajero edita
   // el pedido desde otro device, se refleja sin F5. Filtro por venta_id.
   useRealtimeTable({
