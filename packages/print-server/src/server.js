@@ -331,10 +331,21 @@ app.post('/test/:id', async (req, res) => {
 
 app.get('/discover/usb', async (req, res) => {
   try {
-    const devices = await printerHandler.discoverUsb();
-    res.json({ devices });
+    const result = await printerHandler.discoverUsb();
+    res.json(result);
   } catch (err) {
     res.status(502).json({ error: 'DISCOVER_FAILED', detail: err.message });
+  }
+});
+
+// Windows: lista las impresoras USB que Windows reconoce con nombre + puerto.
+// El usuario elige cuál asignar a cada slot de COMANDA (cocina/caja/factura).
+app.get('/discover/windows-printers', async (req, res) => {
+  try {
+    const printers = await printerHandler.listWindowsUsbPrinters();
+    res.json({ printers });
+  } catch (err) {
+    res.status(502).json({ error: 'LIST_FAILED', detail: err.message });
   }
 });
 

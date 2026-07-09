@@ -13,6 +13,7 @@ import path from 'node:path';
 const execAsync = promisify(exec);
 
 // Retorna el Name de la primera impresora Windows en puerto USB (ej: "Impresora Comanda").
+// Sirve como fallback cuando el user no seteo un nombre específico en la config.
 async function findWindowsUsbPrinterName() {
   if (process.platform !== 'win32') return null;
   try {
@@ -26,21 +27,72 @@ async function findWindowsUsbPrinterName() {
   }
 }
 
+// Verifica que una impresora Windows con nombre exacto existe.
+async function windowsPrinterExists(name) {
+  if (process.platform !== 'win32' || !name) return false;
+  try {
+    const escaped = name.replace(/'/g, "''");
+    const { stdout } = await execAsync(
+      `powershell.exe -NoProfile -Command "if (Get-Printer -Name '${escaped}' -ErrorAction SilentlyContinue) { 'ok' }"`,
+      { timeout: 5000 }
+    );
+    return stdout.trim() === 'ok';
+  } catch {
+    return false;
+  }
+}
+
+// Devuelve TODAS las impresoras USB configuradas en Windows (nombre + puerto).
+// Sirve para que el UI de COMANDA muestre un selector y evite el bug de
+// "solo detecta la primera" cuando hay múltiples térmicas conectadas.
+async function listWindowsUsbPrinters() {
+  if (process.platform !== 'win32') return [];
+  try {
+    const { stdout } = await execAsync(
+      `powershell.exe -NoProfile -Command "Get-Printer | Where-Object { $_.PortName -match '^USB' } | Select-Object Name, PortName | ConvertTo-Json -Compress"`,
+      { timeout: 5000 }
+    );
+    const parsed = JSON.parse(stdout.trim() || '[]');
+    const arr = Array.isArray(parsed) ? parsed : [parsed];
+    return arr.map((p) => ({ nombre: p.Name, puerto: p.PortName }));
+  } catch {
+    return [];
+  }
+}
+
 // Interface custom para USB en Windows.
 // Usa la Windows Print API (winspool.drv) con tipo de datos RAW para enviar
 // los bytes ESC/POS directamente al hardware sin que el driver "Generic/Text Only"
 // los procese como texto y los corrompa.
 // El flujo: escribir buffer a bin temp → generar ps1 temp con P/Invoke →
 // ejecutar ps1 → limpiar ambos archivos.
-function makeWindowsUsbInterface() {
+//
+// Fix 09-jul (Camilo, Devoto): antes usaba siempre "Select-Object -First 1" →
+// con 2 impresoras USB conectadas, ambas se dirigían al mismo hardware.
+// Ahora: si config trae windows_printer_name (nombre exacto que reporta
+// Windows), lo usa. Sino, cae al fallback anterior (primera USB).
+function makeWindowsUsbInterface(config = {}) {
+  const preferredName = config.windows_printer_name || null;
   return {
     async isPrinterConnected() {
+      if (preferredName) {
+        return await windowsPrinterExists(preferredName);
+      }
       const name = await findWindowsUsbPrinterName().catch(() => null);
       return !!name;
     },
     async execute(buffer) {
-      const printerName = await findWindowsUsbPrinterName();
-      if (!printerName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
+      let printerName;
+      if (preferredName) {
+        const exists = await windowsPrinterExists(preferredName);
+        if (!exists) {
+          throw new Error(`Windows no reconoce impresora "${preferredName}". Verificá el nombre en Configuración → Impresoras.`);
+        }
+        printerName = preferredName;
+      } else {
+        printerName = await findWindowsUsbPrinterName();
+        if (!printerName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
+      }
 
       const ts = Date.now();
       const binFile = path.join(os.tmpdir(), `comanda_${ts}.bin`);
@@ -137,7 +189,7 @@ async function buildPrinter(printerCfg) {
   let iface;
   if (t === 'usb') {
     iface = process.platform === 'win32'
-      ? makeWindowsUsbInterface()
+      ? makeWindowsUsbInterface(c)
       : 'printer:auto'; // Linux/Mac: printer:auto funciona nativamente
   } else if (t === 'network') {
     if (!c.host) throw new Error('Network requiere config.host');
@@ -370,26 +422,49 @@ async function printKitchen(printer, ticket) {
 async function discoverUsb() {
   // node-thermal-printer no expone discovery puro. Usamos node-usb directo
   // si está instalada, sino devolvemos lista vacía con mensaje.
+  //
+  // Fix 09-jul (Camilo/Devoto reportó que solo detectaba 1 de 2 impresoras):
+  // antes filtrábamos por vendor_id conocido y descartábamos las genéricas
+  // chinas / de vendor ID no listado. Ahora devolvemos TODAS las USB con
+  // un flag `probable_termica` para que el usuario pueda elegir manualmente.
   try {
     const usb = await import('usb').catch(() => null);
     if (!usb || !usb.getDeviceList) {
       return { error: 'USB discovery requiere paquete "usb" instalado.', devices: [] };
     }
-    const devices = usb.getDeviceList();
-    const known = devices.map((d) => ({
-      vendor_id: '0x' + d.deviceDescriptor.idVendor.toString(16),
-      product_id: '0x' + d.deviceDescriptor.idProduct.toString(16),
-      // Algunos vendor IDs típicos térmicas
-      probable_termica: [
-        0x04b8, // Epson
-        0x0519, // Star
-        0x0fe6, // ICS Advent
-        0x1504, // Bixolon
-        0x0dd4, // Custom Engineering
-        0x28e9, // Xprinter
-      ].includes(d.deviceDescriptor.idVendor),
-    }));
-    return { devices: known.filter((d) => d.probable_termica) };
+    // Vendor IDs conocidos de térmicas + adaptadores comunes que usan las genéricas.
+    const VENDORS_TERMICAS = new Set([
+      0x04b8, // Epson
+      0x0519, // Star
+      0x0fe6, // ICS Advent
+      0x1504, // Bixolon
+      0x0dd4, // Custom Engineering
+      0x28e9, // Xprinter (genéricas chinas)
+      0x0416, // Winbond
+      0x0483, // STMicroelectronics
+      0x067b, // Prolific (USB-to-serial)
+      0x1a86, // QinHeng (USB-to-serial CH340)
+      0x1fc9, // NXP (algunas genéricas)
+      0x0525, // Netchip
+      0x154f, // Sanei
+      0x03f0, // HP
+      0x0acd, // ID TECH
+    ]);
+    // Filtramos hubs USB de sistema y dispositivos triviales (class 9 = hub).
+    // El resto lo devolvemos con probable_termica true/false.
+    const devices = usb.getDeviceList()
+      .filter((d) => d.deviceDescriptor.bDeviceClass !== 9)
+      .map((d) => {
+        const vid = d.deviceDescriptor.idVendor;
+        return {
+          vendor_id: '0x' + vid.toString(16).padStart(4, '0'),
+          product_id: '0x' + d.deviceDescriptor.idProduct.toString(16).padStart(4, '0'),
+          probable_termica: VENDORS_TERMICAS.has(vid),
+        };
+      });
+    // Ordenamos las probable_termica primero para mejorar el UX.
+    devices.sort((a, b) => Number(b.probable_termica) - Number(a.probable_termica));
+    return { devices };
   } catch (err) {
     return { error: err.message, devices: [] };
   }
@@ -406,4 +481,4 @@ function truncate(s, max) {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
 }
 
-export const printers = { ping, print, discoverUsb };
+export const printers = { ping, print, discoverUsb, listWindowsUsbPrinters };

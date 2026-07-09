@@ -162,7 +162,7 @@ export class PrintServerClient {
     }
   }
 
-  async discoverUsb(): Promise<Array<{ vendor_id: string; product_id: string }>> {
+  async discoverUsb(): Promise<Array<{ vendor_id: string; product_id: string; probable_termica?: boolean }>> {
     const resp = await fetch(`${this.baseUrl}/discover/usb`);
     if (!resp.ok) return [];
     const data = await resp.json();

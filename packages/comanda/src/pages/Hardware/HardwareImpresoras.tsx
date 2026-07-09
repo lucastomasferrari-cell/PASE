@@ -52,6 +52,7 @@ interface FormState {
   // USB
   vendor_id: string;
   product_id: string;
+  windows_printer_name: string;
   // Network
   host: string;
   port: string;
@@ -68,6 +69,7 @@ const EMPTY: FormState = {
   transporte: 'usb',
   vendor_id: '',
   product_id: '',
+  windows_printer_name: '',
   host: '',
   port: '9100',
   path: '',
@@ -130,6 +132,7 @@ export function HardwareImpresoras() {
       transporte: p.transporte,
       vendor_id: String(cfg.vendor_id ?? ''),
       product_id: String(cfg.product_id ?? ''),
+      windows_printer_name: String(cfg.windows_printer_name ?? ''),
       host: String(cfg.host ?? ''),
       port: String(cfg.port ?? '9100'),
       path: String(cfg.path ?? ''),
@@ -148,6 +151,11 @@ export function HardwareImpresoras() {
     if (form.transporte === 'usb') {
       if (form.vendor_id) config.vendor_id = form.vendor_id;
       if (form.product_id) config.product_id = form.product_id;
+      // Nombre exacto de la impresora en Windows — clave cuando hay múltiples
+      // USB para que cada printer entry apunte a un hardware distinto.
+      if (form.windows_printer_name.trim()) {
+        config.windows_printer_name = form.windows_printer_name.trim();
+      }
     } else if (form.transporte === 'network') {
       if (!form.host.trim()) { toast.error('IP/host requerido para Network'); return; }
       config.host = form.host.trim();
@@ -428,18 +436,57 @@ export function HardwareImpresoras() {
             {form.transporte === 'usb' && (
               <div className="rounded-md border border-border p-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Dejá vacío para auto-detectar la primera USB. Para impresora específica, pegá vendor + product (formato 0x04b8).
+                  Si tenés <strong>varias impresoras USB</strong>, pegá el nombre exacto de Windows (ej. "Epson TM-T20III") para que cada entry apunte a un hardware distinto. Sino, dejá vacío y usa la primera USB.
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Vendor ID</Label>
-                    <Input value={form.vendor_id} onChange={(e) => setForm((f) => ({ ...f, vendor_id: e.target.value }))} placeholder="0x04b8" className="h-9 font-mono text-xs" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs flex-1">Nombre en Windows</Label>
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={async () => {
+                        try {
+                          const resp = await fetch('http://127.0.0.1:9100/discover/windows-printers');
+                          const data = await resp.json();
+                          const list = data.printers ?? [];
+                          if (list.length === 0) {
+                            toast.info('No se encontraron impresoras USB en Windows');
+                            return;
+                          }
+                          const nombres = list.map((p: { nombre: string; puerto: string }) => `• ${p.nombre} (${p.puerto})`).join('\n');
+                          const elegido = window.prompt(
+                            `Impresoras USB detectadas en Windows:\n\n${nombres}\n\nCopiá el nombre exacto (sin el "• " y sin el puerto) y pegalo abajo.`,
+                            list[0].nombre,
+                          );
+                          if (elegido) setForm((f) => ({ ...f, windows_printer_name: elegido }));
+                        } catch {
+                          toast.error('No se pudo consultar el Print Agent. ¿Está corriendo?');
+                        }
+                      }}
+                    >
+                      Detectar
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Product ID</Label>
-                    <Input value={form.product_id} onChange={(e) => setForm((f) => ({ ...f, product_id: e.target.value }))} placeholder="0x0202" className="h-9 font-mono text-xs" />
-                  </div>
+                  <Input
+                    value={form.windows_printer_name}
+                    onChange={(e) => setForm((f) => ({ ...f, windows_printer_name: e.target.value }))}
+                    placeholder="Epson TM-T20III"
+                    className="h-9 text-xs"
+                  />
                 </div>
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground">Opcional: identificar por Vendor/Product ID</summary>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Vendor ID</Label>
+                      <Input value={form.vendor_id} onChange={(e) => setForm((f) => ({ ...f, vendor_id: e.target.value }))} placeholder="0x04b8" className="h-9 font-mono text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Product ID</Label>
+                      <Input value={form.product_id} onChange={(e) => setForm((f) => ({ ...f, product_id: e.target.value }))} placeholder="0x0202" className="h-9 font-mono text-xs" />
+                    </div>
+                  </div>
+                </details>
               </div>
             )}
 
