@@ -156,7 +156,7 @@ export async function resetPassword(usuarioId: number): Promise<{ error: string 
 }
 
 export async function listLocales(): Promise<{ data: { id: number; nombre: string }[]; error: string | null }> {
-  const { data, error } = await db().from('locales').select('id, nombre').is('deleted_at', null).order('nombre');
+  const { data, error } = await db().from('locales').select('id, nombre').order('nombre');
   if (error) return { data: [], error: error.message };
   return { data: (data ?? []) as { id: number; nombre: string }[], error: null };
 }

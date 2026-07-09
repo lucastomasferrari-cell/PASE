@@ -33,10 +33,10 @@ export async function listMarcas(): Promise<{ data: Marca[]; error: string | nul
 }
 
 export async function listLocalesConMarca(): Promise<{ data: LocalConMarca[]; error: string | null }> {
+  // Nota: la tabla `locales` no tiene deleted_at (no usamos soft-delete acá).
   const { data, error } = await db()
     .from('locales')
     .select('id, nombre, marca_id')
-    .is('deleted_at', null)
     .order('nombre');
   if (error) return { data: [], error: error.message };
   return { data: (data ?? []) as LocalConMarca[], error: null };

@@ -72,7 +72,7 @@ export function AdminHome() {
   useEffect(() => {
     if (!sesion) return;
     void (async () => {
-      const { data } = await db().from('locales').select('id, nombre').is('deleted_at', null).order('nombre');
+      const { data } = await db().from('locales').select('id, nombre').order('nombre');
       const rows = (data ?? []) as LocalLite[];
       setLocales(rows);
       if (rows.length > 0 && localSel === null) setLocalSel(rows[0]!.id);
