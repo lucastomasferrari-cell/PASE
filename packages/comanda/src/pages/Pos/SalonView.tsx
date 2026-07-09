@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layout } from 'lucide-react';
+import { Layout, ClipboardList } from 'lucide-react';
 
 // ── Density del plano de mesas (Compacto/Normal/Grande) ──────────────────
 // Se guarda en localStorage por dispositivo (no por user — útil cuando el
@@ -236,6 +236,22 @@ export function SalonView() {
                   );
                 })}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('comanda:open-all-checks', {
+                      detail: { modo: 'salon', estado: 'cobrada', periodo: 'hoy' },
+                    }),
+                  );
+                }}
+                className="gap-1.5"
+                title="Ver mesas cerradas del turno"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                Cerradas del turno
+              </Button>
               {puedeEditarLayout && mesas.length > 0 && (
                 <Button
                   variant="outline"

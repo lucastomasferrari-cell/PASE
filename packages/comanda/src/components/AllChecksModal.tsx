@@ -16,20 +16,28 @@ import { CanalBadge } from '@/components/CanalBadge';
 import { EstadoVentaBadge } from '@/components/EstadoBadge';
 import { formatARS, formatHoraAR, formatFechaAR } from '@/lib/format';
 
+export interface AllChecksInitialFilters {
+  modo?: ModoVenta | 'todos';
+  estado?: EstadoVenta | 'cualquiera';
+  periodo?: PeriodoFiltro;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Filtros iniciales cuando el modal se abre. Se aplican solo al abrir. */
+  initialFilters?: AllChecksInitialFilters;
 }
 
-export function AllChecksModal({ open, onOpenChange }: Props) {
+export function AllChecksModal({ open, onOpenChange, initialFilters }: Props) {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
-  const [modo, setModo] = useState<ModoVenta | 'todos'>('todos');
-  const [estado, setEstado] = useState<EstadoVenta | 'cualquiera'>('cualquiera');
-  const [periodo, setPeriodo] = useState<PeriodoFiltro>('hoy');
+  const [modo, setModo] = useState<ModoVenta | 'todos'>(initialFilters?.modo ?? 'todos');
+  const [estado, setEstado] = useState<EstadoVenta | 'cualquiera'>(initialFilters?.estado ?? 'cualquiera');
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>(initialFilters?.periodo ?? 'hoy');
   const [sort, setSort] = useState<'recientes' | 'antiguas' | 'mayor' | 'menor'>('recientes');
   const [results, setResults] = useState<VentaPos[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,8 +57,11 @@ export function AllChecksModal({ open, onOpenChange }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    setQuery(''); setModo('todos'); setEstado('cualquiera'); setPeriodo('hoy');
-  }, [open]);
+    setQuery('');
+    setModo(initialFilters?.modo ?? 'todos');
+    setEstado(initialFilters?.estado ?? 'cualquiera');
+    setPeriodo(initialFilters?.periodo ?? 'hoy');
+  }, [open, initialFilters?.modo, initialFilters?.estado, initialFilters?.periodo]);
 
   useEffect(() => {
     if (!open) return;

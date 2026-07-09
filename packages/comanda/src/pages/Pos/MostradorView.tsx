@@ -39,6 +39,12 @@ export function MostradorView() {
   const [abrirTabOpen, setAbrirTabOpen] = useState(false);
   const [tabNombre, setTabNombre] = useState('');
 
+  // Tab: activas o cerradas (histórico del turno).
+  const [tab, setTab] = useState<'activas' | 'cerradas'>('activas');
+  // Al cambiar de tab resetear el filtro de estado (los valores válidos
+  // son distintos entre activas y cerradas).
+  useEffect(() => { setEstadoFiltro('todos'); }, [tab]);
+
   // Filtros / sort
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -77,15 +83,18 @@ export function MostradorView() {
   const reload = useCallback(async () => {
     if (localId === null) return;
     setLoading(true);
+    const estados = tab === 'activas'
+      ? ['abierta' as const, 'enviada' as const, 'lista' as const]
+      : ['entregada' as const, 'cobrada' as const, 'anulada' as const];
     const { data, error: err } = await listVentas({
       localId,
       modos: ['mostrador'],
-      estados: ['abierta', 'enviada', 'lista'],
+      estados,
     });
     if (err) setError(err);
     setVentas(data);
     setLoading(false);
-  }, [localId]);
+  }, [localId, tab]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -138,9 +147,11 @@ export function MostradorView() {
       {/* Mostrador: la lista de cards abajo ya muestra todas las órdenes activas */}
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="p-6">
-          <header className="flex items-center gap-3 mb-5">
+          <header className="flex items-center gap-3 mb-3">
             <h1 className="text-lg font-semibold">Mostrador</h1>
-            <span className="text-xs text-muted-foreground">{ventas.length} órdenes activas</span>
+            <span className="text-xs text-muted-foreground">
+              {ventas.length} {tab === 'activas' ? 'activas' : 'cerradas'}
+            </span>
             <div className="ml-auto flex gap-2">
               <Button
                 onClick={() => setAbrirTabOpen(true)}
@@ -162,6 +173,32 @@ export function MostradorView() {
               </Button>
             </div>
           </header>
+
+          {/* Tabs Activas / Cerradas */}
+          <div className="mb-4 flex gap-1 border-b border-border">
+            <button
+              type="button"
+              onClick={() => setTab('activas')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === 'activas'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Activas
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('cerradas')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === 'cerradas'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Cerradas del turno
+            </button>
+          </div>
 
           {error && (
             <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
@@ -186,9 +223,19 @@ export function MostradorView() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos los estados</SelectItem>
-                  <SelectItem value="abierta">Abiertas</SelectItem>
-                  <SelectItem value="enviada">Enviadas</SelectItem>
-                  <SelectItem value="lista">Listas</SelectItem>
+                  {tab === 'activas' ? (
+                    <>
+                      <SelectItem value="abierta">Abiertas</SelectItem>
+                      <SelectItem value="enviada">Enviadas</SelectItem>
+                      <SelectItem value="lista">Listas</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="entregada">Entregadas</SelectItem>
+                      <SelectItem value="cobrada">Cobradas</SelectItem>
+                      <SelectItem value="anulada">Anuladas</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
@@ -219,14 +266,20 @@ export function MostradorView() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
                   <Coffee className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-sm font-medium mb-1">Sin órdenes abiertas</h3>
+                <h3 className="text-sm font-medium mb-1">
+                  {tab === 'activas' ? 'Sin órdenes abiertas' : 'Sin órdenes cerradas en el turno'}
+                </h3>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4">
-                  Tocá "Nueva orden" para empezar a tomar pedidos del mostrador o la barra.
+                  {tab === 'activas'
+                    ? 'Tocá "Nueva orden" para empezar a tomar pedidos del mostrador o la barra.'
+                    : 'Cuando cobres o entregues una orden va a aparecer acá.'}
                 </p>
-                <Button onClick={nuevaOrden} disabled={creando} variant="success">
-                  <Plus className="h-5 w-5 mr-2" />
-                  Nueva orden
-                </Button>
+                {tab === 'activas' && (
+                  <Button onClick={nuevaOrden} disabled={creando} variant="success">
+                    <Plus className="h-5 w-5 mr-2" />
+                    Nueva orden
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : ventasFiltradas.length === 0 ? (

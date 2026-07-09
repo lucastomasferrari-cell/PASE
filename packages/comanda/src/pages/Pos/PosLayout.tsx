@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { BusyModeButton } from '@/components/BusyModeButton';
 import { PosSidebar } from '@/components/PosSidebar';
 import { UserAvatarMenu } from '@/components/UserAvatarMenu';
-import { AllChecksModal } from '@/components/AllChecksModal';
+import { AllChecksModal, type AllChecksInitialFilters } from '@/components/AllChecksModal';
 import { MobileModoMozoBanner } from '@/components/MobileModoMozoBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { SyncStatusBadge } from '@/components/SyncStatusBadge';
@@ -23,6 +23,7 @@ export function PosLayout() {
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
   const [allChecksOpen, setAllChecksOpen] = useState(false);
+  const [allChecksFilters, setAllChecksFilters] = useState<AllChecksInitialFilters | undefined>(undefined);
 
   useEffect(() => {
     if (localId === null) return;
@@ -52,10 +53,23 @@ export function PosLayout() {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
       e.preventDefault();
+      setAllChecksFilters(undefined);
       setAllChecksOpen(true);
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Otros views (SalonView, MostradorView) pueden abrir el modal con filtros
+  // ya aplicados (p.ej. "cerradas del turno") disparando un CustomEvent.
+  useEffect(() => {
+    function onOpen(e: Event) {
+      const detail = (e as CustomEvent<AllChecksInitialFilters>).detail;
+      setAllChecksFilters(detail ?? undefined);
+      setAllChecksOpen(true);
+    }
+    window.addEventListener('comanda:open-all-checks', onOpen);
+    return () => window.removeEventListener('comanda:open-all-checks', onOpen);
   }, []);
 
   const { theme, toggleTheme } = useTheme();
@@ -147,7 +161,7 @@ export function PosLayout() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setAllChecksOpen(true)}
+              onClick={() => { setAllChecksFilters(undefined); setAllChecksOpen(true); }}
               title="Buscar cuentas (atajo: /)"
               className="gap-1.5 text-muted-foreground hover:text-foreground"
             >
@@ -190,7 +204,11 @@ export function PosLayout() {
         </div>
       </header>
 
-      <AllChecksModal open={allChecksOpen} onOpenChange={setAllChecksOpen} />
+      <AllChecksModal
+        open={allChecksOpen}
+        onOpenChange={setAllChecksOpen}
+        initialFilters={allChecksFilters}
+      />
       <MobileModoMozoBanner />
 
       {/* Body: sidebar + content */}
