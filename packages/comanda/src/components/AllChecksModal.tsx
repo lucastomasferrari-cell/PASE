@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import {
   buscarChecks, sumaChecks,
   type AllChecksFilter, type PeriodoFiltro,
@@ -8,9 +8,8 @@ import {
 import type { VentaPos, ModoVenta, EstadoVenta } from '@/types/database';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CanalBadge } from '@/components/CanalBadge';
 import { EstadoVentaBadge } from '@/components/EstadoBadge';
@@ -80,12 +79,9 @@ export function AllChecksModal({ open, onOpenChange, initialFilters }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Todas las cuentas</h2>
-          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-            <X className="h-4 w-4" />
-          </Button>
+        {/* Header — el cerrar (X) lo trae DialogContent por default */}
+        <div className="px-6 py-4 border-b border-border">
+          <DialogTitle className="text-lg font-semibold">Todas las cuentas</DialogTitle>
         </div>
 
         {/* Filtros */}
