@@ -191,12 +191,19 @@ async function print(printerCfg, ticket) {
     return printKitchen(printer, ticket);
   }
 
-  // ── Header
+  // Ancho útil de la impresora (32 col=58mm, 48 col=80mm). Usado para
+  // truncar nombres de items para que qty+name+precio siempre entren en 1 línea.
+  const cols = printerCfg?.config?.width || 32;
+
+  // ── HEADER (título en doble ancho + alto, subtítulo normal)
   printer.alignCenter();
   printer.setTextDoubleHeight();
   printer.setTextDoubleWidth();
   printer.bold(true);
-  printer.println(ticket.titulo || 'COMANDA');
+  // Truncar título si es demasiado largo — se doblan chars por doble ancho.
+  const tituloMax = Math.floor(cols / 2);
+  const titulo = (ticket.titulo || 'COMANDA').slice(0, tituloMax);
+  printer.println(titulo);
   printer.setTextNormal();
   printer.bold(false);
 
@@ -205,35 +212,47 @@ async function print(printerCfg, ticket) {
   }
   if (ticket.cuit_emisor) printer.println(`CUIT ${ticket.cuit_emisor}`);
   if (ticket.direccion) printer.println(ticket.direccion);
-  printer.newLine();
 
-  // Identificación
+  // ── ID + FECHA (en 1 sola línea si cabe, sino apilados)
+  printer.newLine();
+  let idStr;
   if (ticket.punto_venta != null && ticket.numero_comprobante != null) {
     const pv = String(ticket.punto_venta).padStart(5, '0');
     const num = String(ticket.numero_comprobante).padStart(8, '0');
-    printer.bold(true);
-    printer.println(`${pv}-${num}`);
-    printer.bold(false);
+    idStr = `${pv}-${num}`;
   } else {
-    printer.println(`Ticket #${ticket.venta_id}`);
+    // Acortar IDs largos tipo TEST-1783623539936 → TEST-...39936
+    idStr = String(ticket.venta_id || '').length > 12
+      ? `#${String(ticket.venta_id).slice(-8)}`
+      : `#${ticket.venta_id}`;
   }
-  printer.println(ticket.fechaHora);
-  printer.drawLine();
+  printer.alignLeft();
+  printer.bold(true);
+  printer.println(idStr);
+  printer.bold(false);
+  if (ticket.fechaHora) printer.println(ticket.fechaHora);
 
-  // ── Receptor (si no es CF)
+  // ── RECEPTOR (si no es CF)
   if (ticket.cliente_doc_tipo && ticket.cliente_doc_tipo !== 'CF' && ticket.cliente_doc_nro) {
-    printer.alignLeft();
+    printer.newLine();
     printer.println(`Cliente: ${ticket.cliente_razon_social || ''}`);
     printer.println(`${ticket.cliente_doc_tipo}: ${ticket.cliente_doc_nro}`);
-    printer.newLine();
   }
 
-  // ── Items
+  printer.drawLine();
+
+  // ── ITEMS (qty + name + price en 1 línea, truncando name si hace falta)
   printer.alignLeft();
   for (const it of (ticket.items || [])) {
-    // leftRight ajusta solo al ancho del papel (58/80mm) → no se deforma
-    // cuando el nombre es largo (antes el padding fijo lo hacía wrappear feo).
-    printer.leftRight(`${it.cantidad}x ${it.nombre}`, formatMoney(it.subtotal));
+    const qty = `${it.cantidad}x `;
+    const precio = formatMoney(it.subtotal);
+    // Reserva: qty + espacio antes del precio (mínimo 1) + precio
+    const espacioParaNombre = cols - qty.length - precio.length - 1;
+    let nombre = it.nombre || '';
+    if (nombre.length > espacioParaNombre) {
+      nombre = nombre.slice(0, Math.max(1, espacioParaNombre - 1)) + '…';
+    }
+    printer.leftRight(`${qty}${nombre}`, precio);
     if (it.modificadores && it.modificadores.length > 0) {
       for (const mod of it.modificadores) {
         printer.println(`   + ${mod.nombre || mod}`);
@@ -245,7 +264,7 @@ async function print(printerCfg, ticket) {
   }
   printer.drawLine();
 
-  // ── Subtotales
+  // ── SUBTOTALES
   if (ticket.descuento && ticket.descuento > 0) {
     printer.leftRight('Descuento', `-${formatMoney(ticket.descuento)}`);
   }
@@ -257,17 +276,21 @@ async function print(printerCfg, ticket) {
     printer.leftRight('Neto', formatMoney(ticket.importe_neto ?? (ticket.total - ticket.importe_iva)));
     printer.leftRight('IVA 21%', formatMoney(ticket.importe_iva));
   }
+
+  // TOTAL en doble alto (no doble ancho para que la $ y el número entren)
   printer.bold(true);
   printer.setTextDoubleHeight();
   printer.leftRight('TOTAL', formatMoney(ticket.total));
   printer.setTextNormal();
   printer.bold(false);
 
-  // ── Pagos
-  printer.newLine();
-  for (const p of (ticket.pagos || [])) {
-    const cuotasStr = p.cuotas && p.cuotas > 1 ? ` (${p.cuotas} cuotas)` : '';
-    printer.println(`${p.metodo}${cuotasStr}: ${formatMoney(p.monto)}`);
+  // ── PAGOS
+  if ((ticket.pagos || []).length > 0) {
+    printer.newLine();
+    for (const p of ticket.pagos) {
+      const cuotasStr = p.cuotas && p.cuotas > 1 ? ` (${p.cuotas} cuotas)` : '';
+      printer.leftRight(`${p.metodo}${cuotasStr}`, formatMoney(p.monto));
+    }
   }
 
   // ── CAE + QR fiscal AFIP
@@ -284,11 +307,13 @@ async function print(printerCfg, ticket) {
   } else if (ticket.tipo_comprobante_letra === 'X' || !ticket.tipo_comprobante_letra) {
     printer.newLine();
     printer.alignCenter();
-    printer.println('** DOCUMENTO NO FISCAL **');
+    printer.bold(true);
+    printer.println('DOCUMENTO NO FISCAL');
+    printer.bold(false);
     printer.alignLeft();
   }
 
-  // ── Cierre
+  // ── CIERRE
   printer.newLine();
   printer.alignCenter();
   printer.println(ticket.mensaje_final || 'Gracias por su visita');
