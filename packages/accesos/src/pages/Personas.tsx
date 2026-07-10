@@ -10,15 +10,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Search, Plus, Check, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock } from 'lucide-react';
 import {
-  listUsuarios, crearUsuario, actualizarUsuario, setPermisos, setLocales,
+  listUsuarios, crearUsuario, actualizarUsuario, sincronizarUsuario,
   resetPassword, listLocales, type Usuario,
 } from '@/lib/usuariosService';
+import { listRoles, type Rol } from '@/lib/rolesService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, APPS_ADMIN, APPS_OPERATIVAS, type AppKey } from '@/lib/apps';
 import { CATEGORIAS } from '@/lib/permisos';
 import { Accesos } from './Accesos';
-
-const ROLES_BASE = ['dueno', 'admin', 'encargado', 'cajero', 'compras'];
 
 interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
 
@@ -28,6 +27,7 @@ export function Personas() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [locales, setLocs] = useState<{ id: number; nombre: string }[]>([]);
   const [marcas, setMarcas] = useState<MarcaConLocales[]>([]);
+  const [roles, setRoles] = useState<Rol[]>([]);
   const [search, setSearch] = useState('');
   const [cargando, setCargando] = useState(true);
   const [modo, setModo] = useState<'lista' | 'matriz'>('lista');
@@ -35,9 +35,9 @@ export function Personas() {
 
   const reload = useCallback(async () => {
     setCargando(true);
-    const [u, l, m, lcm] = await Promise.all([listUsuarios(), listLocales(), listMarcas(), listLocalesConMarca()]);
+    const [u, l, m, lcm, r] = await Promise.all([listUsuarios(), listLocales(), listMarcas(), listLocalesConMarca(), listRoles()]);
     if (u.error) toast.error('No se pudieron cargar usuarios: ' + u.error);
-    setUsuarios(u.data); setLocs(l.data);
+    setUsuarios(u.data); setLocs(l.data); setRoles(r.data);
     // Marca → locales que le pertenecen (para el atajo "asignar por marca").
     setMarcas(m.data.map((mk) => ({
       id: mk.id,
@@ -78,6 +78,7 @@ export function Personas() {
         usuario={editando === 'nuevo' ? null : editando}
         locales={locales}
         marcas={marcas}
+        roles={roles}
         onReset={editando !== 'nuevo' ? () => void reset(editando) : undefined}
         onClose={() => setEditando(null)}
         onSaved={() => { setEditando(null); void reload(); }}
@@ -178,10 +179,11 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   );
 }
 
-function FichaUsuario({ usuario, locales, marcas, onReset, onClose, onSaved }: {
+function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSaved }: {
   usuario: Usuario | null;
   locales: { id: number; nombre: string }[];
   marcas: MarcaConLocales[];
+  roles: Rol[];
   onReset?: () => void;
   onClose: () => void;
   onSaved: () => void;
@@ -189,12 +191,15 @@ function FichaUsuario({ usuario, locales, marcas, onReset, onClose, onSaved }: {
   const esEdicion = usuario !== null;
   const [nombreT, setNombre] = useState(usuario?.nombre ?? '');
   const [email, setEmail] = useState(usuario?.email ?? '');
-  const [rol, setRol] = useState(usuario?.rol ?? 'encargado');
+  const [rolId, setRolId] = useState<string | null>(usuario?.rol_id ?? null);
   const [password, setPassword] = useState('');
   const [apps, setApps] = useState<string[]>(usuario?.apps_permitidas ?? ['pase']);
   const [locs, setLocs] = useState<number[]>(usuario?.locales ?? []);
   const [permisos, setPermisosState] = useState<string[]>(usuario?.permisos ?? []);
   const [guardando, setGuardando] = useState(false);
+
+  const selectedRole = roles.find((r) => r.id === rolId) ?? null;
+  const rolePerms = new Set(selectedRole?.permisos ?? []);
 
   function toggleApp(k: string) { setApps((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k]); }
   function toggleLocal(id: number) { setLocs((l) => l.includes(id) ? l.filter((x) => x !== id) : [...l, id]); }
@@ -209,25 +214,42 @@ function FichaUsuario({ usuario, locales, marcas, onReset, onClose, onSaved }: {
     if (!nombreT.trim()) { toast.error('Falta el nombre'); return; }
     if (!email.trim()) { toast.error('Falta el email'); return; }
     if (!esEdicion && (!password || password.length < 6)) { toast.error('La password inicial debe tener al menos 6 caracteres'); return; }
+    // Convención PASE: usuarios.rol (texto) es binario dueño/encargado; el rol
+    // granular va en rol_id. Lo replicamos para no divergir del resto del sistema
+    // (hay pantallas que chequean rol === 'encargado'). Si no hay rol elegido,
+    // preservamos el texto actual (ej. cuentas de dispositivo).
+    const rolSlug = selectedRole?.slug === 'dueno'
+      ? 'dueno'
+      : (selectedRole ? 'encargado' : (usuario?.rol ?? 'encargado'));
     setGuardando(true);
     try {
-      let id: number;
       if (esEdicion && usuario) {
-        const upd = await actualizarUsuario(usuario.id, {
-          nombre: nombreT.trim(), rol, apps_permitidas: apps,
+        // Guardado atómico (rol + permisos + locales + rol_id) por el mismo RPC
+        // que usa PASE. Preserva las cuentas visibles/operables actuales para no
+        // cambiar accesos sin querer. Si algo falla, ROLLBACK: queda como estaba.
+        const sync = await sincronizarUsuario({
+          usuarioId: usuario.id, rol: rolSlug, rolId,
+          modulos: permisos, locales: locs,
+          cuentasVisibles: usuario.cuentas_visibles ?? null,
+          cuentasOperables: usuario.cuentas_operables ?? null,
+          cuentasAll: usuario.cuentas_visibles == null,
         });
-        if (upd.error) { toast.error(upd.error); return; }
-        id = usuario.id;
+        if (sync.error) { toast.error(sync.error); return; }
+        const upd = await actualizarUsuario(usuario.id, { apps_permitidas: apps });
+        if (upd.error) { toast.error('Permisos guardados pero falló apps: ' + upd.error); return; }
       } else {
-        const { id: nuevoId, error } = await crearUsuario({
-          email: email.trim(), nombre: nombreT.trim(), rol, password, apps_permitidas: apps,
+        const { id, error } = await crearUsuario({
+          email: email.trim(), nombre: nombreT.trim(), rol: rolSlug, password,
+          apps_permitidas: apps, rol_id: rolId,
         });
-        if (error || !nuevoId) { toast.error(error ?? 'No se pudo crear'); return; }
-        id = nuevoId;
+        if (error || !id) { toast.error(error ?? 'No se pudo crear'); return; }
+        const sync = await sincronizarUsuario({
+          usuarioId: id, rol: rolSlug, rolId,
+          modulos: permisos, locales: locs,
+          cuentasVisibles: null, cuentasOperables: null, cuentasAll: true,
+        });
+        if (sync.error) { toast.error('Usuario creado pero falló permisos: ' + sync.error); return; }
       }
-      const [pe, lo] = await Promise.all([setPermisos(id, permisos), setLocales(id, locs)]);
-      if (pe.error) { toast.error('Usuario guardado pero falló permisos: ' + pe.error); return; }
-      if (lo.error) { toast.error('Usuario guardado pero falló locales: ' + lo.error); return; }
       toast.success(esEdicion ? 'Usuario actualizado' : 'Usuario creado');
       onSaved();
     } finally { setGuardando(false); }
@@ -271,9 +293,11 @@ function FichaUsuario({ usuario, locales, marcas, onReset, onClose, onSaved }: {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-ink-soft">Rol</label>
-            <select value={rol} onChange={(e) => setRol(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
-              {ROLES_BASE.map((r) => <option key={r} value={r}>{r}</option>)}
+            <select value={rolId ?? ''} onChange={(e) => setRolId(e.target.value || null)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+              <option value="">— Sin rol —</option>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
             </select>
+            {selectedRole && <p className="text-[11px] text-ink-muted">Trae {rolePerms.size} permiso{rolePerms.size === 1 ? '' : 's'}. Ajustá abajo si hace falta.</p>}
           </div>
           {!esEdicion && (
             <div className="space-y-1.5">
@@ -332,17 +356,34 @@ function FichaUsuario({ usuario, locales, marcas, onReset, onClose, onSaved }: {
       )}
 
       <section className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-3">
-        <p className="text-xs normal-case tracking-wide text-ink-muted">Permisos detallados</p>
+        <div>
+          <p className="text-sm font-medium">Permisos</p>
+          <p className="text-xs text-ink-muted mt-0.5">Arrancan del rol. Tocá uno para sumarlo o quitarlo solo para esta persona.</p>
+        </div>
+        <div className="flex flex-wrap gap-4 text-[11px] text-ink-soft bg-brand-50 rounded-lg px-3 py-2">
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-ink/10 border border-ink/15" />Viene del rol</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-500" />Ajuste para esta persona</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-ink/20" />Sin acceso</span>
+        </div>
         {CATEGORIAS.map((cat) => (
           <div key={cat.titulo} className="rounded-xl border border-ink/10 p-3">
             <p className="text-sm font-medium mb-2">{cat.titulo}</p>
             <div className="flex flex-wrap gap-1.5">
-              {cat.permisos.map((p) => (
-                <button key={p.slug} type="button" onClick={() => togglePerm(p.slug)} title={p.descripcion}
-                        className={`text-xs px-2.5 py-1 rounded-full border ${permisos.includes(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
-                  {p.label}
-                </button>
-              ))}
+              {cat.permisos.map((p) => {
+                const inUser = permisos.includes(p.slug);
+                const inRole = rolePerms.has(p.slug);
+                const cls = inUser
+                  ? 'bg-brand-500 text-white border-brand-500'
+                  : inRole
+                    ? 'bg-ink/5 text-ink-soft border-transparent'
+                    : 'bg-white text-ink-soft border-ink/15';
+                return (
+                  <button key={p.slug} type="button" onClick={() => togglePerm(p.slug)} title={p.descripcion}
+                          className={`text-xs px-2.5 py-1 rounded-full border ${cls}`}>
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         ))}

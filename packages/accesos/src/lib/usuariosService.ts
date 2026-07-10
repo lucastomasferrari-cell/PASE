@@ -25,7 +25,7 @@ export interface Usuario {
   password_temporal: boolean;
   cuentas_visibles: string[] | null;
   cuentas_operables?: string[] | null;
-  rol_id?: number | null;       // FK a tabla roles (RBAC)
+  rol_id?: string | null;       // FK (UUID) a tabla roles (RBAC)
   apps_permitidas?: string[];   // 'pase' | 'comanda' | 'mesa' | 'habitue' | 'accesos'
   permisos?: string[];          // resuelto vía LEFT JOIN
   locales?: number[];           // ids de locales asignados
@@ -39,15 +39,15 @@ export async function listUsuarios(): Promise<{ data: Usuario[]; error: string |
   // Hago 3 queries en paralelo y armo el modelo combinado.
   const [u, perms, locs] = await Promise.all([
     db().from('usuarios').select(COLS).order('nombre'),
-    db().from('usuario_permisos').select('usuario_id, permiso'),
+    db().from('usuario_permisos').select('usuario_id, modulo_slug'),
     db().from('usuario_locales').select('usuario_id, local_id'),
   ]);
   if (u.error) return { data: [], error: u.error.message };
 
   const permByUser = new Map<number, string[]>();
-  for (const r of (perms.data ?? []) as { usuario_id: number; permiso: string }[]) {
+  for (const r of (perms.data ?? []) as { usuario_id: number; modulo_slug: string }[]) {
     const arr = permByUser.get(r.usuario_id) ?? [];
-    arr.push(r.permiso);
+    arr.push(r.modulo_slug);
     permByUser.set(r.usuario_id, arr);
   }
   const locByUser = new Map<number, number[]>();
@@ -72,7 +72,7 @@ export interface UsuarioInput {
   password: string;
   apps_permitidas?: string[];
   cuentas_visibles?: string[] | null;
-  rol_id?: number | null;
+  rol_id?: string | null;
 }
 
 // Crea usuario en Auth + perfil en `usuarios`. Va por /api/auth-admin que
@@ -117,23 +117,33 @@ export async function actualizarUsuario(id: number, patch: Partial<Usuario>): Pr
   return { error: error?.message ?? null };
 }
 
-export async function setPermisos(usuarioId: number, slugs: string[]): Promise<{ error: string | null }> {
-  // Estrategia "snapshot": borro los actuales y reinserto. Una sola transacción
-  // del lado servidor sería ideal — pendiente RPC `fn_set_permisos`.
-  const del = await db().from('usuario_permisos').delete().eq('usuario_id', usuarioId);
-  if (del.error) return { error: del.error.message };
-  if (slugs.length === 0) return { error: null };
-  const rows = slugs.map((p) => ({ usuario_id: usuarioId, permiso: p }));
-  const { error } = await db().from('usuario_permisos').insert(rows);
-  return { error: error?.message ?? null };
-}
-
-export async function setLocales(usuarioId: number, localIds: number[]): Promise<{ error: string | null }> {
-  const del = await db().from('usuario_locales').delete().eq('usuario_id', usuarioId);
-  if (del.error) return { error: del.error.message };
-  if (localIds.length === 0) return { error: null };
-  const rows = localIds.map((local_id) => ({ usuario_id: usuarioId, local_id }));
-  const { error } = await db().from('usuario_locales').insert(rows);
+// Guardado atómico de rol + permisos + locales + cuentas + rol_id, por el
+// MISMO RPC que usa PASE (Usuarios.tsx). Reemplaza los inserts sueltos viejos
+// (que escribían la columna equivocada `permiso` en vez de `modulo_slug`, no
+// seteaban `tenant_id` y no eran atómicos → podían dejar al user en 0 permisos
+// si el insert fallaba a mitad). Si algo falla, ROLLBACK: el user queda igual.
+export async function sincronizarUsuario(p: {
+  usuarioId: number;
+  rol: string;
+  rolId: string | null;
+  modulos: string[];
+  locales: number[];
+  cuentasVisibles: string[] | null;
+  cuentasOperables: string[] | null;
+  cuentasAll: boolean;
+  activo?: boolean | null;
+}): Promise<{ error: string | null }> {
+  const { error } = await db().rpc('sincronizar_permisos_usuario', {
+    p_usuario_id: p.usuarioId,
+    p_rol: p.rol,
+    p_modulos: p.modulos,
+    p_locales: p.locales,
+    p_cuentas_visibles: p.cuentasVisibles,
+    p_cuentas_operables: p.cuentasOperables,
+    p_cuentas_all: p.cuentasAll,
+    p_rol_id: p.rolId,
+    p_activo: p.activo ?? null,
+  });
   return { error: error?.message ?? null };
 }
 
