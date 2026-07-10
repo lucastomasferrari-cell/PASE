@@ -7,6 +7,7 @@ import {
   LogOut, ShieldCheck, Users, ScrollText, User, MapPin, ChevronDown, Check, Tags, Tablet as TabletIcon,
 } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
+import { esLocalVisible } from '@/lib/locales';
 import { Personas } from './Personas';
 import { PosLocal } from './PosLocal';
 import { Marcas } from './Marcas';
@@ -70,7 +71,7 @@ export function AdminHome() {
     if (!sesion) return;
     void (async () => {
       const { data } = await db().from('locales').select('id, nombre').order('nombre');
-      const rows = (data ?? []) as LocalLite[];
+      const rows = ((data ?? []) as LocalLite[]).filter((l) => esLocalVisible(l.nombre));
       setLocales(rows);
       if (rows.length > 0 && localSel === null) setLocalSel(rows[0]!.id);
     })();

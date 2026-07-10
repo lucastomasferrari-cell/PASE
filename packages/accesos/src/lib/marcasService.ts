@@ -5,6 +5,7 @@
 // El insert NO pasa tenant_id: la columna tiene DEFAULT auth_tenant_id().
 
 import { db } from './supabase';
+import { esLocalVisible } from './locales';
 
 export interface Marca {
   id: number;
@@ -39,7 +40,7 @@ export async function listLocalesConMarca(): Promise<{ data: LocalConMarca[]; er
     .select('id, nombre, marca_id')
     .order('nombre');
   if (error) return { data: [], error: error.message };
-  return { data: (data ?? []) as LocalConMarca[], error: null };
+  return { data: ((data ?? []) as LocalConMarca[]).filter((l) => esLocalVisible(l.nombre)), error: null };
 }
 
 export async function crearMarca(input: { nombre: string; color?: string | null }): Promise<{ id: number | null; error: string | null }> {

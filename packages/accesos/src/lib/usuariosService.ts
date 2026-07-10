@@ -8,6 +8,7 @@
 // rol dueno/admin/superadmin.
 
 import { db } from './supabase';
+import { esLocalVisible } from './locales';
 
 async function authHeaders(): Promise<Record<string, string> | null> {
   const { data } = await db().auth.getSession();
@@ -168,5 +169,5 @@ export async function resetPassword(usuarioId: number): Promise<{ error: string 
 export async function listLocales(): Promise<{ data: { id: number; nombre: string }[]; error: string | null }> {
   const { data, error } = await db().from('locales').select('id, nombre').order('nombre');
   if (error) return { data: [], error: error.message };
-  return { data: (data ?? []) as { id: number; nombre: string }[], error: null };
+  return { data: ((data ?? []) as { id: number; nombre: string }[]).filter((l) => esLocalVisible(l.nombre)), error: null };
 }
