@@ -631,7 +631,7 @@ export default async function handler(req, res) {
       // Params: local_id
       // Auth: admin/dueño del tenant que es dueño del local.
       // Return: { email, password } — one-time (no se guarda en DB).
-      const { local_id: localIdRaw } = req.body || {};
+      const { local_id: localIdRaw, password: chosenPasswordRaw } = req.body || {};
       const localId = Number(localIdRaw);
       if (!Number.isFinite(localId) || localId <= 0) {
         return res.status(400).json({ ok: false, error: 'Falta local_id' });
@@ -649,11 +649,17 @@ export default async function handler(req, res) {
         return res.status(403).json({ ok: false, error: 'cross_tenant_denied' });
       }
 
-      // Generar password aleatoria (12 chars fáciles de leer).
+      // Password: elegida por el dueño (si viene) o aleatoria de 12 chars.
       const { randomBytes } = await import('crypto');
-      const newPassword = randomBytes(9).toString('base64')
-        .replace(/[+/=]/g, '')
-        .slice(0, 12);
+      let newPassword;
+      if (chosenPasswordRaw != null && String(chosenPasswordRaw).length > 0) {
+        newPassword = String(chosenPasswordRaw);
+        if (newPassword.length < 8) {
+          return res.status(400).json({ ok: false, error: 'La contraseña elegida debe tener al menos 8 caracteres' });
+        }
+      } else {
+        newPassword = randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
+      }
 
       let loginEmail = local.login_email;
       let authUserId;

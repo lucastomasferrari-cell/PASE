@@ -30,6 +30,7 @@ export function Tablet({ localId, locales }: Props) {
   const [rotando, setRotando] = useState(false);
   const [creds, setCreds] = useState<Credenciales | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passElegida, setPassElegida] = useState('');
 
   const reload = useCallback(async () => {
     if (!localId) { setLocal(null); return; }
@@ -46,11 +47,11 @@ export function Tablet({ localId, locales }: Props) {
 
   useEffect(() => { void reload(); setCreds(null); setPasswordVisible(false); }, [reload]);
 
-  async function rotarCredenciales() {
+  async function rotarCredenciales(chosenPassword?: string) {
     if (!localId) return;
     if (local?.login_email) {
       const ok = window.confirm(
-        'Rotar la contraseña de la tablet.\n\n'
+        (chosenPassword ? 'Cambiar la contraseña de la tablet.' : 'Rotar la contraseña de la tablet.') + '\n\n'
         + '⚠️ La tablet actual va a quedar desconectada — hay que loguearla de nuevo con la contraseña nueva.\n\n'
         + '¿Continuar?',
       );
@@ -65,18 +66,24 @@ export function Tablet({ localId, locales }: Props) {
         'content-type': 'application/json',
         authorization: `Bearer ${jwt ?? ''}`,
       },
-      body: JSON.stringify({ action: 'local_login_rotate', local_id: localId }),
+      body: JSON.stringify({ action: 'local_login_rotate', local_id: localId, ...(chosenPassword ? { password: chosenPassword } : {}) }),
     });
     const body = await res.json().catch(() => ({}));
     setRotando(false);
     if (!res.ok || !body.ok) {
-      toast.error(body.error ?? 'No se pudo rotar');
+      toast.error(body.error ?? 'No se pudo actualizar');
       return;
     }
     setCreds({ email: body.email, password: body.password });
     setPasswordVisible(true);
+    setPassElegida('');
     void reload();
-    toast.success(local?.login_email ? 'Contraseña rotada' : 'Credenciales generadas');
+    toast.success(local?.login_email ? 'Contraseña actualizada' : 'Credenciales generadas');
+  }
+
+  function usarElegida() {
+    if (passElegida.length < 8) { toast.error('La contraseña debe tener al menos 8 caracteres'); return; }
+    void rotarCredenciales(passElegida);
   }
 
   function copiar(v: string) {
@@ -115,7 +122,7 @@ export function Tablet({ localId, locales }: Props) {
 
       <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center text-brand">
+          <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700">
             <TabletIcon className="h-5 w-5" />
           </div>
           <div>
@@ -179,15 +186,39 @@ export function Tablet({ localId, locales }: Props) {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => void rotarCredenciales()}
-          disabled={rotando}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-brand text-white hover:bg-brand/90 disabled:opacity-60 font-medium transition-colors"
-        >
-          <RotateCw className={`h-4 w-4 ${rotando ? 'animate-spin' : ''}`} />
-          {rotando ? 'Rotando…' : yaExiste ? 'Rotar contraseña' : 'Generar credenciales de la tablet'}
-        </button>
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => void rotarCredenciales()}
+            disabled={rotando}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 font-medium transition-colors"
+          >
+            <RotateCw className={`h-4 w-4 ${rotando ? 'animate-spin' : ''}`} />
+            {rotando ? 'Guardando…' : yaExiste ? 'Rotar a una contraseña al azar' : 'Generar credenciales (al azar)'}
+          </button>
+
+          <div className="pt-3 border-t border-ink/10">
+            <p className="text-xs text-ink-muted mb-2">
+              La contraseña actual <strong>no se puede ver</strong> (se guarda encriptada). Poné una elegida:
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={passElegida}
+                onChange={(e) => setPassElegida(e.target.value)}
+                placeholder="Contraseña elegida (mín. 8)"
+                className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => void usarElegida()}
+                disabled={rotando || passElegida.length < 8}
+                className="px-4 py-2 rounded-lg border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 text-sm font-medium disabled:opacity-50"
+              >
+                Usar
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
