@@ -5,11 +5,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Power, KeyRound, X } from 'lucide-react';
-import { listEmpleadosPos, setPosActivo, setRolPos, setPin, type EmpleadoPos } from '@/lib/posService';
+import { listEmpleadosPos, setPosActivo, setRolPos, setPin, type EmpleadoPos, type RolPos } from '@/lib/posService';
 
 interface Props { localId: number | null; locales: { id: number; nombre: string }[]; }
 
-const ROLES_POS: ('cajero' | 'mozo' | 'admin')[] = ['cajero', 'mozo', 'admin'];
+const ROLES_POS: RolPos[] = ['cajero', 'bartender', 'encargado', 'manager', 'dueno'];
 
 function nombreEmpleado(e: EmpleadoPos) {
   return [e.nombre, e.apellido].filter(Boolean).join(' ').trim() || 'Sin nombre';
@@ -36,7 +36,7 @@ export function PinPos({ localId, locales }: Props) {
     if (error) { toast.error(error); void reload(); }
   }
 
-  async function cambiarRol(e: EmpleadoPos, rol: 'cajero' | 'mozo' | 'admin' | null) {
+  async function cambiarRol(e: EmpleadoPos, rol: RolPos | null) {
     setEmpleados((prev) => prev.map((x) => x.id === e.id ? { ...x, rol_pos: rol } : x));
     const { error } = await setRolPos(e.id, rol);
     if (error) { toast.error(error); void reload(); }
@@ -72,8 +72,8 @@ export function PinPos({ localId, locales }: Props) {
                 {e.pin_actualizado_at && <div className="text-[11px] text-ink-muted mt-0.5">PIN seteado el {new Date(e.pin_actualizado_at).toLocaleDateString('es-AR')}</div>}
               </div>
               <div className="flex items-center gap-1.5">
-                <select value={e.rol_pos ?? ''} onChange={(ev) => void cambiarRol(e, (ev.target.value || null) as 'cajero' | 'mozo' | 'admin' | null)}
-                        className="text-xs rounded-lg border border-ink/15 bg-white px-2 py-1.5">
+                <select value={e.rol_pos ?? ''} onChange={(ev) => void cambiarRol(e, (ev.target.value || null) as RolPos | null)}
+                        className="text-xs rounded-lg border border-ink/15 bg-white px-2 py-1.5 capitalize">
                   <option value="">Sin rol</option>
                   {ROLES_POS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>

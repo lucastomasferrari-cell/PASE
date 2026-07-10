@@ -22,14 +22,23 @@ function faltaTabla(msg: string) {
   return /relation .*accesos_audit.* does not exist/i.test(msg) || /could not find the table/i.test(msg);
 }
 
+// Resuelve solo quién es el actor (el dueño/admin logueado) desde la sesión,
+// así los callers solo pasan a quién y qué acción. Silencioso si no hay sesión,
+// no se puede resolver el actor, o la tabla no está migrada (nunca rompe el flujo).
 export async function logAudit(args: {
-  actorId: number;
   usuarioId: number;
   accion: AuditAccion;
   detalle?: Record<string, unknown>;
 }): Promise<{ error: string | null }> {
+  const { data: sess } = await db().auth.getSession();
+  const authId = sess.session?.user?.id;
+  if (!authId) return { error: null };
+  const { data: actor } = await db().from('usuarios').select('id').eq('auth_id', authId).maybeSingle();
+  const actorId = (actor as { id: number } | null)?.id ?? null;
+  if (actorId == null) return { error: null };
+
   const { error } = await db().from('accesos_audit').insert({
-    actor_id: args.actorId,
+    actor_id: actorId,
     usuario_id: args.usuarioId,
     accion: args.accion,
     detalle: args.detalle ?? {},

@@ -14,6 +14,7 @@ import {
   resetPassword, listLocales, type Usuario,
 } from '@/lib/usuariosService';
 import { listRoles, type Rol } from '@/lib/rolesService';
+import { logAudit } from '@/lib/auditService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, APPS_ADMIN, APPS_OPERATIVAS, type AppKey } from '@/lib/apps';
 import { CATEGORIAS } from '@/lib/permisos';
@@ -59,13 +60,17 @@ export function Personas() {
     setUsuarios((prev) => prev.map((x) => x.id === u.id ? { ...x, activo: !x.activo } : x));
     const { error } = await actualizarUsuario(u.id, { activo: !u.activo });
     if (error) { toast.error(error); void reload(); }
-    else toast.success(`${nombre(u)} ${!u.activo ? 'activado' : 'desactivado'}`);
+    else {
+      toast.success(`${nombre(u)} ${!u.activo ? 'activado' : 'desactivado'}`);
+      void logAudit({ usuarioId: u.id, accion: !u.activo ? 'activar' : 'desactivar' });
+    }
   }
 
   async function reset(u: Usuario) {
     if (!window.confirm(`¿Resetear la contraseña de ${nombre(u)}?`)) return;
     const { error, tempPassword } = await resetPassword(u.id);
     if (error) { toast.error(error); return; }
+    void logAudit({ usuarioId: u.id, accion: 'reset_password' });
     if (tempPassword) {
       window.prompt('Pasale esta contraseña temporal — la cambia al loguearse:', tempPassword);
     } else toast.success('Contraseña reseteada');
@@ -237,6 +242,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         if (sync.error) { toast.error(sync.error); return; }
         const upd = await actualizarUsuario(usuario.id, { apps_permitidas: apps });
         if (upd.error) { toast.error('Permisos guardados pero falló apps: ' + upd.error); return; }
+        void logAudit({ usuarioId: usuario.id, accion: 'editar', detalle: { rolId } });
       } else {
         const { id, error } = await crearUsuario({
           email: email.trim(), nombre: nombreT.trim(), rol: rolSlug, password,
@@ -249,6 +255,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
           cuentasVisibles: null, cuentasOperables: null, cuentasAll: true,
         });
         if (sync.error) { toast.error('Usuario creado pero falló permisos: ' + sync.error); return; }
+        void logAudit({ usuarioId: id, accion: 'crear' });
       }
       toast.success(esEdicion ? 'Usuario actualizado' : 'Usuario creado');
       onSaved();

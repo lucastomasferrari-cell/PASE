@@ -1,8 +1,14 @@
 // posService — empleados POS de COMANDA (PIN). Permite al dueño definir
-// quién puede entrar al POS, asignar rol_pos (cajero/mozo/admin) y resetear
-// el PIN. Tabla `rrhh_empleados` + RPC `fn_set_pin_pos`.
+// quién puede entrar al POS, asignar rol_pos y resetear el PIN.
+// Tabla `rrhh_empleados` + RPC `fn_set_pin_pos`.
 
 import { db } from './supabase';
+
+// Valores válidos de rrhh_empleados.rol_pos según el CHECK de la base
+// (migración 202605151740). OJO: antes esta lista decía cajero/mozo/admin,
+// que la base NO acepta → guardar tiraba error. 'mozo' se sumará cuando
+// COMANDA soporte el rol (hoy su slug de cobrar mezcla tomar-pedido + cobrar).
+export type RolPos = 'cajero' | 'bartender' | 'encargado' | 'manager' | 'dueno';
 
 export interface EmpleadoPos {
   id: string;
@@ -12,7 +18,7 @@ export interface EmpleadoPos {
   puesto: string | null;
   activo: boolean;
   pos_activo: boolean;
-  rol_pos: 'cajero' | 'mozo' | 'admin' | null;
+  rol_pos: RolPos | null;
   pin_actualizado_at: string | null;
 }
 
@@ -33,7 +39,7 @@ export async function setPosActivo(empleadoId: string, activo: boolean): Promise
   return { error: error?.message ?? null };
 }
 
-export async function setRolPos(empleadoId: string, rol: 'cajero' | 'mozo' | 'admin' | null): Promise<{ error: string | null }> {
+export async function setRolPos(empleadoId: string, rol: RolPos | null): Promise<{ error: string | null }> {
   const { error } = await db().from('rrhh_empleados').update({ rol_pos: rol }).eq('id', empleadoId);
   return { error: error?.message ?? null };
 }
