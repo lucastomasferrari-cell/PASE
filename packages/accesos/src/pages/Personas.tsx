@@ -1,16 +1,22 @@
 // Personas — alma del admin: lista, alta, edición y baja de usuarios del
 // tenant. Cada uno con su rol, apps permitidas, locales asignados y permisos.
+//
+// Rediseño F1: la edición pasó de modal a ficha-página (más aire para rol,
+// apps, locales y permisos). La matriz "quién entra a qué app" vive acá como
+// una vista secundaria (antes era una página aparte). La lógica de guardado
+// NO cambió: mismos crearUsuario / actualizarUsuario / setPermisos / setLocales.
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Plus, X, Check, Power, KeyRound, ShieldCheck, MapPin } from 'lucide-react';
+import { Search, Plus, Check, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock } from 'lucide-react';
 import {
   listUsuarios, crearUsuario, actualizarUsuario, setPermisos, setLocales,
   resetPassword, listLocales, type Usuario,
 } from '@/lib/usuariosService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
-import { APPS, type AppKey } from '@/lib/apps';
+import { APPS, APPS_ADMIN, APPS_OPERATIVAS, type AppKey } from '@/lib/apps';
 import { CATEGORIAS } from '@/lib/permisos';
+import { Accesos } from './Accesos';
 
 const ROLES_BASE = ['dueno', 'admin', 'encargado', 'cajero', 'compras'];
 
@@ -24,6 +30,7 @@ export function Personas() {
   const [marcas, setMarcas] = useState<MarcaConLocales[]>([]);
   const [search, setSearch] = useState('');
   const [cargando, setCargando] = useState(true);
+  const [modo, setModo] = useState<'lista' | 'matriz'>('lista');
   const [editando, setEditando] = useState<Usuario | 'nuevo' | null>(null);
 
   const reload = useCallback(async () => {
@@ -64,6 +71,20 @@ export function Personas() {
     } else toast.success('Contraseña reseteada');
   }
 
+  // Ficha-página: reemplaza la lista mientras editás/creás.
+  if (editando) {
+    return (
+      <FichaUsuario
+        usuario={editando === 'nuevo' ? null : editando}
+        locales={locales}
+        marcas={marcas}
+        onReset={editando !== 'nuevo' ? () => void reset(editando) : undefined}
+        onClose={() => setEditando(null)}
+        onSaved={() => { setEditando(null); void reload(); }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center gap-2 flex-wrap">
@@ -72,13 +93,21 @@ export function Personas() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o email…"
                  className="w-full rounded-lg border border-ink/15 bg-white pl-9 pr-3 py-2.5 text-sm" />
         </div>
+        <div className="inline-flex rounded-lg border border-ink/15 bg-white p-0.5">
+          <button onClick={() => setModo('lista')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${modo === 'lista' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Lista</button>
+          <button onClick={() => setModo('matriz')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${modo === 'matriz' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Matriz de apps</button>
+        </div>
         <button onClick={() => setEditando('nuevo')}
                 className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2.5 text-sm font-medium inline-flex items-center gap-1.5">
           <Plus className="h-4 w-4" /> Nueva persona
         </button>
       </div>
 
-      {cargando ? (
+      {modo === 'matriz' ? (
+        <Accesos />
+      ) : cargando ? (
         <div className="py-16 text-center text-ink-muted">Cargando equipo…</div>
       ) : filtrados.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-16 text-center">
@@ -92,16 +121,6 @@ export function Personas() {
                          onToggleActivo={() => void toggleActivo(u)} onReset={() => void reset(u)} />
           ))}
         </div>
-      )}
-
-      {editando && (
-        <FormUsuario
-          usuario={editando === 'nuevo' ? null : editando}
-          locales={locales}
-          marcas={marcas}
-          onClose={() => setEditando(null)}
-          onSaved={() => { setEditando(null); void reload(); }}
-        />
       )}
     </div>
   );
@@ -130,9 +149,10 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
           <div className="flex flex-wrap gap-1 mt-2">
             {apps.map((k) => {
               const app = APPS.find((a) => a.key === (k as AppKey));
+              const op = app?.tier === 'operativa';
               return (
-                <span key={k} className="text-[11px] px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 border border-brand-200 inline-flex items-center gap-1">
-                  {app?.emoji} {app?.nombre ?? k}
+                <span key={k} className={`text-[11px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${op ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-brand-100 text-brand-800 border-brand-200'}`}>
+                  {app?.nombre ?? k}
                 </span>
               );
             })}
@@ -158,10 +178,11 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   );
 }
 
-function FormUsuario({ usuario, locales, marcas, onClose, onSaved }: {
+function FichaUsuario({ usuario, locales, marcas, onReset, onClose, onSaved }: {
   usuario: Usuario | null;
   locales: { id: number; nombre: string }[];
   marcas: MarcaConLocales[];
+  onReset?: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -212,114 +233,145 @@ function FormUsuario({ usuario, locales, marcas, onClose, onSaved }: {
     } finally { setGuardando(false); }
   }
 
+  const inicial = (nombreT || email || '?')[0]?.toUpperCase() ?? '?';
+
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-medium">{esEdicion ? `Editar a ${usuario?.nombre || usuario?.email}` : 'Nueva persona'}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
+    <div className="space-y-4 max-w-3xl">
+      <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-brand-700">
+        <ArrowLeft className="h-4 w-4" /> Personas
+      </button>
+
+      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 flex items-center gap-4 flex-wrap">
+        <div className="w-14 h-14 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-xl shrink-0">{inicial}</div>
+        <div className="flex-1 min-w-[160px]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-medium">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
+            {esEdicion && <span className="text-[10px] normal-case tracking-wide px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{usuario?.rol}</span>}
+          </div>
+          {esEdicion && <div className="text-sm text-ink-muted mt-0.5">{usuario?.email}</div>}
         </div>
+        {esEdicion && onReset && (
+          <button onClick={onReset} className="text-sm px-3 py-2 rounded-lg border border-ink/15 bg-white hover:bg-ink/5 text-ink-soft font-medium inline-flex items-center gap-1.5">
+            <KeyRound className="h-4 w-4" /> Resetear contraseña
+          </button>
+        )}
+      </div>
 
-        <section className="space-y-3">
-          <p className="text-xs normal-case tracking-wide text-ink-muted">Datos básicos</p>
-          <div className="grid sm:grid-cols-2 gap-3">
+      <section className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-3">
+        <p className="text-xs normal-case tracking-wide text-ink-muted">Datos básicos</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-ink-soft">Nombre *</label>
+            <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-ink-soft">Email *</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" disabled={esEdicion}
+                   className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm disabled:bg-ink/5" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-ink-soft">Rol</label>
+            <select value={rol} onChange={(e) => setRol(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+              {ROLES_BASE.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          {!esEdicion && (
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-ink-soft">Nombre *</label>
-              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+              <label className="text-xs font-medium text-ink-soft">Contraseña inicial *</label>
+              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-ink-soft">Email *</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" disabled={esEdicion}
-                     className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm disabled:bg-ink/5" />
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
+        <div>
+          <p className="text-sm font-medium">Apps que puede abrir</p>
+          <p className="text-xs text-ink-muted mt-0.5">Administrativas: entra con su usuario y contraseña. Operativas: puede entrar sin PIN, con los permisos de su rol.</p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-ink-muted mb-2">Administrativas</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {APPS_ADMIN.map((a) => <AppToggle key={a.key} a={a} sel={apps.includes(a.key)} onToggle={() => toggleApp(a.key)} />)}
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-ink-muted mb-2">Operativas</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {APPS_OPERATIVAS.map((a) => <AppToggle key={a.key} a={a} sel={apps.includes(a.key)} onToggle={() => toggleApp(a.key)} operativa />)}
+          </div>
+        </div>
+      </section>
+
+      {locales.length > 0 && (
+        <section className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-2">
+          <p className="text-xs normal-case tracking-wide text-ink-muted">Locales asignados (vacío = todos)</p>
+          {marcas.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pb-1">
+              <span className="text-[11px] text-ink-muted self-center">Por marca:</span>
+              {marcas.map((m) => {
+                const todos = m.localIds.every((id) => locs.includes(id));
+                return (
+                  <button key={m.id} type="button" onClick={() => toggleMarca(m.localIds)}
+                          className={`text-xs px-3 py-1.5 rounded-full border font-medium ${todos ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white border-ink/15 text-ink-soft hover:bg-ink/5'}`}>
+                    {m.nombre}
+                  </button>
+                );
+              })}
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-ink-soft">Rol</label>
-              <select value={rol} onChange={(e) => setRol(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
-                {ROLES_BASE.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            {!esEdicion && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-ink-soft">Contraseña inicial *</label>
-                <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
-              </div>
-            )}
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {locales.map((l) => (
+              <button key={l.id} onClick={() => toggleLocal(l.id)} type="button"
+                      className={`text-xs px-3 py-1.5 rounded-full border ${locs.includes(l.id) ? 'bg-brand-500 text-white border-brand-500' : 'bg-white border-ink/15 text-ink-soft'}`}>
+                {l.nombre}
+              </button>
+            ))}
           </div>
         </section>
+      )}
 
-        <section className="space-y-2">
-          <p className="text-xs normal-case tracking-wide text-ink-muted">Apps a las que puede entrar</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {APPS.map((a) => {
-              const sel = apps.includes(a.key);
-              return (
-                <button key={a.key} onClick={() => toggleApp(a.key)} type="button"
-                        className={`text-left rounded-xl border p-3 transition-colors ${sel ? 'border-brand-500 bg-brand-50/60' : 'border-ink/10 bg-white hover:bg-ink/5'}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xl">{a.emoji}</span>
-                    {sel && <Check className="h-4 w-4 text-brand-600" />}
-                  </div>
-                  <div className="font-medium mt-1">{a.nombre}</div>
-                  <div className="text-[11px] text-ink-muted">{a.paraQuien}</div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {locales.length > 0 && (
-          <section className="space-y-2">
-            <p className="text-xs normal-case tracking-wide text-ink-muted">Locales asignados (vacío = todos)</p>
-            {marcas.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pb-1">
-                <span className="text-[11px] text-ink-muted self-center">Por marca:</span>
-                {marcas.map((m) => {
-                  const todos = m.localIds.every((id) => locs.includes(id));
-                  return (
-                    <button key={m.id} type="button" onClick={() => toggleMarca(m.localIds)}
-                            className={`text-xs px-3 py-1.5 rounded-full border font-medium ${todos ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white border-ink/15 text-ink-soft hover:bg-ink/5'}`}>
-                      {m.nombre}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+      <section className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-3">
+        <p className="text-xs normal-case tracking-wide text-ink-muted">Permisos detallados</p>
+        {CATEGORIAS.map((cat) => (
+          <div key={cat.titulo} className="rounded-xl border border-ink/10 p-3">
+            <p className="text-sm font-medium mb-2">{cat.titulo}</p>
             <div className="flex flex-wrap gap-1.5">
-              {locales.map((l) => (
-                <button key={l.id} onClick={() => toggleLocal(l.id)} type="button"
-                        className={`text-xs px-3 py-1.5 rounded-full border ${locs.includes(l.id) ? 'bg-brand-500 text-white border-brand-500' : 'bg-white border-ink/15 text-ink-soft'}`}>
-                  {l.nombre}
+              {cat.permisos.map((p) => (
+                <button key={p.slug} type="button" onClick={() => togglePerm(p.slug)} title={p.descripcion}
+                        className={`text-xs px-2.5 py-1 rounded-full border ${permisos.includes(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
+                  {p.label}
                 </button>
               ))}
             </div>
-          </section>
-        )}
+          </div>
+        ))}
+      </section>
 
-        <section className="space-y-3">
-          <p className="text-xs normal-case tracking-wide text-ink-muted">Permisos detallados</p>
-          {CATEGORIAS.map((cat) => (
-            <div key={cat.titulo} className="rounded-xl border border-ink/10 p-3">
-              <p className="text-sm font-medium mb-2">{cat.emoji} {cat.titulo}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {cat.permisos.map((p) => (
-                  <button key={p.slug} type="button" onClick={() => togglePerm(p.slug)} title={p.descripcion}
-                          className={`text-xs px-2.5 py-1 rounded-full border ${permisos.includes(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </section>
-
-        <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 rounded-lg border border-ink/15 py-2.5 text-sm font-medium hover:bg-ink/5">Cancelar</button>
-          <button onClick={() => void guardar()} disabled={guardando}
-                  className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
-            {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear persona'}
-          </button>
-        </div>
+      <div className="flex gap-2 pt-1 pb-2">
+        <button onClick={onClose} className="flex-1 rounded-lg border border-ink/15 py-2.5 text-sm font-medium hover:bg-ink/5">Cancelar</button>
+        <button onClick={() => void guardar()} disabled={guardando}
+                className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+          {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear persona'}
+        </button>
       </div>
     </div>
+  );
+}
+
+function AppToggle({ a, sel, onToggle, operativa }: {
+  a: { key: string; nombre: string; paraQuien: string }; sel: boolean; onToggle: () => void; operativa?: boolean;
+}) {
+  const onCls = operativa ? 'border-amber-400 bg-amber-50/70' : 'border-brand-500 bg-brand-50/60';
+  return (
+    <button onClick={onToggle} type="button"
+            className={`text-left rounded-xl border p-3 transition-colors ${sel ? onCls : 'border-ink/10 bg-white hover:bg-ink/5'}`}>
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-sm">{a.nombre}</span>
+        {sel && <Check className={`h-4 w-4 ${operativa ? 'text-amber-600' : 'text-brand-600'}`} />}
+      </div>
+      <div className="text-[11px] text-ink-muted mt-0.5">{a.paraQuien}</div>
+      {operativa && <div className="text-[10px] text-amber-700 mt-1 inline-flex items-center gap-1"><Lock className="h-3 w-3" /> entra sin PIN</div>}
+    </button>
   );
 }

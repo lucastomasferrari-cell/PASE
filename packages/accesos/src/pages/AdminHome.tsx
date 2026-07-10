@@ -4,29 +4,24 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  LogOut, ShieldCheck, Users, Grid3x3, KeyRound, ScrollText, User, MapPin, ChevronDown, Check, Tags, Tablet as TabletIcon,
+  LogOut, ShieldCheck, Users, ScrollText, User, MapPin, ChevronDown, Check, Tags, Tablet as TabletIcon,
 } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Personas } from './Personas';
+import { PosLocal } from './PosLocal';
 import { Marcas } from './Marcas';
 import { Roles } from './Roles';
-import { Accesos } from './Accesos';
-import { PinPos } from './PinPos';
-import { Tablet } from './Tablet';
 import { Auditoria } from './Auditoria';
 import { MiCuenta } from './MiCuenta';
 
-type Seccion = 'personas' | 'marcas' | 'roles' | 'accesos' | 'pin' | 'tablet' | 'audit' | 'mi_cuenta';
+type Seccion = 'personas' | 'pos' | 'roles' | 'marcas' | 'audit' | 'mi_cuenta';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'personas', label: 'Personas', icon: <Users className="h-[18px] w-[18px]" /> },
-  { key: 'marcas', label: 'Marcas', icon: <Tags className="h-[18px] w-[18px]" /> },
-  { key: 'roles', label: 'Roles y permisos', icon: <ShieldCheck className="h-[18px] w-[18px]" /> },
-  { key: 'accesos', label: 'Accesos por app', icon: <Grid3x3 className="h-[18px] w-[18px]" /> },
-  { key: 'pin', label: 'PIN del POS', icon: <KeyRound className="h-[18px] w-[18px]" /> },
-  { key: 'tablet', label: 'Tablet del local', icon: <TabletIcon className="h-[18px] w-[18px]" /> },
-  { key: 'audit', label: 'Auditoría', icon: <ScrollText className="h-[18px] w-[18px]" /> },
-  { key: 'mi_cuenta', label: 'Mi cuenta', icon: <User className="h-[18px] w-[18px]" /> },
+  { key: 'pos', label: 'POS del local', icon: <TabletIcon className="h-[18px] w-[18px]" /> },
+  { key: 'roles', label: 'Roles', icon: <ShieldCheck className="h-[18px] w-[18px]" /> },
+  { key: 'marcas', label: 'Marcas y locales', icon: <Tags className="h-[18px] w-[18px]" /> },
+  { key: 'audit', label: 'Actividad', icon: <ScrollText className="h-[18px] w-[18px]" /> },
 ];
 
 interface LocalLite { id: number; nombre: string; }
@@ -164,8 +159,11 @@ export function AdminHome() {
             </button>
           ))}
         </nav>
-        <div className="border-t border-ink/10 p-3">
-          <div className="px-2 pb-2 text-xs text-ink-muted truncate" title={sesion.email}>{sesion.email}</div>
+        <div className="border-t border-ink/10 p-3 space-y-1">
+          <button onClick={() => setSeccion('mi_cuenta')}
+                  className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm ${seccion === 'mi_cuenta' ? 'bg-brand-50 text-brand-700' : 'text-ink-soft hover:bg-ink/5'}`}>
+            <User className="h-4 w-4 shrink-0" /> <span className="truncate" title={sesion.email}>{sesion.email}</span>
+          </button>
           <button onClick={() => void salir()} className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-ink-soft hover:bg-ink/5">
             <LogOut className="h-4 w-4" /> Salir
           </button>
@@ -175,8 +173,8 @@ export function AdminHome() {
       <div className="flex-1 min-w-0 md:pl-60 flex flex-col min-h-screen">
         <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-ink/10 h-16 flex items-center gap-3 px-4 sm:px-6">
           <span className="md:hidden text-xl font-medium text-brand-700">accesos<span className="text-gold">.</span></span>
-          <h1 className="text-lg font-medium capitalize">{NAV.find((n) => n.key === seccion)?.label}</h1>
-          {locales.length > 1 && seccion === 'pin' && (
+          <h1 className="text-lg font-medium capitalize">{seccion === 'mi_cuenta' ? 'Mi cuenta' : NAV.find((n) => n.key === seccion)?.label}</h1>
+          {locales.length > 1 && seccion === 'pos' && (
             <LocalSwitcher locales={locales} sel={localSel} onSelect={setLocalSel} />
           )}
           <button onClick={() => void salir()} className="md:hidden ml-auto text-ink-soft hover:text-ink p-2" title="Salir"><LogOut className="h-5 w-5" /></button>
@@ -195,11 +193,9 @@ export function AdminHome() {
 
         <main className="flex-1 px-4 sm:px-6 py-6">
           {seccion === 'personas' ? <Personas />
-            : seccion === 'marcas' ? <Marcas />
+            : seccion === 'pos' ? <PosLocal localId={localSel} locales={locales} />
             : seccion === 'roles' ? <Roles />
-            : seccion === 'accesos' ? <Accesos />
-            : seccion === 'pin' ? <PinPos localId={localSel} locales={locales} />
-            : seccion === 'tablet' ? <Tablet localId={localSel} locales={locales} />
+            : seccion === 'marcas' ? <Marcas />
             : seccion === 'audit' ? <Auditoria />
             : <MiCuenta email={sesion.email} />}
         </main>
