@@ -28,10 +28,12 @@ interface Props {
   onConfirmado: () => void;
 }
 
-// Sprint 7 HIGH #2: retiros > $5000 también requieren override (antes
-// solo ajustes > $10k).
-const UMBRAL_AJUSTE_OVERRIDE = 10_000;
-const UMBRAL_RETIRO_OVERRIDE = 5_000;
+// Umbral único de manager override, alineado con fn_movimiento_caja_comanda
+// (fix 03-jul: todos los tipos ≥ $5000 requieren PIN de manager).
+// Antes el frontend usaba umbrales distintos por tipo y NO disparaba el
+// dialog para deposito → la RPC lo rechazaba sin que el UI pidiera PIN
+// (reporte Camilo 10-jul, "no puedo ingresar saldo inicial").
+const UMBRAL_MOV_OVERRIDE = 5_000;
 
 export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }: Props) {
   const { user } = useAuth();
@@ -51,9 +53,10 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
     if (open) { setMonto(0); setMotivo(''); setMetodo('efectivo'); setShowOverride(false); setSaving(false); }
   }, [open]);
 
-  const requiereOverride =
-    (tipo === 'ajuste' && Math.abs(monto) > UMBRAL_AJUSTE_OVERRIDE) ||
-    (tipo === 'retiro' && Math.abs(monto) > UMBRAL_RETIRO_OVERRIDE);
+  // Alinear con la RPC: cualquier tipo con monto ≥ $5000 requiere PIN de
+  // manager. Antes solo retiro/ajuste — depósito no disparaba el dialog y
+  // la RPC lo rechazaba silenciosamente.
+  const requiereOverride = Math.abs(monto) >= UMBRAL_MOV_OVERRIDE;
   const motivoMinimo = requiereOverride ? 10 : 5;
 
   async function ejecutar(managerId?: string) {
@@ -136,9 +139,7 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
             <div className="rounded-md bg-warning/10 border border-warning/30 p-3 text-sm flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
               <span>
-                {tipo === 'retiro'
-                  ? `Retiro mayor a ${formatARS(UMBRAL_RETIRO_OVERRIDE)} requiere autorización de manager (PIN + motivo).`
-                  : `Ajuste mayor a ${formatARS(UMBRAL_AJUSTE_OVERRIDE)} requiere autorización de manager.`}
+                Movimiento de {formatARS(UMBRAL_MOV_OVERRIDE)} o más — requiere PIN de manager (podés autorizar con tu propio PIN si sos manager o dueño).
               </span>
             </div>
           )}
