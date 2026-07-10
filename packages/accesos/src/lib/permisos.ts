@@ -1,13 +1,17 @@
-// Catálogo de permisos del ecosistema. Lo usa Accesos para mostrar la matriz
-// de Roles y permisos. Los slugs son los mismos que usa PASE en la columna
-// `usuarios.permisos` y en la RPC `auth_tiene_permiso()` — porteado de
-// packages/pase/src/lib/auth.ts.PERMISOS_EXTRAS.
+// Catálogo de permisos administrativos del ecosistema (los que controla PASE).
+// Sincronizado 1:1 con packages/pase/src/lib/auth.ts (MODULOS + PERMISOS_EXTRAS),
+// que es la fuente de verdad: son los mismos slugs que PASE guarda en
+// `usuario_permisos` / `rol_permisos` y chequea la RPC `auth_tiene_permiso()`.
+//
+// IMPORTANTE: acá van SOLO los permisos administrativos (login web → PASE).
+// Los permisos operativos del POS (COMANDA) viven en otra tabla
+// (`rol_pos_permisos`, por `rol_pos`) y son otro mundo — no se mezclan.
+// 'tenants' se omite: es solo superadmin.
 
 export interface PermisoDef {
   slug: string;
   label: string;
   descripcion?: string;
-  app: 'pase' | 'comanda' | 'mesa' | 'habitue' | 'cross';
 }
 
 export interface CategoriaPermisos {
@@ -18,65 +22,61 @@ export interface CategoriaPermisos {
 
 export const CATEGORIAS: CategoriaPermisos[] = [
   {
-    titulo: 'Operación diaria (PASE)', emoji: '',
+    titulo: 'Operación diaria', emoji: '',
     permisos: [
-      { slug: 'caja', label: 'Caja y movimientos', descripcion: 'Ver y operar la caja.', app: 'pase' },
-      { slug: 'ventas', label: 'Ventas', descripcion: 'Cargar y ver ventas.', app: 'pase' },
-      { slug: 'compras', label: 'Compras', descripcion: 'Cargar/pagar facturas y remitos.', app: 'pase' },
-      { slug: 'remitos', label: 'Remitos', descripcion: 'Gestionar remitos.', app: 'pase' },
-      { slug: 'gastos', label: 'Gastos', descripcion: 'Cargar gastos sin factura.', app: 'pase' },
-      { slug: 'proveedores', label: 'Proveedores', descripcion: 'ABM de proveedores.', app: 'pase' },
+      { slug: 'caja', label: 'Caja', descripcion: 'Ver y operar la caja / tesorería.' },
+      { slug: 'ventas', label: 'Ventas', descripcion: 'Cargar y ver cierres de ventas.' },
+      { slug: 'compras', label: 'Compras', descripcion: 'Cargar/pagar facturas y remitos.' },
+      { slug: 'remitos', label: 'Remitos', descripcion: 'Gestionar remitos.' },
+      { slug: 'gastos', label: 'Gastos', descripcion: 'Cargar gastos sin factura.' },
+      { slug: 'proveedores', label: 'Proveedores', descripcion: 'ABM de proveedores.' },
+      { slug: 'mp', label: 'Conciliación MP', descripcion: 'Ver la conciliación de Mercado Pago.' },
+      { slug: 'conciliacion', label: 'Conciliación', descripcion: 'Cierre de mes contra extracto. Sensible: crea/anula movimientos según el cruce.' },
     ],
   },
   {
-    titulo: 'Gestión y reportes (PASE)', emoji: '',
+    titulo: 'Reportes y finanzas', emoji: '',
     permisos: [
-      { slug: 'negocio', label: 'Panel del negocio', app: 'pase' },
-      { slug: 'finanzas', label: 'Finanzas', app: 'pase' },
-      { slug: 'eerr', label: 'Estado de resultados (EERR)', app: 'pase' },
-      { slug: 'rentabilidad', label: 'Rentabilidad', app: 'pase' },
-      { slug: 'objetivos', label: 'Objetivos', app: 'pase' },
-      { slug: 'rrhh', label: 'RRHH (sueldos, adelantos, vacaciones)', app: 'pase' },
-      { slug: 'mensajeria', label: 'Mensajería interna', app: 'pase' },
+      { slug: 'negocio', label: 'Negocio' },
+      { slug: 'finanzas', label: 'Finanzas' },
+      { slug: 'eerr', label: 'Reportes (EERR)' },
+      { slug: 'rentabilidad', label: 'Rentabilidad', descripcion: 'Stock valorizado, CMV teórico vs real, simulador.' },
+      { slug: 'objetivos', label: 'Objetivos' },
+      { slug: 'cashflow', label: 'Cashflow', descripcion: 'La ruta del dinero (base percibida). Sensible.' },
+      { slug: 'utilidades', label: 'Utilidades (reparto socios)', descripcion: 'Reparto entre socios. Sensible.' },
+      { slug: 'contador', label: 'Contador / IVA' },
+      { slug: 'ventas_historico', label: 'Ver histórico de ventas', descripcion: 'Sin esto, solo ve el cierre que cargó en su sesión.' },
     ],
   },
   {
-    titulo: 'Acciones destructivas (sin permiso pide código del dueño)', emoji: '',
+    titulo: 'Equipo (RRHH)', emoji: '',
     permisos: [
-      { slug: 'caja_anular', label: 'Anular movimientos de caja', app: 'pase' },
-      { slug: 'compras_anular', label: 'Anular facturas/remitos', app: 'pase' },
-      { slug: 'ventas_anular', label: 'Anular ventas', app: 'pase' },
-      { slug: 'rrhh_anular', label: 'Anular pagos de RRHH', app: 'pase' },
+      { slug: 'rrhh', label: 'Equipo / RRHH', descripcion: 'Sueldos, adelantos, vacaciones, legajos.' },
+      { slug: 'rrhh_liquidacion_final', label: 'Liquidación final (despidos/renuncias)', descripcion: 'Indemnización, SAC, vacaciones. Plata sensible; por default solo dueño/admin.' },
     ],
   },
   {
-    titulo: 'Configuración (PASE)', emoji: '',
+    titulo: 'Acciones sensibles (anular)', emoji: '',
     permisos: [
-      { slug: 'ajustes', label: 'Ajustes generales', app: 'pase' },
-      { slug: 'blindaje', label: 'Blindaje (cierres y bloqueos)', app: 'pase' },
+      { slug: 'caja_anular', label: 'Anular movimientos de caja', descripcion: 'Sin esto, solo ve/edita; anular bloqueado.' },
+      { slug: 'compras_anular', label: 'Anular facturas/remitos', descripcion: 'Sin esto, Compras es solo carga/lectura.' },
+      { slug: 'ventas_anular', label: 'Anular ventas/cierres', descripcion: 'Sin esto, crea cierres pero no los revierte.' },
+      { slug: 'ver_anulados', label: 'Ver anulados / inactivos', descripcion: 'Habilita los toggles "ver anulados/inactivos" en Caja, Proveedores y RRHH.' },
     ],
   },
   {
-    titulo: 'COMANDA — POS y catálogo', emoji: '',
+    titulo: 'Herramientas', emoji: '',
     permisos: [
-      { slug: 'comanda.salon.editar', label: 'Editar salón/mesas', app: 'comanda' },
-      { slug: 'comanda.config.editar', label: 'Configuración de COMANDA', app: 'comanda' },
-      { slug: 'comanda.empleados.ver', label: 'Ver empleados POS', app: 'comanda' },
+      { slug: 'mensajeria', label: 'Mensajería', descripcion: 'Panel del bot de Instagram + responder como humano.' },
+      { slug: 'diagnostico_ia', label: 'Asistente de diagnóstico IA', descripcion: 'Modo diagnóstico del bot de ayuda: mira la base (solo lectura) acotado a sus locales.' },
     ],
   },
   {
-    titulo: 'MESA — reservas', emoji: '',
+    titulo: 'Configuración y sistema', emoji: '',
     permisos: [
-      { slug: 'mesa.reservas.editar', label: 'Crear/editar reservas', app: 'mesa' },
-      { slug: 'mesa.config.editar', label: 'Configurar horarios y mesas', app: 'mesa' },
-    ],
-  },
-  {
-    titulo: 'Habitué — CRM y marketing', emoji: '',
-    permisos: [
-      { slug: 'habitue.campanas.enviar', label: 'Enviar campañas', app: 'habitue' },
-      { slug: 'habitue.cupones.editar', label: 'Crear cupones y vouchers', app: 'habitue' },
-      { slug: 'habitue.config.editar', label: 'Configurar integraciones y fidelidad', app: 'habitue' },
+      { slug: 'ajustes', label: 'Ajustes generales' },
+      { slug: 'blindaje', label: 'Blindaje (cierres y bloqueos de mes)' },
+      { slug: 'usuarios', label: 'Usuarios y permisos' },
     ],
   },
 ];

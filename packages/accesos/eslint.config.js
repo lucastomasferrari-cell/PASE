@@ -11,5 +11,12 @@ export default defineConfig([
     files: ['src/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
     languageOptions: { ecmaVersion: 2022, globals: globals.browser },
+    rules: {
+      // Convención del paquete: carga de datos on-mount con flag de loading
+      // (useEffect(() => void reload(), [reload]) donde reload hace setCargando).
+      // La regla nueva de react-hooks lo marca como falso positivo en TODAS las
+      // páginas. Se desactiva a nivel paquete en vez de sembrar disables por línea.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ]);
