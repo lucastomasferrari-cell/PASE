@@ -44,7 +44,7 @@ export function PinPos({ localId, locales }: Props) {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <p className="text-sm text-ink-muted">Empleados que pueden entrar al POS de COMANDA. Cada uno tiene su <strong>PIN de 4 dígitos</strong> y un rol que define qué puede hacer (cobrar, sentar, anular, etc).</p>
+      <p className="text-xs text-ink-muted">Cada uno entra con su <strong>PIN de 4 dígitos</strong>; el rol define qué puede hacer.</p>
 
       {!localId && locales.length > 1 && (
         <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">

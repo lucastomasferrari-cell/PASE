@@ -108,16 +108,9 @@ export function Tablet({ localId, locales }: Props) {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="flex items-start gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-sm text-ink-muted">
-        <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-medium text-ink">Cómo funciona el login de la tablet</p>
-          <p className="mt-1 leading-relaxed">
-            La tablet del local se loguea <strong>una sola vez</strong> con estas credenciales y queda eternamente logueada. Después,
-            cada empleado se identifica con su <strong>PIN de 4 dígitos</strong> desde la sección "PIN del POS".
-            Si la tablet se pierde o cambia de manos, <strong>rotá la contraseña</strong> — la tablet vieja se desconecta sola.
-          </p>
-        </div>
+      <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-ink-muted">
+        <Info className="h-3.5 w-3.5 text-slate-500 shrink-0 mt-0.5" />
+        <p>La tablet entra una vez con esta cuenta y queda logueada; después cada empleado usa su <strong>PIN</strong>. Si se pierde, rotá la contraseña y la vieja se desconecta.</p>
       </div>
 
       <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 space-y-4">
