@@ -24,6 +24,9 @@
     { "source": "/((?!api/|sitemap\\.xml$).*)", "destination": "/index.html" }
   ],
   "functions": {
+    "api/tienda-mp.js": {
+      "maxDuration": 30
+    },
     "api/mp-sync.js": {
       "maxDuration": 300
     },
