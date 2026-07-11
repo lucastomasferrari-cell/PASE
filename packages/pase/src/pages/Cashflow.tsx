@@ -227,22 +227,7 @@ function ResumenView({ lid, periodoMes, refreshKey, onChanged }: {
         )}
       </div>
 
-      <Card padding="lg">
-        <div style={cardTitle}>Saldos por cuenta</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "4px 24px", alignItems: "baseline" }}>
-          <div style={thMuted}>Cuenta</div>
-          <div style={{ ...thMuted, textAlign: "right" }}>Saldo inicial</div>
-          <div style={{ ...thMuted, textAlign: "right" }}>Saldo final</div>
-          {([
-            ["Efectivo", resumen.saldos_iniciales.efectivo, resumen.saldos_finales.efectivo],
-            ["MercadoPago", resumen.saldos_iniciales.mercadopago, resumen.saldos_finales.mercadopago],
-            ["Banco", resumen.saldos_iniciales.banco, resumen.saldos_finales.banco],
-            ["Caja Utilidades", resumen.saldos_iniciales.utilidades, resumen.saldos_finales.utilidades],
-          ] as const).map(([nombre, ini, fin]) => (
-            <Row3 key={nombre} a={nombre} b={fmt_$(ini)} c={fmt_$(fin)} />
-          ))}
-        </div>
-      </Card>
+      <ComposicionSaldo resumen={resumen} />
 
       <FlujoMes
         saldoIni={resumen.saldos_iniciales.efectivo + resumen.saldos_iniciales.mercadopago + resumen.saldos_iniciales.banco}
@@ -464,6 +449,80 @@ function sumCat(items: ResumenCategoria[]): number { return items.reduce((s, i) 
 /** Plata redondeada (sin centavos) para las tarjetas de posición — evita que los
  *  montos grandes se corten. El detalle exacto va en las tablas. */
 function fmtM(n: number): string { return `$ ${Math.round(n).toLocaleString("es-AR")}`; }
+
+const CUENTA_LABEL_CAJA: Record<string, string> = {
+  "Caja Chica": "Caja Chica", "Caja Mayor": "Caja Mayor", "Caja Efectivo": "Efectivo (casa)",
+  "MercadoPago": "MercadoPago", "Banco": "Banco", "CAJA UTILIDADES": "Caja Utilidades",
+};
+
+/** Cuadro transparente: por cada caja, saldo inicial + entradas − salidas = saldo final. */
+function ComposicionSaldo({ resumen }: { resumen: CashflowResumen }) {
+  const filas = resumen.flujo_cuentas ?? [];
+  // Fallback si el backend viejo todavía no devuelve flujo_cuentas.
+  if (filas.length === 0) {
+    return (
+      <Card padding="lg">
+        <div style={cardTitle}>Saldos por cuenta</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "4px 24px", alignItems: "baseline" }}>
+          <div style={thMuted}>Cuenta</div>
+          <div style={{ ...thMuted, textAlign: "right" }}>Saldo inicial</div>
+          <div style={{ ...thMuted, textAlign: "right" }}>Saldo final</div>
+          {([
+            ["Efectivo", resumen.saldos_iniciales.efectivo, resumen.saldos_finales.efectivo],
+            ["MercadoPago", resumen.saldos_iniciales.mercadopago, resumen.saldos_finales.mercadopago],
+            ["Banco", resumen.saldos_iniciales.banco, resumen.saldos_finales.banco],
+            ["Caja Utilidades", resumen.saldos_iniciales.utilidades, resumen.saldos_finales.utilidades],
+          ] as const).map(([nombre, ini, fin]) => (
+            <Row3 key={nombre} a={nombre} b={fmt_$(ini)} c={fmt_$(fin)} />
+          ))}
+        </div>
+      </Card>
+    );
+  }
+  const tot = filas.reduce((a, f) => ({
+    ini: a.ini + f.saldo_inicial, ent: a.ent + f.entradas, sal: a.sal + f.salidas, fin: a.fin + f.saldo_final,
+  }), { ini: 0, ent: 0, sal: 0, fin: 0 });
+  const numTd: React.CSSProperties = { ...tdCell, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+  return (
+    <Card padding="lg">
+      <div style={cardTitle}>Cómo se compone el saldo</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--pase-fs-sm)", minWidth: 520 }}>
+          <thead>
+            <tr style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)" }}>
+              <th style={{ ...thCell, textAlign: "left" }}>Caja</th>
+              <th style={{ ...thCell, textAlign: "right" }}>Saldo inicial</th>
+              <th style={{ ...thCell, textAlign: "right" }}>+ Entradas</th>
+              <th style={{ ...thCell, textAlign: "right" }}>− Salidas</th>
+              <th style={{ ...thCell, textAlign: "right" }}>= Saldo final</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.cuenta} style={{ borderTop: "0.5px solid var(--pase-border)" }}>
+                <td style={tdCell}>{CUENTA_LABEL_CAJA[f.cuenta] ?? f.cuenta}</td>
+                <td style={numTd}>{fmt_$(f.saldo_inicial)}</td>
+                <td style={{ ...numTd, color: "var(--pase-celeste)" }}>{fmt_$(f.entradas)}</td>
+                <td style={{ ...numTd, color: "#B91C1C" }}>{fmt_$(f.salidas)}</td>
+                <td style={{ ...numTd, fontWeight: 500 }}>{fmt_$(f.saldo_final)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "1px solid var(--pase-border)", fontWeight: 500 }}>
+              <td style={tdCell}>Total</td>
+              <td style={numTd}>{fmt_$(tot.ini)}</td>
+              <td style={{ ...numTd, color: "var(--pase-celeste)" }}>{fmt_$(tot.ent)}</td>
+              <td style={{ ...numTd, color: "#B91C1C" }}>{fmt_$(tot.sal)}</td>
+              <td style={numTd}>{fmt_$(tot.fin)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div style={{ ...subMuted, marginTop: 8 }}>Cada caja: saldo inicial + lo que entró − lo que salió = saldo final. Las entradas/salidas de efectivo incluyen movimientos entre tus propias cajas.</div>
+    </Card>
+  );
+}
 
 function CategoriaList({ titulo, items, positivo }: { titulo: string; items: ResumenCategoria[]; positivo?: boolean }) {
   return (

@@ -25,6 +25,9 @@ export interface ResumenExtracto {
   cuenta: string; saldo_inicial: number; saldo_final_real: number;
   saldo_final_calc: number; diferencia: number; cuadra: boolean;
 }
+export interface FlujoCuenta {
+  cuenta: string; saldo_inicial: number; entradas: number; salidas: number; saldo_final: number;
+}
 export interface CashflowResumen {
   periodo: string; local_id: number;
   saldos_iniciales: ResumenSaldos; saldos_finales: ResumenSaldos;
@@ -33,6 +36,7 @@ export interface CashflowResumen {
   en_transito: { bruto: number; acreditado: number; neto: number };
   posicion: { liquido_operativo: number; reservado: number; en_transito: number };
   extractos: ResumenExtracto[];
+  flujo_cuentas?: FlujoCuenta[];
   por_revisar: number; bloqueado: boolean;
 }
 
