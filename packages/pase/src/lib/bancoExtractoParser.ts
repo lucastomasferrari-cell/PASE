@@ -121,16 +121,120 @@ export function parseExtractoBanco(texto: string, anio: number): CashflowExtract
   };
 }
 
-/**
- * Extrae la capa de texto de un PDF de resumen BBVA en el browser usando
- * pdfjs-dist. Reconstruye líneas agrupando los fragmentos por coordenada Y
- * (pdfjs entrega items posicionados, no líneas) y ordenando por X. El resultado
- * se le pasa a `parseExtractoBanco`.
+/* ==========================================================================
+ * Banco GALICIA — "Resumen de Caja de Ahorro en Pesos"
+ * ==========================================================================
+ * Formato distinto al de BBVA (lo usa Neko Villa Crespo, cuenta a nombre de
+ * Lucas Ferrari). Verificado con el resumen real de junio 2026:
  *
- * Import perezoso de pdfjs (~1MB) para no inflar el bundle principal — solo se
- * carga cuando el usuario sube un PDF de banco. Browser-only.
+ *   Fecha Descripción Origen Crédito Débito Saldo
+ *   01/06/26 REINTEGRO PROMOCION GALICIA 2.750,00 2.165.329,40
+ *   01/06/26 ING. BRUTOS S/ CRED -20.613,27 3.175.379,71
+ *   ...
+ *
+ * Diferencias clave con BBVA:
+ * - La fecha es DD/MM/YY (trae el año, a diferencia de BBVA que era DD/MM).
+ * - Cada movimiento trae DOS números al final: monto y saldo corrido. Los
+ *   débitos vienen con signo `-` explícito; los créditos sin signo. Igual que
+ *   BBVA, el signo REAL se deriva del delta del saldo corrido (nunca miente) y
+ *   se cruza contra el monto impreso.
+ * - Debajo de cada movimiento hay líneas de detalle (origen, CBU, CUIT) sin
+ *   fecha → se ignoran (no matchean el patrón).
+ * - No hay "SALDO ANTERIOR": el saldo inicial se deriva del primer movimiento
+ *   (saldo − monto). El cierre se cruza contra el saldo que declara el encabezado
+ *   junto al período (si está).
  */
-export async function extraerTextoPdf(file: File): Promise<string> {
+
+// DD/MM/YY <concepto> <monto,dd> <saldo,dd> (fin de línea). Concepto no-greedy;
+// los dos montos finales exigen coma+2 decimales.
+const GAL_MOV_RE = /^(\d{2})\/(\d{2})\/(\d{2})\s+(.+?)\s+(-?[\d.]+,\d{2})\s+(-?[\d.]+,\d{2})$/;
+// Saldo declarado junto al período: "... 29/05/2026 26/06/2026 $2.025.303,46".
+const GAL_CIERRE_RE = /\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+\$?\s*(-?[\d.]+,\d{2})/;
+
+/**
+ * Parsea el texto de un resumen Galicia y lo devuelve en el contrato común del
+ * cashflow. `anio` queda para compat de firma con `parseExtractoBanco`, pero el
+ * año real sale del DD/MM/**YY** de cada línea.
+ */
+export function parseExtractoBancoGalicia(texto: string, _anio: number): CashflowExtractoParseado {
+  const advertencias: string[] = [];
+  // Separar dos movimientos pegados en una misma fila (un saldo `…,dd` seguido de
+  // una fecha DD/MM/YY marca el inicio de otro movimiento).
+  const normalizado = texto.replace(/(,\d{2})\s+(\d{2}\/\d{2}\/\d{2}\s)/g, "$1\n$2");
+  const lineasTexto = normalizado.split(/\r?\n/).map(l => l.trim());
+
+  const crudos: { dd: string; mm: string; yy: string; concepto: string; montoImpreso: number; saldo: number }[] = [];
+  for (const linea of lineasTexto) {
+    const m = GAL_MOV_RE.exec(linea);
+    if (!m) continue;
+    const [, dd, mm, yy, conceptoRaw, montoRaw, saldoRaw] = m;
+    crudos.push({
+      dd: dd!, mm: mm!, yy: yy!,
+      concepto: conceptoRaw!.replace(/\s+/g, " ").trim(),
+      montoImpreso: parseMontoAr(montoRaw!),
+      saldo: parseMontoAr(saldoRaw!),
+    });
+  }
+
+  if (crudos.length === 0) {
+    advertencias.push("No se encontraron movimientos con formato Galicia (DD/MM/YY … monto saldo).");
+    return { saldoInicial: 0, saldoFinal: 0, lineas: [], advertencias };
+  }
+
+  // Saldo inicial = saldo del primer movimiento − su monto impreso (con signo).
+  const saldoInicial = Math.round((crudos[0]!.saldo - crudos[0]!.montoImpreso) * 100) / 100;
+
+  const lineas: CashflowLineaCargada[] = [];
+  let saldoPrev = saldoInicial;
+  for (const c of crudos) {
+    // Fuente de verdad del monto = delta del saldo corrido.
+    const monto = Math.round((c.saldo - saldoPrev) * 100) / 100;
+    if (Math.abs(Math.abs(monto) - Math.abs(c.montoImpreso)) > 0.01) {
+      advertencias.push(
+        `Línea ${c.dd}/${c.mm}: el delta de saldo ($${monto.toFixed(2)}) no coincide con el monto impreso ($${c.montoImpreso.toFixed(2)}).`,
+      );
+    }
+    lineas.push({
+      fecha: `20${c.yy}-${c.mm}-${c.dd}`,
+      descripcion: c.concepto,
+      monto_bruto: monto,
+      comision: 0,
+      retencion: 0,
+    });
+    saldoPrev = c.saldo;
+  }
+
+  const saldoFinal = crudos[crudos.length - 1]!.saldo;
+
+  // Cruce contra el saldo de cierre declarado en el encabezado (si aparece).
+  const declarado = texto.match(GAL_CIERRE_RE);
+  if (declarado) {
+    const saldoDeclarado = parseMontoAr(declarado[1]!);
+    if (Math.abs(saldoDeclarado - saldoFinal) > 0.01) {
+      advertencias.push(
+        `El saldo de cierre declarado ($${saldoDeclarado.toFixed(2)}) no coincide con el saldo corrido derivado ($${saldoFinal.toFixed(2)}).`,
+      );
+    }
+  }
+
+  return { saldoInicial, saldoFinal, lineas, ...(advertencias.length > 0 ? { advertencias } : {}) };
+}
+
+/* ==========================================================================
+ * Extracción de texto del PDF (browser, pdfjs) + detección de formato
+ * ========================================================================== */
+
+/**
+ * Reconstruye las líneas de texto de un PDF de banco agrupando los fragmentos de
+ * pdfjs por coordenada Y (pdfjs entrega ítems posicionados, no líneas) y
+ * ordenando por X. Import perezoso de pdfjs (~1MB) para no inflar el bundle.
+ *
+ * `recortarGlifos` activa el recorte de basura antes de la primera fecha DD/MM
+ * (necesario para BBVA, donde un glifo mal decodificado ancla la fila). NO se usa
+ * para Galicia: ahí las fechas son DD/MM/YY y el recorte leería "MM/YY" como una
+ * fecha falsa y se comería el día. Browser-only.
+ */
+async function extraerFilasPdf(file: File, recortarGlifos: boolean): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
   // El worker se sirve como asset propio (Vite resuelve la URL en build).
   const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
@@ -143,8 +247,7 @@ export async function extraerTextoPdf(file: File): Promise<string> {
   // Tolerancia de agrupación por fila. Los ítems de una misma fila se reportan
   // con Y que difiere por sub-píxeles; agrupar por Y EXACTA los separa (rompe
   // movimientos). Las filas reales están a ~12 de distancia, así que 4 reúne la
-  // fila sin fusionar filas distintas. (Validado vs Resumen.pdf real de BBVA:
-  // 24/24 movimientos, saldo de cierre exacto, 0 mismatches.)
+  // fila sin fusionar filas distintas.
   const TOL = 4;
 
   for (let p = 1; p <= pdf.numPages; p++) {
@@ -168,17 +271,16 @@ export async function extraerTextoPdf(file: File): Promise<string> {
       else { actual = { y: it.y, items: [it] }; filas.push(actual); }
     }
 
-    const lineasPagina = filas.map(f =>
-      f.items
+    const lineasPagina = filas.map(f => {
+      const base = f.items
         .sort((a, b) => a.x - b.x)
         .map(it => it.str)
         .join(" ")
         .replace(/\s+/g, " ")
-        .trim()
-        // Recortar glifos basura antes de la primera fecha DD/MM: un ítem mal
-        // decodificado puede anclar la fila y robarse el movimiento.
-        .replace(/^.*?(?=\d{2}\/\d{2}\s)/, ""),
-    );
+        .trim();
+      // Recortar glifos basura antes de la primera fecha DD/MM (solo BBVA).
+      return recortarGlifos ? base.replace(/^.*?(?=\d{2}\/\d{2}\s)/, "") : base;
+    });
     paginas.push(lineasPagina.join("\n"));
   }
 
@@ -186,10 +288,36 @@ export async function extraerTextoPdf(file: File): Promise<string> {
 }
 
 /**
- * Conveniencia para la pantalla: extrae el texto del PDF y lo parsea en un paso.
- * `anio` es el año del período del resumen.
+ * Extrae el texto de un PDF de resumen BBVA (con recorte de glifos). Se mantiene
+ * exportada por compatibilidad — el path que usa la pantalla es
+ * `bancoLineasParaCashflow`, que autodetecta el banco.
+ */
+export async function extraerTextoPdf(file: File): Promise<string> {
+  return extraerFilasPdf(file, true);
+}
+
+/** ¿El texto extraído tiene pinta de resumen Galicia? (≥3 líneas DD/MM/YY … monto saldo). */
+function pareceGalicia(texto: string): boolean {
+  let hits = 0;
+  for (const l of texto.split(/\r?\n/)) {
+    if (GAL_MOV_RE.test(l.trim())) hits++;
+    if (hits >= 3) return true;
+  }
+  return false;
+}
+
+/**
+ * Conveniencia para la pantalla: extrae el texto del PDF, DETECTA el banco
+ * (Galicia vs BBVA) y lo parsea con el parser correcto en un paso.
+ * `anio` es el año del período (lo usa BBVA, que solo trae DD/MM).
  */
 export async function bancoLineasParaCashflow(file: File, anio: number): Promise<CashflowExtractoParseado> {
-  const texto = await extraerTextoPdf(file);
-  return parseExtractoBanco(texto, anio);
+  // Extracción sin recorte: sirve tal cual para Galicia y para detectar formato.
+  const textoSinRecorte = await extraerFilasPdf(file, false);
+  if (pareceGalicia(textoSinRecorte)) {
+    return parseExtractoBancoGalicia(textoSinRecorte, anio);
+  }
+  // BBVA necesita el recorte de glifos → re-extraemos con recorte.
+  const textoBbva = await extraerFilasPdf(file, true);
+  return parseExtractoBanco(textoBbva, anio);
 }

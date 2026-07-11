@@ -255,12 +255,21 @@ export function mpResultadoParaCashflow(r: ExtractoResultado): CashflowExtractoP
 }
 
 /**
- * Conveniencia para la pantalla: lee el archivo XLSX/XLS de MP y lo devuelve ya
- * adaptado al shape del cashflow. Devuelve null si el archivo no parsea (el
- * caller decide mostrar error o caer a carga manual).
+ * Conveniencia para la pantalla: lee el archivo de MP (CSV o XLSX/XLS) y lo
+ * devuelve ya adaptado al shape del cashflow. Devuelve null si el archivo no
+ * parsea (el caller decide mostrar error o caer a carga manual).
+ *
+ * MP entrega el account_statement como CSV (formato AR: `01-06-2026`,
+ * `3.002.112,67`). Si el archivo ES un CSV, lo leemos como texto y lo parseamos
+ * directo con `parseExtractoMP` — NO lo pasamos por SheetJS, que reinterpreta las
+ * fechas AR (`01-06-2026` → `1/5/26`) y los miles/decimales y corrompe los datos.
+ * Solo los `.xlsx/.xls` (celdas ya tipadas) van por el camino Excel.
  */
 export async function mpLineasParaCashflow(file: File): Promise<CashflowExtractoParseado | null> {
-  const r = await parseExtractoMpExcel(file);
+  const esCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+  const r = esCsv
+    ? parseExtractoMP(await file.text())
+    : await parseExtractoMpExcel(file);
   return r ? mpResultadoParaCashflow(r) : null;
 }
 

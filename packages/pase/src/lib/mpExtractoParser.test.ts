@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseExtractoMP, mpResultadoParaCashflow } from "./mpExtractoParser";
+import { parseExtractoMP, mpResultadoParaCashflow, mpLineasParaCashflow } from "./mpExtractoParser";
 
 const BOM = String.fromCharCode(0xfeff);
 
@@ -129,6 +129,20 @@ describe("parseExtractoMP — sanity check vs header de resumen", () => {
     // suman mucho menos → genera advertencias.
     const r = parseExtractoMP(SAMPLE_REAL)!;
     expect(r.advertencias.some(a => a.toLowerCase().includes("créditos") || a.toLowerCase().includes("débitos"))).toBe(true);
+  });
+});
+
+describe("mpLineasParaCashflow — lee CSV directo (no lo pasa por SheetJS)", () => {
+  it("un archivo .csv se parsea con parseExtractoMP y conserva fechas AR", async () => {
+    const file = new File([SAMPLE_REAL], "account_statement.csv", { type: "text/csv" });
+    const cf = await mpLineasParaCashflow(file);
+    expect(cf).not.toBeNull();
+    // 6 movimientos con fechas ISO correctas (SheetJS las corrompería a "1/5/26").
+    expect(cf!.lineas).toHaveLength(6);
+    expect(cf!.lineas[0]!.fecha).toBe("2026-04-01");
+    expect(cf!.lineas[5]!.fecha).toBe("2026-04-30");
+    expect(cf!.saldoInicial).toBeCloseTo(911181.47, 2);
+    expect(cf!.saldoFinal).toBeCloseTo(660798.92, 2);
   });
 });
 

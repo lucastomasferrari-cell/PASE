@@ -108,7 +108,7 @@ function UploadExtractoModal({ lid, periodoMes, onClose, onDone }: {
         ? await mpLineasParaCashflow(file)
         : await bancoLineasParaCashflow(file, anio);
       if (!r || r.lineas.length === 0) {
-        setError("No pude leer movimientos del archivo. Revisá que sea el extracto correcto (MP: .xlsx; Banco: el PDF del resumen).");
+        setError("No pude leer movimientos del archivo. Revisá que sea el extracto correcto (MP: el .csv o .xlsx del panel; Banco: el PDF del resumen).");
       } else {
         setParseado(r);
       }
@@ -144,13 +144,13 @@ function UploadExtractoModal({ lid, periodoMes, onClose, onDone }: {
         <label style={{ display: "grid", gap: 4 }}>
           <span style={subMuted}>Cuenta</span>
           <select value={cuenta} onChange={(e) => { setCuenta(e.target.value as CashflowCuenta); setParseado(null); }} style={selStyle}>
-            <option value="MercadoPago">MercadoPago (.xlsx del panel)</option>
-            <option value="Banco">Banco BBVA (.pdf del resumen)</option>
+            <option value="MercadoPago">MercadoPago (.csv o .xlsx del panel)</option>
+            <option value="Banco">Banco — BBVA o Galicia (.pdf del resumen)</option>
           </select>
         </label>
         <label style={{ display: "grid", gap: 4 }}>
           <span style={subMuted}>Archivo</span>
-          <input type="file" accept={cuenta === "MercadoPago" ? ".xlsx,.xls" : ".pdf"}
+          <input type="file" accept={cuenta === "MercadoPago" ? ".csv,.xlsx,.xls" : ".pdf"}
             onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
         </label>
 

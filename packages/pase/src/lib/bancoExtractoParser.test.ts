@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseExtractoBanco } from "./bancoExtractoParser";
+import { parseExtractoBanco, parseExtractoBancoGalicia } from "./bancoExtractoParser";
 
 /**
  * Fixture REAL: bloque DETALLE del resumen BBVA de Rene (cuenta Baldi Antonella,
@@ -108,6 +108,106 @@ describe("parseExtractoBanco — robustez", () => {
 
   it("devuelve cero líneas y saldos 0 si no hay movimientos", () => {
     const r = parseExtractoBanco("texto sin estructura\nFECHA ORIGEN CONCEPTO\n", 2026);
+    expect(r.lineas).toHaveLength(0);
+    expect(r.saldoInicial).toBe(0);
+    expect(r.saldoFinal).toBe(0);
+  });
+});
+
+/**
+ * Fixture REAL: bloque del resumen Galicia "Caja de Ahorro en Pesos" de Neko
+ * Villa Crespo (cuenta a nombre de Lucas Ferrari), junio 2026, extraído del PDF
+ * con la capa de texto. Incluye el ruido real (header de columnas repetido,
+ * líneas de detalle sin fecha: origen, CUIT, CBU) para verificar que se ignoran.
+ * El saldo corre de 2.162.579,40 (derivado) a 1.703.491,16.
+ */
+const SAMPLE_GALICIA_JUNIO = `Movimientos
+Fecha Descripción Origen Crédito Débito Saldo
+01/06/26 REINTEGRO PROMOCION GALICIA 2.750,00 2.165.329,40
+Starbucks Coffee
+01/06/26 TRANSFERENCIAS CASH 1.030.663,58 3.195.992,98
+PROVEEDORES
+DELIVERY HERO FI
+30715221159
+BANCO SANTANDER RIO
+01/06/26 ING. BRUTOS S/ CRED -20.613,27 3.175.379,71
+REG.RECAU.SIRCREB
+01/06/26 PAGO CON TRANSFERENCIA -9.500,00 3.165.879,71
+BANCO DE GAL
+01/06/26 PAGO TARJETA VISA -162.691,20 3.003.188,51
+D.A. AL VTO
+01/06/26 PAGO TARJETA VISA -1.299.697,35 1.703.491,16
+D.A. AL VTO
+01/06/26 RESCATE FIMA 3.000.000,00 4.703.491,16
+Fima Premium Clase A
+01/06/26 TRANSF. CTAS PROPIAS -3.000.000,00 1.703.491,16
+CU 20399087539
+Resumen de Caja de Ahorro en Pesos Página 1 / 8
+CBU 29/05/2026 26/06/2026 $1.703.491,16`;
+
+describe("parseExtractoBancoGalicia — resumen Galicia real (junio 2026)", () => {
+  it("deriva saldoInicial del primer movimiento y saldoFinal del último saldo corrido", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    expect(r.saldoInicial).toBeCloseTo(2162579.40, 2);
+    expect(r.saldoFinal).toBeCloseTo(1703491.16, 2);
+  });
+
+  it("parsea las 8 líneas de movimiento (ignora header, footer y detalle sin fecha)", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    expect(r.lineas).toHaveLength(8);
+  });
+
+  it("cada línea respeta el contrato del cashflow (fecha ISO, comision/retencion 0)", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    for (const l of r.lineas) {
+      expect(l.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(l.comision).toBe(0);
+      expect(l.retencion).toBe(0);
+      expect(typeof l.monto_bruto).toBe("number");
+    }
+  });
+
+  it("usa el año del DD/MM/YY de la línea (26 → 2026)", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    expect(r.lineas[0]!.fecha).toBe("2026-06-01");
+  });
+
+  it("deriva el signo del delta de saldo (créditos + / débitos −)", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    // Crédito: reintegro de promoción → +2.750.
+    expect(r.lineas[0]!.monto_bruto).toBeCloseTo(2750, 2);
+    expect(r.lineas[0]!.descripcion).toContain("REINTEGRO PROMOCION GALICIA");
+    // Débito: impuesto ING. BRUTOS → negativo.
+    const ib = r.lineas.find(l => l.descripcion.includes("ING. BRUTOS"))!;
+    expect(ib.monto_bruto).toBeCloseTo(-20613.27, 2);
+    // Débito grande: PAGO TARJETA VISA → negativo.
+    const visa = r.lineas.filter(l => l.descripcion.includes("PAGO TARJETA VISA"));
+    expect(visa).toHaveLength(2);
+    expect(visa[1]!.monto_bruto).toBeCloseTo(-1299697.35, 2);
+  });
+
+  it("la suma de los montos = saldoFinal − saldoInicial (invariante telescópica)", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    const suma = r.lineas.reduce((s, l) => s + l.monto_bruto, 0);
+    expect(suma).toBeCloseTo(r.saldoFinal - r.saldoInicial, 2);
+  });
+
+  it("no genera advertencias cuando el saldo declarado cuadra con el derivado", () => {
+    const r = parseExtractoBancoGalicia(SAMPLE_GALICIA_JUNIO, 2026);
+    expect(r.advertencias ?? []).toHaveLength(0);
+  });
+});
+
+describe("parseExtractoBancoGalicia — robustez", () => {
+  it("advierte (no rompe) si el saldo de cierre declarado no cuadra", () => {
+    const trucho = SAMPLE_GALICIA_JUNIO.replace("$1.703.491,16", "$9.999.999,99");
+    const r = parseExtractoBancoGalicia(trucho, 2026);
+    expect(r.saldoFinal).toBeCloseTo(1703491.16, 2);
+    expect((r.advertencias ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("devuelve cero líneas y saldos 0 si no hay movimientos", () => {
+    const r = parseExtractoBancoGalicia("Resumen de Caja de Ahorro\nFecha Descripción Saldo\n", 2026);
     expect(r.lineas).toHaveLength(0);
     expect(r.saldoInicial).toBe(0);
     expect(r.saldoFinal).toBe(0);
