@@ -23,7 +23,11 @@ import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } f
 import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
 import { findMatchingMpSecret } from './_mp-webhook.js';
 import { checkUserAuth } from './_user-auth.js';
-import { Afip } from '@afipsdk/afip.js';
+// @afipsdk/afip.js es CommonJS: el named import { Afip } falla en el runtime
+// ESM de Vercel y crashea la función al init (FUNCTION_INVOCATION_FAILED).
+// Se importa el default y se desestructura.
+import afipPkg from '@afipsdk/afip.js';
+const Afip = afipPkg.Afip ?? afipPkg;
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;

@@ -35,9 +35,12 @@
 //     es válido fiscalmente.
 
 import { createClient } from '@supabase/supabase-js';
-import { Afip } from '@afipsdk/afip.js';
+import afipPkg from '@afipsdk/afip.js';
 import { checkUserAuth } from './_user-auth.js';
 import { setCorsHeaders } from './_cors.js';
+// @afipsdk/afip.js es CommonJS: import default + desestructurar (el named
+// import { Afip } falla en el runtime ESM de Vercel y crashea al init).
+const Afip = afipPkg.Afip ?? afipPkg;
 
 export default async function handler(req, res) {
   // Fix auditoría 2026-05-21 ALTO-5: CORS allow-list explícito.
