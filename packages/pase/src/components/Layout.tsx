@@ -193,8 +193,6 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
             );
           })}
         </nav>
-
-        <div style={{ flex: 1 }} />
       </div>
     </>
   );
@@ -757,7 +755,7 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 }
 
 /* ─── TOP BAR (perfil arriba a la derecha) ──────────────────────────── */
-.pase-topbar{position:fixed;top:0;right:0;z-index:15;display:flex;align-items:center;gap:6px;padding:12px 20px}
+.pase-topbar{position:fixed;top:10px;right:16px;z-index:15;display:flex;align-items:center;gap:4px;padding:5px 7px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:999px;box-shadow:0 2px 10px rgba(15,30,45,0.06)}
 .pase-topbar-avatar{width:32px;height:32px;border-radius:50%;background:var(--pase-celeste);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:opacity 0.15s;letter-spacing:-0.02em}
 .pase-topbar-avatar:hover{opacity:0.85}
 .pase-topbar-dropdown{position:absolute;top:calc(100% + 6px);right:0;width:220px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;z-index:50}
@@ -768,5 +766,5 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 .pase-topbar-dd-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:none;background:none;color:var(--pase-text-muted);font-size:12px;font-family:var(--pase-font);cursor:pointer;transition:all 0.12s;text-align:left}
 .pase-topbar-dd-item:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
 .pase-topbar-dd-logout:hover{color:#dc2626}
-@media(max-width:1024px){.pase-topbar{top:0;right:0;padding:14px 60px 14px 56px}}
+@media(max-width:1024px){.pase-topbar{top:8px;right:12px;padding:4px 6px}}
 ` + polishCss;
