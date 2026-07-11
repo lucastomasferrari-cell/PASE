@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Tablet as TabletIcon, RotateCw, Copy, Eye, EyeOff, Info } from 'lucide-react';
+import { Tablet as TabletIcon, Copy, Eye, EyeOff, Info } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 interface Props {
@@ -179,37 +179,27 @@ export function Tablet({ localId, locales }: Props) {
           </div>
         )}
 
-        <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => void rotarCredenciales()}
-            disabled={rotando}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 font-medium transition-colors"
-          >
-            <RotateCw className={`h-4 w-4 ${rotando ? 'animate-spin' : ''}`} />
-            {rotando ? 'Guardando…' : yaExiste ? 'Rotar a una contraseña al azar' : 'Generar credenciales (al azar)'}
-          </button>
-
-          <div className="pt-3 border-t border-ink/10">
-            <p className="text-xs text-ink-muted mb-2">
-              La contraseña actual <strong>no se puede ver</strong> (se guarda encriptada). Poné una elegida:
-            </p>
-            <div className="flex gap-2">
-              <input
-                value={passElegida}
-                onChange={(e) => setPassElegida(e.target.value)}
-                placeholder="Contraseña elegida (mín. 8)"
-                className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => void usarElegida()}
-                disabled={rotando || passElegida.length < 8}
-                className="px-4 py-2 rounded-lg border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 text-sm font-medium disabled:opacity-50"
-              >
-                Usar
-              </button>
-            </div>
+        <div>
+          <p className="text-xs text-ink-muted mb-2">
+            {yaExiste
+              ? <>La contraseña actual <strong>no se puede ver</strong> (se guarda encriptada). Poné una nueva:</>
+              : 'Poné una contraseña para la tablet:'}
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={passElegida}
+              onChange={(e) => setPassElegida(e.target.value)}
+              placeholder="Contraseña de la tablet (mín. 8)"
+              className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => void usarElegida()}
+              disabled={rotando || passElegida.length < 8}
+              className="px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 text-sm font-medium disabled:opacity-50 shrink-0"
+            >
+              {rotando ? 'Guardando…' : yaExiste ? 'Cambiar' : 'Generar'}
+            </button>
           </div>
         </div>
       </div>
