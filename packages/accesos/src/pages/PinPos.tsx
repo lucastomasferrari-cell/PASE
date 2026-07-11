@@ -62,7 +62,7 @@ export function PinPos({ localId, locales }: Props) {
       ) : (
         <div className="space-y-2">
           {empleados.map((e) => (
-            <div key={e.id} className={`rounded-2xl bg-white border shadow-card p-4 flex items-center gap-3 flex-wrap ${e.pos_activo ? 'border-ink/5' : 'border-ink/5 opacity-60'}`}>
+            <div key={e.id} className={`rounded-xl bg-white border shadow-card px-4 py-3 flex items-center gap-3 flex-wrap ${e.pos_activo ? 'border-ink/5' : 'border-ink/5 opacity-60'}`}>
               <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-sm shrink-0">
                 {(nombreEmpleado(e)[0] ?? '?').toUpperCase()}
               </div>

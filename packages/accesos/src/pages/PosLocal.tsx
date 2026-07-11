@@ -24,7 +24,7 @@ function SeccionTitulo({ icon, children }: { icon: React.ReactNode; children: Re
 
 export function PosLocal({ localId, locales }: Props) {
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-6 max-w-3xl">
       <p className="text-sm text-ink-muted">
         Personal operativo del local. La tablet entra una sola vez con la cuenta del local; después cada empleado
         se identifica con su <strong>PIN de 4 dígitos</strong>.

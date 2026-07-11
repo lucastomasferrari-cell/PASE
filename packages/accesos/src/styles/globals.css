@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  /* Base compacta (14px) como el prototipo aprobado. En 16px la UI se sentía
+     "con zoom": textos y paddings ocupaban demasiado. Todo lo que usa rem
+     (text-sm, p-4, gap, etc.) escala a ~87.5% de forma uniforme. */
+  html {
+    font-size: 14px;
+  }
   body {
     @apply bg-crema text-ink antialiased;
   }

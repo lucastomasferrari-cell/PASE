@@ -108,7 +108,7 @@ export function Tablet({ localId, locales }: Props) {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="flex items-start gap-3 rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-ink-muted">
+      <div className="flex items-start gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-sm text-ink-muted">
         <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
         <div>
           <p className="font-medium text-ink">Cómo funciona el login de la tablet</p>
@@ -120,7 +120,7 @@ export function Tablet({ localId, locales }: Props) {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
+      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700">
             <TabletIcon className="h-5 w-5" />
@@ -191,7 +191,7 @@ export function Tablet({ localId, locales }: Props) {
             type="button"
             onClick={() => void rotarCredenciales()}
             disabled={rotando}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 font-medium transition-colors"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 font-medium transition-colors"
           >
             <RotateCw className={`h-4 w-4 ${rotando ? 'animate-spin' : ''}`} />
             {rotando ? 'Guardando…' : yaExiste ? 'Rotar a una contraseña al azar' : 'Generar credenciales (al azar)'}

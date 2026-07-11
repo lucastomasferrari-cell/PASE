@@ -97,7 +97,7 @@ export function Personas() {
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o email…"
-                 className="w-full rounded-lg border border-ink/15 bg-white pl-9 pr-3 py-2.5 text-sm" />
+                 className="w-full rounded-lg border border-ink/15 bg-white pl-9 pr-3 py-2 text-sm" />
         </div>
         <div className="inline-flex rounded-lg border border-ink/15 bg-white p-0.5">
           <button onClick={() => setModo('lista')}
@@ -106,7 +106,7 @@ export function Personas() {
                   className={`px-3 py-1.5 rounded-md text-sm font-medium ${modo === 'matriz' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Matriz de apps</button>
         </div>
         <button onClick={() => setEditando('nuevo')}
-                className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2.5 text-sm font-medium inline-flex items-center gap-1.5">
+                className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
           <Plus className="h-4 w-4" /> Nueva persona
         </button>
       </div>
@@ -139,7 +139,7 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   const locsAsignados = (u.locales ?? []).map((id) => locales.find((l) => l.id === id)?.nombre).filter(Boolean);
 
   return (
-    <div className={`rounded-2xl bg-white border shadow-card p-4 ${u.activo ? 'border-ink/5' : 'border-ink/5 opacity-60'}`}>
+    <div className={`rounded-xl bg-white border shadow-card px-4 py-3 ${u.activo ? 'border-ink/5' : 'border-ink/5 opacity-60'}`}>
       <div className="flex items-start gap-3 flex-wrap">
         <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-sm shrink-0">
           {(nombre(u)[0] ?? '?').toUpperCase()}
