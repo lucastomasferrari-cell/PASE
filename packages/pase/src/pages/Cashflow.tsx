@@ -500,7 +500,7 @@ function ConciliacionView() {
   const [colapsados, setColapsados] = useState<Set<string>>(new Set());
   const toggleGrupo = (k: string) => setColapsados((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
-  const cuenta = (k: string) => k === "todas" ? CONC_FILAS.length : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === k).length;
+  const contar = (k: string) => k === "todas" ? CONC_FILAS.length : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === k).length;
   const visibles = filtro === "todas" ? CONC_FILAS : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === filtro);
 
   return (
@@ -520,7 +520,7 @@ function ConciliacionView() {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {CONC_PILLS.map((p) => (
             <button key={p.key} onClick={() => setFiltro(p.key)} style={concPill(filtro === p.key)}>
-              {p.label} <span style={{ opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>{cuenta(p.key)}</span>
+              {p.label} <span style={{ opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>{contar(p.key)}</span>
             </button>
           ))}
         </div>
