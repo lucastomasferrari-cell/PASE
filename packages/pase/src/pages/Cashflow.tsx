@@ -6,6 +6,7 @@
 // Todo el cálculo vive en las RPCs (lib/cashflow.ts).
 
 import { useEffect, useState } from "react";
+import { db } from "../lib/supabase";
 import { PageContainer, PageHeader, StatCard, Card, Modal } from "../components/ui";
 import { fmt_$, todayAR_ISO } from "../lib/utils";
 import { translateRpcError } from "../lib/errors";
@@ -76,7 +77,7 @@ export default function Cashflow({ locales, localActivo }: Props) {
       {!lid && <div style={{ color: "var(--pase-text-muted)", padding: 24 }}>Elegí un local para ver la ruta del dinero.</div>}
       {lid && tab === "resumen" && <ResumenView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} onChanged={refresh} />}
       {lid && tab === "ganancia" && <GananciaView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
-      {lid && tab === "conciliacion" && <ConciliacionView />}
+      {lid && tab === "conciliacion" && <ConciliacionView lid={lid} periodoMes={periodoMes} />}
 
       {lid && uploadOpen && (
         <UploadExtractoModal
@@ -362,6 +363,7 @@ type EstadoConc = "conciliada" | "clasificar" | "falta" | "elegir" | "sobra" | "
 
 interface FilaConc {
   id: string; fecha: string; concepto: string; categoria: string; categoriaVacia?: boolean;
+  estadoLabel?: string;
   debe?: number; haber?: number; saldo?: number | null;
   estado: EstadoConc; sub?: string; acciones?: string[]; tachado?: boolean;
 }
@@ -385,28 +387,103 @@ const CONC_GRUPO_ORDEN: { key: string; label: string; color: string }[] = [
   { key: "conciliada", label: "Conciliadas", color: "var(--pase-celeste)" },
 ];
 
-const CONC_FILAS: FilaConc[] = [
-  { id: "1", fecha: "01/06", concepto: "Liquidación de dinero", categoria: "Venta", haber: 223668.48, saldo: 3225781.15, estado: "conciliada" },
-  { id: "2", fecha: "02/06", concepto: "Transferencia recibida Oscar Trejo", categoria: "— elegí —", categoriaVacia: true, haber: 105500, saldo: 3331281.15, estado: "clasificar", acciones: ["Venta", "Aporte de socio", "Transferencia interna"] },
-  { id: "3", fecha: "02/06", concepto: "Pago RAPPI ARG SAS", categoria: "Comisiones", sub: "linkeado a Gasto #1042", debe: 42122, saldo: 3289159.15, estado: "conciliada" },
-  { id: "4", fecha: "03/06", concepto: "Transferencia enviada CASA CHINA", categoria: "CMV", sub: "linkeado a Factura #A-0087", debe: 654047.59, saldo: 2635111.56, estado: "conciliada" },
-  { id: "5", fecha: "03/06", concepto: "Transferencia enviada Lima Magica Srl", categoria: "CMV", debe: 170998.95, saldo: 2464112.61, estado: "falta", acciones: ["Marcar factura #F-2231 como pagada", "Linkear otra", "Crear gasto", "Ignorar"] },
-  { id: "6", fecha: "03/06", concepto: "Compra Mercado Libre", categoria: "— sin cargar —", categoriaVacia: true, debe: 30000, saldo: 2434112.61, estado: "falta", acciones: ["Crear gasto", "Linkear factura", "Es de un proveedor…", "Ignorar"] },
-  { id: "7", fecha: "04/06", concepto: "Transferencia enviada Emanuel Enecoiz", categoria: "CMV", debe: 464000, saldo: 1970112.61, estado: "elegir", sub: "2 pagos posibles con este monto", acciones: ["Elegir cuál"] },
-  { id: "8", fecha: "—", concepto: "The Good Selection S.R.L", categoria: "10 pagos", saldo: null, estado: "diferencia", sub: "extracto −6.138.241,73 vs sistema −11.784.844,62 · 5.646.602,89 de más (¿mes anterior?)", acciones: ["Ver detalle"] },
-  { id: "9", fecha: "28/05", concepto: "Pago SUL SRL · Fact 0017", categoria: "CMV", debe: 240015.80, saldo: null, estado: "sobra", sub: "Sólo en PASE, no está en el extracto", acciones: ["Anular", "Se pagó en efectivo", "Es de otro día"] },
-  { id: "10", fecha: "02/06", concepto: "Impuesto por extracción", categoria: "Ignorada", debe: 600, saldo: 1969512.61, estado: "ignorada", tachado: true, sub: "impuesto bancario", acciones: ["Reactivar"] },
-];
+// Cruce real que devuelve fn_cruzar_extracto_mp (shape mínima que consumimos).
+interface CruceFila {
+  idx: number; fecha: string; monto: number; descripcion: string;
+  estado: string; num_candidatos: number;
+  bloque: { proveedor: string; suma_extracto: number; suma_pase: number | null; dif: number } | null;
+}
+interface CruceSobra { id: string; fecha: string; importe: number; detalle: string }
+interface CruceLite { extracto: CruceFila[]; sobrantes: CruceSobra[] }
 
-function ConciliacionView() {
+const EST_LABEL: Record<EstadoConc, string> = {
+  conciliada: "Conciliada", clasificar: "Por clasificar", falta: "Falta cargar",
+  elegir: "Por elegir", sobra: "Sobra en PASE", ignorada: "Ignorada", diferencia: "Diferencia",
+};
+const EST_TXT_COLOR: Record<EstadoConc, string> = {
+  conciliada: "var(--pase-celeste)", clasificar: "#D97706", falta: "#B91C1C",
+  elegir: "#D97706", sobra: "#B91C1C", ignorada: "var(--pase-text-muted)", diferencia: "#D97706",
+};
+
+function fmtDDMM(f: string): string { return f && f.length >= 10 ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : f; }
+
+/** Traduce el resultado del motor probado (fn_cruzar_extracto_mp) a filas de la vista. */
+function mapCruce(cruce: CruceLite): FilaConc[] {
+  const estOf = (e: string): EstadoConc =>
+    e.startsWith("verde") || e === "ya_conciliada" ? "conciliada"
+      : e.startsWith("amarillo") ? "elegir"
+        : e === "bloque_diferencia" ? "diferencia" : "falta";
+  const out: FilaConc[] = [];
+  for (const f of cruce.extracto ?? []) {
+    const e = estOf(f.estado);
+    let sub: string | undefined;
+    if (e === "elegir") sub = `${f.num_candidatos} pago(s) posible(s) en el sistema con este monto`;
+    else if (f.estado === "factura_sin_pagar") sub = "Tiene una factura pendiente de pago que coincide";
+    else if (e === "falta") sub = "Salió del banco, no está cargado en el sistema";
+    else if (e === "diferencia" && f.bloque)
+      sub = `${f.bloque.proveedor}: extracto ${fmt_$(f.bloque.suma_extracto)} vs sistema ${f.bloque.suma_pase == null ? "—" : fmt_$(f.bloque.suma_pase)} · dif ${fmt_$(f.bloque.dif)}`;
+    out.push({
+      id: `ext-${f.idx}`, fecha: fmtDDMM(f.fecha), concepto: f.descripcion, categoria: "",
+      estadoLabel: EST_LABEL[e], estado: e, sub,
+      debe: f.monto < 0 ? Math.abs(f.monto) : undefined,
+      haber: f.monto > 0 ? f.monto : undefined, saldo: null,
+    });
+  }
+  for (const s of cruce.sobrantes ?? []) {
+    out.push({
+      id: `sob-${s.id}`, fecha: fmtDDMM(s.fecha), concepto: s.detalle, categoria: "",
+      estadoLabel: EST_LABEL.sobra, estado: "sobra", sub: "Cargado en el sistema, no está en el extracto",
+      debe: Math.abs(s.importe), saldo: null,
+    });
+  }
+  return out;
+}
+
+function ConciliacionView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
   const [cuenta, setCuenta] = useState<string>("MercadoPago");
+  const [filas, setFilas] = useState<FilaConc[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<string>("todas");
   const [modo, setModo] = useState<"lista" | "agrupado">("lista");
   const [colapsados, setColapsados] = useState<Set<string>>(new Set());
   const toggleGrupo = (k: string) => setColapsados((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
-  const contar = (k: string) => k === "todas" ? CONC_FILAS.length : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === k).length;
-  const visibles = filtro === "todas" ? CONC_FILAS : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === filtro);
+  // Carga real: trae las líneas del extracto MP guardado y las cruza con el
+  // motor PROBADO (fn_cruzar_extracto_mp) — la misma lógica de /conciliacion-extracto.
+  useEffect(() => {
+    let cancel = false;
+    if (cuenta !== "MercadoPago") { setFilas([]); setError(null); return; }
+    setLoading(true); setError(null);
+    (async () => {
+      const mes = periodoMes.slice(0, 7);
+      const [y, m] = mes.split("-").map(Number) as [number, number];
+      const hasta = `${mes}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+      const { data: lineas, error: e1 } = await db
+        .from("cashflow_lineas")
+        .select("fecha, descripcion, monto_bruto, cashflow_extractos!inner(local_id, periodo_mes, cuenta)")
+        .eq("cashflow_extractos.local_id", lid)
+        .eq("cashflow_extractos.periodo_mes", periodoMes)
+        .eq("cashflow_extractos.cuenta", "MercadoPago");
+      if (cancel) return;
+      if (e1) { setError(translateRpcError(e1.message)); setLoading(false); return; }
+      const payload = ((lineas as { fecha: string; descripcion: string; monto_bruto: number }[] | null) ?? [])
+        .map((l) => ({ fecha: l.fecha, monto: l.monto_bruto, descripcion: l.descripcion, referencia_externa: null }));
+      if (payload.length === 0) { setFilas([]); setLoading(false); return; }
+      const { data, error } = await db.rpc("fn_cruzar_extracto_mp", {
+        p_local_id: lid, p_periodo_desde: periodoMes, p_periodo_hasta: hasta,
+        p_movs_extracto: payload, p_solo_egresos: true, p_match_agrupado: true,
+      });
+      if (cancel) return;
+      if (error) setError(translateRpcError(error.message));
+      else setFilas(mapCruce(data as CruceLite));
+      setLoading(false);
+    })();
+    return () => { cancel = true; };
+  }, [lid, periodoMes, cuenta]);
+
+  const contar = (k: string) => k === "todas" ? filas.length : filas.filter((f) => CONC_GRUPO[f.estado] === k).length;
+  const visibles = filtro === "todas" ? filas : filas.filter((f) => CONC_GRUPO[f.estado] === filtro);
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
@@ -417,7 +494,7 @@ function ConciliacionView() {
           <option value="Banco">Banco</option>
         </select>
         <span style={{ fontSize: "var(--pase-fs-base)", color: "var(--pase-text-muted)" }}>
-          Inicial <b style={{ color: "var(--pase-text)" }}>$3.002.112,67</b> → Final <b style={{ color: "var(--pase-text)" }}>$838.469,38</b> · <span style={{ color: "var(--pase-celeste)" }}>cuadra</span>
+          {filas.length} movimientos del extracto
         </span>
       </div>
 
@@ -436,7 +513,10 @@ function ConciliacionView() {
         </div>
       </div>
 
-      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: -6 }}>Vista preliminar — datos de ejemplo para ver el diseño.</div>
+      {loading && <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: -6 }}>Cruzando el extracto contra el sistema…</div>}
+      {error && <Card padding="md"><div style={{ color: "#B91C1C" }}>{error}</div></Card>}
+      {cuenta !== "MercadoPago" && <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: -6 }}>Por ahora la conciliación automática es solo de MercadoPago — la del banco viene en el próximo paso.</div>}
+      {!loading && !error && cuenta === "MercadoPago" && filas.length === 0 && <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: -6 }}>No hay extracto de MercadoPago cargado para este mes. Subilo con "+ Subir extracto".</div>}
 
       <Card padding="md">
         <div style={{ overflowX: "auto" }}>
@@ -452,7 +532,7 @@ function ConciliacionView() {
               {modo === "agrupado" && CONC_GRUPO_ORDEN
                 .filter((g) => filtro === "todas" || g.key === filtro)
                 .flatMap((g) => {
-                  const rows = CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === g.key);
+                  const rows = filas.filter((f) => CONC_GRUPO[f.estado] === g.key);
                   if (rows.length === 0) return [];
                   const cerrado = colapsados.has(g.key);
                   const header = (
@@ -475,7 +555,7 @@ function ConciliacionView() {
       </Card>
 
       <div style={subMuted}>
-        Cada acción impacta de verdad: clasificar un ingreso alimenta el Cashflow; linkear o crear un egreso alimenta el EERR y el P&L real. El puntito de color es el estado de cada línea.
+        Datos reales, cruzados con el mismo motor que ya usás en Conciliación. Los botones para resolver (crear gasto, marcar factura pagada, anular) se enchufan en el próximo paso.
       </div>
     </div>
   );
@@ -500,10 +580,12 @@ function ConcFila({ f }: { f: FilaConc }) {
         )}
       </td>
       <td style={tdCell}>
-        <select value={f.categoria} onChange={() => {}}
-          style={{ ...selStyle, padding: "2px 6px", fontSize: "var(--pase-fs-xs)", ...(f.categoriaVacia ? { borderColor: "#B91C1C", color: "#B91C1C" } : {}) }}>
-          <option value={f.categoria}>{f.categoria}</option>
-        </select>
+        {f.categoria
+          ? <select value={f.categoria} onChange={() => {}}
+              style={{ ...selStyle, padding: "2px 6px", fontSize: "var(--pase-fs-xs)", ...(f.categoriaVacia ? { borderColor: "#B91C1C", color: "#B91C1C" } : {}) }}>
+              <option value={f.categoria}>{f.categoria}</option>
+            </select>
+          : <span style={{ fontSize: "var(--pase-fs-xs)", fontWeight: 500, color: EST_TXT_COLOR[f.estado] }}>{f.estadoLabel}</span>}
       </td>
       <td style={{ ...tdCell, textAlign: "right", color: "#B91C1C", fontVariantNumeric: "tabular-nums" }}>{f.debe ? fmt_$(f.debe) : ""}</td>
       <td style={{ ...tdCell, textAlign: "right", color: "var(--pase-celeste)", fontVariantNumeric: "tabular-nums" }}>{f.haber ? fmt_$(f.haber) : ""}</td>
