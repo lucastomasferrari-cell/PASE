@@ -11,8 +11,9 @@ import { fmt_$, todayAR_ISO } from "../lib/utils";
 import { translateRpcError } from "../lib/errors";
 import type { Usuario, Local } from "../types/auth";
 import {
-  resumenMes, subirExtracto, cerrarMes, CATEGORIA_LABEL,
+  resumenMes, pylMes, subirExtracto, cerrarMes, CATEGORIA_LABEL,
   type CashflowResumen, type ResumenCategoria, type CashflowCuenta,
+  type CashflowPyl, type PylLinea,
 } from "../lib/cashflow";
 import { mpLineasParaCashflow } from "../lib/mpExtractoParser";
 import { bancoLineasParaCashflow } from "../lib/bancoExtractoParser";
@@ -24,10 +25,10 @@ interface Props {
   localActivo: number | null;
 }
 
-type Tab = "resumen" | "conciliacion";
+type Tab = "resumen" | "ganancia" | "conciliacion";
 
 const TAB_LABEL: Record<Tab, string> = {
-  resumen: "Resumen", conciliacion: "Conciliación",
+  resumen: "Resumen", ganancia: "Ganancia real", conciliacion: "Conciliación",
 };
 
 export default function Cashflow({ locales, localActivo }: Props) {
@@ -65,7 +66,7 @@ export default function Cashflow({ locales, localActivo }: Props) {
       />
 
       <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "0.5px solid var(--pase-border)" }}>
-        {(["resumen", "conciliacion"] as const).map((t) => (
+        {(["resumen", "ganancia", "conciliacion"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={tabBtn(tab === t)}>
             {TAB_LABEL[t]}
           </button>
@@ -74,6 +75,7 @@ export default function Cashflow({ locales, localActivo }: Props) {
 
       {!lid && <div style={{ color: "var(--pase-text-muted)", padding: 24 }}>Elegí un local para ver la ruta del dinero.</div>}
       {lid && tab === "resumen" && <ResumenView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} onChanged={refresh} />}
+      {lid && tab === "ganancia" && <GananciaView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
       {lid && tab === "conciliacion" && <ConciliacionView />}
 
       {lid && uploadOpen && (
@@ -280,6 +282,76 @@ function ResumenView({ lid, periodoMes, refreshKey, onChanged }: {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ----------------------------- Ganancia real vs teórica (P&L) ----------------------------- */
+
+const PYL_LINEAS: [string, keyof PylLinea, 1 | -1][] = [
+  ["Ventas", "ventas", 1], ["− CMV", "cmv", -1], ["− Gastos fijos", "gastos_fijos", -1],
+  ["− Gastos variables", "gastos_variables", -1], ["− Sueldos", "sueldos", -1],
+  ["− Cargas sociales", "cargas_sociales", -1], ["− Publicidad", "publicidad", -1],
+  ["− Comisiones", "comisiones", -1], ["− Impuestos", "impuestos", -1], ["− Otros", "otros", -1],
+];
+
+function GananciaView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: string; refreshKey: number }) {
+  const [pyl, setPyl] = useState<CashflowPyl | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    setLoading(true); setError(null);
+    pylMes(lid, periodoMes).then(({ data, error }) => {
+      if (cancel) return;
+      if (error) setError(translateRpcError(error)); else setPyl(data);
+      setLoading(false);
+    });
+    return () => { cancel = true; };
+  }, [lid, periodoMes, refreshKey]);
+
+  if (error) return <Card padding="md"><div style={{ color: "#B91C1C" }}>{error}</div></Card>;
+  if (!pyl && loading) return <Cargando />;
+  if (!pyl) return null;
+  const d = pyl.devengado, p = pyl.percibido;
+  const utilColor = (n: number) => (n >= 0 ? "var(--pase-celeste)" : "#B91C1C");
+
+  return (
+    <div style={{ display: "grid", gap: 16, opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
+      <Card padding="md">
+        <div style={subMuted}>La misma estructura del EERR, en dos columnas: la ganancia <b>teórica</b> (devengada — cuando comprás/vendés) y la <b>real</b> (percibida — cuando pagás/cobrás de verdad).</div>
+      </Card>
+
+      <Card padding="lg">
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--pase-fs-base)" }}>
+            <thead>
+              <tr style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)", textAlign: "left" }}>
+                <th style={thCell}></th>
+                <th style={{ ...thCell, textAlign: "right" }}>Teórica (EERR)</th>
+                <th style={{ ...thCell, textAlign: "right" }}>Real (caja)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PYL_LINEAS.map(([label, key, signo]) => (
+                <tr key={key} style={{ borderTop: "0.5px solid var(--pase-border)" }}>
+                  <td style={tdCell}>{label}</td>
+                  <td style={{ ...tdCell, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt_$(signo * d[key])}</td>
+                  <td style={{ ...tdCell, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt_$(signo * p[key])}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: "1.5px solid var(--pase-border-strong)", fontWeight: 500 }}>
+                <td style={{ ...tdCell, fontWeight: 500 }}>= Utilidad</td>
+                <td style={{ ...tdCell, textAlign: "right", fontVariantNumeric: "tabular-nums", color: utilColor(d.utilidad) }}>{fmt_$(d.utilidad)}</td>
+                <td style={{ ...tdCell, textAlign: "right", fontVariantNumeric: "tabular-nums", color: utilColor(p.utilidad) }}>{fmt_$(p.utilidad)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <div style={subMuted}>La diferencia entre las dos utilidades es tu capital de trabajo: lo que vendiste y todavía no cobraste (tarjetas), lo que compraste y todavía no pagaste, stock, sueldos adelantados. Los egresos reales salen de las facturas/gastos cargados, por fecha de pago — mantené la conciliación al día para que no falte nada.</div>
     </div>
   );
 }

@@ -62,6 +62,16 @@ export interface CashflowPuente {
   cash_generado: number; stock_estimado: boolean;
 }
 
+export interface PylLinea {
+  ventas: number; cmv: number; gastos_fijos: number; gastos_variables: number;
+  sueldos: number; cargas_sociales: number; publicidad: number; comisiones: number;
+  impuestos: number; otros: number; utilidad: number;
+}
+export interface CashflowPyl {
+  periodo: string; local_id: number;
+  devengado: PylLinea; percibido: PylLinea;
+}
+
 type R<T> = Promise<{ data: T | null; error: string | null }>;
 
 /** Sube un extracto MP/Banco ya parseado (crea el extracto + clasifica las líneas). */
@@ -129,6 +139,12 @@ export async function libroMes(localId: number, periodoMes: string, cuenta?: str
 export async function puenteMes(localId: number, periodoMes: string): R<CashflowPuente> {
   const { data, error } = await db.rpc("cashflow_puente_mes", { p_local_id: localId, p_periodo_mes: periodoMes });
   return { data: (data as CashflowPuente | null), error: error?.message ?? null };
+}
+
+/** P&L "Ganancia real vs teórica": dos columnas (devengado / percibido). */
+export async function pylMes(localId: number, periodoMes: string): R<CashflowPyl> {
+  const { data, error } = await db.rpc("cashflow_pyl_mes", { p_local_id: localId, p_periodo_mes: periodoMes });
+  return { data: (data as CashflowPyl | null), error: error?.message ?? null };
 }
 
 /** Cierra/bloquea un mes conciliado. */
