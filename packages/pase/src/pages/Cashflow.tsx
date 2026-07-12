@@ -11,10 +11,8 @@ import { fmt_$, todayAR_ISO } from "../lib/utils";
 import { translateRpcError } from "../lib/errors";
 import type { Usuario, Local } from "../types/auth";
 import {
-  resumenMes, libroMes, puenteMes, reclasificarMov, reclasificarLinea,
-  subirExtracto, cerrarMes, CATEGORIA_LABEL,
-  type CashflowResumen, type ResumenCategoria, type CashflowLibro,
-  type CashflowPuente, type CashflowCategoria, type CashflowCuenta,
+  resumenMes, subirExtracto, cerrarMes, CATEGORIA_LABEL,
+  type CashflowResumen, type ResumenCategoria, type CashflowCuenta,
 } from "../lib/cashflow";
 import { mpLineasParaCashflow } from "../lib/mpExtractoParser";
 import { bancoLineasParaCashflow } from "../lib/bancoExtractoParser";
@@ -26,17 +24,11 @@ interface Props {
   localActivo: number | null;
 }
 
-type Tab = "resumen" | "libro" | "conciliacion" | "puente";
+type Tab = "resumen" | "conciliacion";
 
 const TAB_LABEL: Record<Tab, string> = {
-  resumen: "Resumen", libro: "Libro contable", conciliacion: "Conciliación", puente: "Puente",
+  resumen: "Resumen", conciliacion: "Conciliación",
 };
-
-const CATEGORIAS: CashflowCategoria[] = [
-  "venta", "proveedor", "sueldo", "gasto", "comision", "retencion",
-  "aporte_socio", "retiro_socio", "obra_capex", "transferencia_interna",
-  "apertura_ajuste", "otro",
-];
 
 export default function Cashflow({ locales, localActivo }: Props) {
   const [mes, setMes] = useState<string>(() => todayAR_ISO().slice(0, 7)); // YYYY-MM
@@ -45,7 +37,12 @@ export default function Cashflow({ locales, localActivo }: Props) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Candado anti-traspapeleo: si cambia la sucursal activa (sidebar), sincronizar
+  // localSel para que el `lid` NUNCA quede apuntando a un local viejo al subir.
+  useEffect(() => { if (localActivo != null) setLocalSel(localActivo); }, [localActivo]);
+
   const lid = localActivo ?? localSel;
+  const localNombre = locales.find((l) => l.id === lid)?.nombre ?? "";
   const periodoMes = `${mes}-01`;
   const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -68,7 +65,7 @@ export default function Cashflow({ locales, localActivo }: Props) {
       />
 
       <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "0.5px solid var(--pase-border)" }}>
-        {(["resumen", "libro", "conciliacion", "puente"] as const).map((t) => (
+        {(["resumen", "conciliacion"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={tabBtn(tab === t)}>
             {TAB_LABEL[t]}
           </button>
@@ -77,13 +74,11 @@ export default function Cashflow({ locales, localActivo }: Props) {
 
       {!lid && <div style={{ color: "var(--pase-text-muted)", padding: 24 }}>Elegí un local para ver la ruta del dinero.</div>}
       {lid && tab === "resumen" && <ResumenView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} onChanged={refresh} />}
-      {lid && tab === "libro" && <LibroView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
       {lid && tab === "conciliacion" && <ConciliacionView />}
-      {lid && tab === "puente" && <PuenteView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
 
       {lid && uploadOpen && (
         <UploadExtractoModal
-          lid={lid} periodoMes={periodoMes}
+          lid={lid} localNombre={localNombre} periodoMes={periodoMes}
           onClose={() => setUploadOpen(false)}
           onDone={() => { setUploadOpen(false); refresh(); }}
         />
@@ -94,8 +89,8 @@ export default function Cashflow({ locales, localActivo }: Props) {
 
 /* ----------------------------- Subir extracto ----------------------------- */
 
-function UploadExtractoModal({ lid, periodoMes, onClose, onDone }: {
-  lid: number; periodoMes: string; onClose: () => void; onDone: () => void;
+function UploadExtractoModal({ lid, localNombre, periodoMes, onClose, onDone }: {
+  lid: number; localNombre: string; periodoMes: string; onClose: () => void; onDone: () => void;
 }) {
   const [cuenta, setCuenta] = useState<CashflowCuenta>("MercadoPago");
   const [parseado, setParseado] = useState<CashflowExtractoParseado | null>(null);
@@ -136,7 +131,7 @@ function UploadExtractoModal({ lid, periodoMes, onClose, onDone }: {
   }
 
   return (
-    <Modal isOpen onClose={onClose} title="Subir extracto" subtitle={`Período ${periodoMes.slice(0, 7)}`} preventCloseOnOverlay
+    <Modal isOpen onClose={onClose} title="Subir extracto" subtitle={`${localNombre} · ${periodoMes.slice(0, 7)}`} preventCloseOnOverlay
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancelar</button>
@@ -146,6 +141,9 @@ function UploadExtractoModal({ lid, periodoMes, onClose, onDone }: {
         </>
       }>
       <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ padding: "9px 12px", borderRadius: 8, background: "var(--pase-celeste-100)", border: "0.5px solid var(--pase-celeste)", fontSize: "var(--pase-fs-sm)", color: "var(--pase-text)" }}>
+          Se carga en la sucursal <b>{localNombre}</b>. Verificá que sea la correcta — queda anclado acá y no se traspapela.
+        </div>
         <label style={{ display: "grid", gap: 4 }}>
           <span style={subMuted}>Cuenta</span>
           <select value={cuenta} onChange={(e) => { setCuenta(e.target.value as CashflowCuenta); setParseado(null); }} style={selStyle}>
@@ -286,167 +284,6 @@ function ResumenView({ lid, periodoMes, refreshKey, onChanged }: {
   );
 }
 
-/* ----------------------------- Libro contable ----------------------------- */
-
-const CUENTAS_LIBRO = [
-  { value: "", label: "Efectivo (consolidado)" },
-  { value: "Caja Chica", label: "Caja Chica" },
-  { value: "Caja Mayor", label: "Caja Mayor" },
-  { value: "Caja Efectivo", label: "Caja Efectivo (casa)" },
-  { value: "CAJA UTILIDADES", label: "Caja Utilidades" },
-  { value: "MercadoPago", label: "MercadoPago" },
-  { value: "Banco", label: "Banco" },
-];
-
-function LibroView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: string; refreshKey: number }) {
-  const [cuenta, setCuenta] = useState<string>("");
-  const [libro, setLibro] = useState<CashflowLibro | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
-
-  const esExtracto = cuenta === "MercadoPago" || cuenta === "Banco";
-
-  useEffect(() => {
-    let cancel = false;
-    setLoading(true); setError(null);
-    libroMes(lid, periodoMes, cuenta || null).then(({ data, error }) => {
-      if (cancel) return;
-      if (error) setError(translateRpcError(error)); else setLibro(data);
-      setLoading(false);
-    });
-    return () => { cancel = true; };
-  }, [lid, periodoMes, cuenta, version, refreshKey]);
-
-  async function reclasificar(refId: string, categoria: CashflowCategoria) {
-    const r = esExtracto
-      ? await reclasificarLinea({ lineaId: refId, categoria, aplicarTodas: true })
-      : await reclasificarMov({ movId: refId, categoria, aplicarTodas: true });
-    if (r.error) setError(translateRpcError(r.error));
-    else setVersion((v) => v + 1);
-  }
-
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <select value={cuenta} onChange={(e) => setCuenta(e.target.value)} style={selStyle}>
-          {CUENTAS_LIBRO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
-        {libro && (
-          <span style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)" }}>
-            Inicial {fmt_$(libro.saldo_inicial)} → Final <b style={{ color: "var(--pase-text)" }}>{fmt_$(libro.saldo_final)}</b>
-          </span>
-        )}
-      </div>
-
-      {error && <Card padding="md"><div style={{ color: "#B91C1C" }}>{error}</div></Card>}
-      {!libro && loading && <Cargando />}
-      {libro && (
-        <Card padding="md">
-          <div style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--pase-fs-sm)" }}>
-              <thead>
-                <tr style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)", textAlign: "left" }}>
-                  <th style={thCell}>Fecha</th>
-                  <th style={thCell}>Concepto</th>
-                  <th style={thCell}>Categoría</th>
-                  <th style={{ ...thCell, textAlign: "right" }}>Debe</th>
-                  <th style={{ ...thCell, textAlign: "right" }}>Haber</th>
-                  <th style={{ ...thCell, textAlign: "right" }}>Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {libro.filas.length === 0 && (
-                  <tr><td colSpan={6} style={{ ...tdCell, color: "var(--pase-text-muted)" }}>Sin movimientos este mes.</td></tr>
-                )}
-                {libro.filas.map((f) => (
-                  <tr key={f.ref_id} style={{ borderTop: "0.5px solid var(--pase-border)" }}>
-                    <td style={tdCell}>{f.fecha.slice(8, 10)}/{f.fecha.slice(5, 7)}</td>
-                    <td style={{ ...tdCell, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.concepto}</td>
-                    <td style={tdCell}>
-                      <select value={f.categoria ?? "otro"} onChange={(e) => reclasificar(f.ref_id, e.target.value as CashflowCategoria)}
-                        style={{ ...selStyle, padding: "2px 6px", fontSize: "var(--pase-fs-xs)", ...(f.categoria === "otro" ? { borderColor: "#B91C1C" } : {}) }}>
-                        {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ ...tdCell, textAlign: "right", color: "#B91C1C", fontVariantNumeric: "tabular-nums" }}>{f.debe ? fmt_$(f.debe) : ""}</td>
-                    <td style={{ ...tdCell, textAlign: "right", color: "var(--pase-celeste)", fontVariantNumeric: "tabular-nums" }}>{f.haber ? fmt_$(f.haber) : ""}</td>
-                    <td style={{ ...tdCell, textAlign: "right", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.saldo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-/* ----------------------------- Puente ----------------------------- */
-
-function PuenteView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: string; refreshKey: number }) {
-  const [puente, setPuente] = useState<CashflowPuente | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancel = false;
-    setLoading(true); setError(null);
-    puenteMes(lid, periodoMes).then(({ data, error }) => {
-      if (cancel) return;
-      if (error) setError(translateRpcError(error)); else setPuente(data);
-      setLoading(false);
-    });
-    return () => { cancel = true; };
-  }, [lid, periodoMes, refreshKey]);
-
-  if (error) return <Card padding="md"><div style={{ color: "#B91C1C" }}>{error}</div></Card>;
-  if (!puente && loading) return <Cargando />;
-  if (!puente) return null;
-  const d = puente.devengado;
-
-  return (
-    <div style={{ display: "grid", gap: 16, opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
-      <Card padding="md">
-        <div style={subMuted}>Por qué la ganancia del EERR (devengado) no es igual a la plata generada (cash). El EERR cuenta cuando comprás/vendés; el cashflow, cuando pagás/cobrás.</div>
-      </Card>
-
-      <Card padding="lg">
-        <div style={cardTitle}>Ganancia devengada (EERR)</div>
-        {([
-          ["Ventas", d.ventas], ["− CMV", -d.cmv], ["− Gastos fijos", -d.gastos_fijos],
-          ["− Gastos variables", -d.gastos_variables], ["− Sueldos", -d.sueldos],
-          ["− Cargas sociales", -d.cargas_sociales], ["− Publicidad", -d.publicidad],
-          ["− Comisiones", -d.comisiones], ["− Impuestos", -d.impuestos], ["− Otros", -d.otros],
-        ] as const).map(([k, v]) => (
-          <div key={k} style={rowBetween}><span>{k}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(v)}</span></div>
-        ))}
-        <div style={{ ...rowBetween, fontWeight: 500, borderTop: "0.5px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
-          <span>Utilidad neta devengada</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(d.utilidad_neta)}</span>
-        </div>
-      </Card>
-
-      <Card padding="lg">
-        <div style={cardTitle}>El puente → cash real generado</div>
-        {puente.puente.map((l, i) => (
-          <div key={i} style={rowBetween}>
-            <span>{l.concepto}{l.estimado ? <em style={{ color: "var(--pase-text-muted)" }}> (estimado)</em> : null}</span>
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(l.monto)}</span>
-          </div>
-        ))}
-        <div style={{ ...rowBetween, fontWeight: 500, borderTop: "0.5px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
-          <span>= Cash real generado</span>
-          <span style={{ fontVariantNumeric: "tabular-nums", color: puente.cash_generado >= 0 ? "var(--pase-celeste)" : "#B91C1C" }}>{fmt_$(puente.cash_generado)}</span>
-        </div>
-      </Card>
-      {puente.stock_estimado && (
-        <div style={subMuted}>⚠️ La variación de stock está en $0 (estimado): cargá el inventario valorizado para afinar el puente.</div>
-      )}
-    </div>
-  );
-}
-
 /* ----------------------------- Conciliación (UI, datos de ejemplo) ----------------------------- */
 
 type EstadoConc = "conciliada" | "clasificar" | "falta" | "elegir" | "sobra" | "ignorada" | "diferencia";
@@ -457,10 +294,6 @@ interface FilaConc {
   estado: EstadoConc; sub?: string; acciones?: string[]; tachado?: boolean;
 }
 
-const CONC_COLOR: Record<EstadoConc, string> = {
-  conciliada: "var(--pase-celeste)", clasificar: "#D97706", falta: "#B91C1C",
-  elegir: "#D97706", sobra: "#B91C1C", ignorada: "var(--pase-text-muted)", diferencia: "#D97706",
-};
 // Cada estado cae en un grupo/pill; "diferencia" viaja con "faltan cargar".
 const CONC_GRUPO: Record<EstadoConc, string> = {
   clasificar: "clasificar", falta: "falta", diferencia: "falta",
@@ -498,7 +331,7 @@ function ConciliacionView() {
   const [filtro, setFiltro] = useState<string>("todas");
   const [modo, setModo] = useState<"lista" | "agrupado">("lista");
   const [colapsados, setColapsados] = useState<Set<string>>(new Set());
-  const toggleGrupo = (k: string) => setColapsados((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const toggleGrupo = (k: string) => setColapsados((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   const contar = (k: string) => k === "todas" ? CONC_FILAS.length : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === k).length;
   const visibles = filtro === "todas" ? CONC_FILAS : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === filtro);
@@ -580,29 +413,25 @@ function ConcFila({ f }: { f: FilaConc }) {
   return (
     <tr style={{ borderTop: "0.5px solid var(--pase-border)" }}>
       <td style={{ ...tdCell, color: "var(--pase-text-muted)", whiteSpace: "nowrap" }}>{f.fecha}</td>
-      <td style={tdCell}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: CONC_COLOR[f.estado], marginTop: 5, flex: "0 0 auto" }} />
-          <div style={{ minWidth: 0 }}>
-            <div style={f.tachado ? { textDecoration: "line-through", color: "var(--pase-text-muted)" } : undefined}>{f.concepto}</div>
-            {(f.sub || f.acciones) && (
-              <div style={{ marginTop: 3, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.5 }}>
-                {f.sub && <span>{f.sub}{f.acciones ? " · " : ""}</span>}
-                {f.acciones?.map((a, i) => (
-                  <span key={i}>
-                    <button style={concLink}>{a}</button>
-                    {i < f.acciones!.length - 1 && <span style={{ color: "var(--pase-border-strong)", margin: "0 5px" }}>·</span>}
-                  </span>
-                ))}
-              </div>
-            )}
+      <td style={{ ...tdCell, maxWidth: 340 }}>
+        <div style={f.tachado ? { textDecoration: "line-through", color: "var(--pase-text-muted)" } : undefined}>{f.concepto}</div>
+        {(f.sub || f.acciones) && (
+          <div style={{ marginTop: 3, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.5 }}>
+            {f.sub && <span>{f.sub}{f.acciones ? " · " : ""}</span>}
+            {f.acciones?.map((a, i) => (
+              <span key={i}>
+                <button style={concLink}>{a}</button>
+                {i < f.acciones!.length - 1 && <span style={{ color: "var(--pase-border-strong)", margin: "0 5px" }}>·</span>}
+              </span>
+            ))}
           </div>
-        </div>
+        )}
       </td>
       <td style={tdCell}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 8px", borderRadius: 8, border: "0.5px solid " + (f.categoriaVacia ? "#D97706" : "var(--pase-border-strong)"), fontSize: "var(--pase-fs-xs)", color: f.categoriaVacia ? "#D97706" : "var(--pase-text)", whiteSpace: "nowrap" }}>
-          {f.categoria} <span style={{ color: "var(--pase-text-muted)" }}>▾</span>
-        </span>
+        <select value={f.categoria} onChange={() => {}}
+          style={{ ...selStyle, padding: "2px 6px", fontSize: "var(--pase-fs-xs)", ...(f.categoriaVacia ? { borderColor: "#B91C1C", color: "#B91C1C" } : {}) }}>
+          <option value={f.categoria}>{f.categoria}</option>
+        </select>
       </td>
       <td style={{ ...tdCell, textAlign: "right", color: "#B91C1C", fontVariantNumeric: "tabular-nums" }}>{f.debe ? fmt_$(f.debe) : ""}</td>
       <td style={{ ...tdCell, textAlign: "right", color: "var(--pase-celeste)", fontVariantNumeric: "tabular-nums" }}>{f.haber ? fmt_$(f.haber) : ""}</td>
