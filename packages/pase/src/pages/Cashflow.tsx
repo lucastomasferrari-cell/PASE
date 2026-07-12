@@ -26,7 +26,11 @@ interface Props {
   localActivo: number | null;
 }
 
-type Tab = "resumen" | "libro" | "puente";
+type Tab = "resumen" | "libro" | "conciliacion" | "puente";
+
+const TAB_LABEL: Record<Tab, string> = {
+  resumen: "Resumen", libro: "Libro contable", conciliacion: "Conciliación", puente: "Puente",
+};
 
 const CATEGORIAS: CashflowCategoria[] = [
   "venta", "proveedor", "sueldo", "gasto", "comision", "retencion",
@@ -64,9 +68,9 @@ export default function Cashflow({ locales, localActivo }: Props) {
       />
 
       <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "0.5px solid var(--pase-border)" }}>
-        {(["resumen", "libro", "puente"] as const).map((t) => (
+        {(["resumen", "libro", "conciliacion", "puente"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={tabBtn(tab === t)}>
-            {t === "resumen" ? "Resumen" : t === "libro" ? "Libro contable" : "Puente"}
+            {TAB_LABEL[t]}
           </button>
         ))}
       </div>
@@ -74,6 +78,7 @@ export default function Cashflow({ locales, localActivo }: Props) {
       {!lid && <div style={{ color: "var(--pase-text-muted)", padding: 24 }}>Elegí un local para ver la ruta del dinero.</div>}
       {lid && tab === "resumen" && <ResumenView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} onChanged={refresh} />}
       {lid && tab === "libro" && <LibroView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
+      {lid && tab === "conciliacion" && <ConciliacionView />}
       {lid && tab === "puente" && <PuenteView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
 
       {lid && uploadOpen && (
@@ -441,6 +446,182 @@ function PuenteView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: 
     </div>
   );
 }
+
+/* ----------------------------- Conciliación (UI, datos de ejemplo) ----------------------------- */
+
+type EstadoConc = "conciliada" | "clasificar" | "falta" | "elegir" | "sobra" | "ignorada" | "diferencia";
+
+interface FilaConc {
+  id: string; fecha: string; concepto: string; categoria: string; categoriaVacia?: boolean;
+  debe?: number; haber?: number; saldo?: number | null;
+  estado: EstadoConc; sub?: string; acciones?: string[]; tachado?: boolean;
+}
+
+const CONC_COLOR: Record<EstadoConc, string> = {
+  conciliada: "var(--pase-celeste)", clasificar: "#D97706", falta: "#B91C1C",
+  elegir: "#D97706", sobra: "#B91C1C", ignorada: "var(--pase-text-muted)", diferencia: "#D97706",
+};
+// Cada estado cae en un grupo/pill; "diferencia" viaja con "faltan cargar".
+const CONC_GRUPO: Record<EstadoConc, string> = {
+  clasificar: "clasificar", falta: "falta", diferencia: "falta",
+  elegir: "elegir", sobra: "sobra", ignorada: "ignorada", conciliada: "conciliada",
+};
+const CONC_PILLS = [
+  { key: "todas", label: "Todas" }, { key: "clasificar", label: "Por clasificar" },
+  { key: "falta", label: "Faltan cargar" }, { key: "elegir", label: "Por elegir" },
+  { key: "sobra", label: "Sobran" }, { key: "ignorada", label: "Ignoradas" },
+];
+const CONC_GRUPO_ORDEN: { key: string; label: string; color: string }[] = [
+  { key: "clasificar", label: "Por clasificar · ingresos", color: "#D97706" },
+  { key: "falta", label: "Faltan cargar", color: "#B91C1C" },
+  { key: "elegir", label: "Por elegir", color: "#D97706" },
+  { key: "sobra", label: "Sobran en PASE", color: "#B91C1C" },
+  { key: "ignorada", label: "Ignoradas", color: "var(--pase-text-muted)" },
+  { key: "conciliada", label: "Conciliadas", color: "var(--pase-celeste)" },
+];
+
+const CONC_FILAS: FilaConc[] = [
+  { id: "1", fecha: "01/06", concepto: "Liquidación de dinero", categoria: "Venta", haber: 223668.48, saldo: 3225781.15, estado: "conciliada" },
+  { id: "2", fecha: "02/06", concepto: "Transferencia recibida Oscar Trejo", categoria: "— elegí —", categoriaVacia: true, haber: 105500, saldo: 3331281.15, estado: "clasificar", acciones: ["Venta", "Aporte de socio", "Transferencia interna"] },
+  { id: "3", fecha: "02/06", concepto: "Pago RAPPI ARG SAS", categoria: "Comisiones", sub: "linkeado a Gasto #1042", debe: 42122, saldo: 3289159.15, estado: "conciliada" },
+  { id: "4", fecha: "03/06", concepto: "Transferencia enviada CASA CHINA", categoria: "CMV", sub: "linkeado a Factura #A-0087", debe: 654047.59, saldo: 2635111.56, estado: "conciliada" },
+  { id: "5", fecha: "03/06", concepto: "Transferencia enviada Lima Magica Srl", categoria: "CMV", debe: 170998.95, saldo: 2464112.61, estado: "falta", acciones: ["Marcar factura #F-2231 como pagada", "Linkear otra", "Crear gasto", "Ignorar"] },
+  { id: "6", fecha: "03/06", concepto: "Compra Mercado Libre", categoria: "— sin cargar —", categoriaVacia: true, debe: 30000, saldo: 2434112.61, estado: "falta", acciones: ["Crear gasto", "Linkear factura", "Es de un proveedor…", "Ignorar"] },
+  { id: "7", fecha: "04/06", concepto: "Transferencia enviada Emanuel Enecoiz", categoria: "CMV", debe: 464000, saldo: 1970112.61, estado: "elegir", sub: "2 pagos posibles con este monto", acciones: ["Elegir cuál"] },
+  { id: "8", fecha: "—", concepto: "The Good Selection S.R.L", categoria: "10 pagos", saldo: null, estado: "diferencia", sub: "extracto −6.138.241,73 vs sistema −11.784.844,62 · 5.646.602,89 de más (¿mes anterior?)", acciones: ["Ver detalle"] },
+  { id: "9", fecha: "28/05", concepto: "Pago SUL SRL · Fact 0017", categoria: "CMV", debe: 240015.80, saldo: null, estado: "sobra", sub: "Sólo en PASE, no está en el extracto", acciones: ["Anular", "Se pagó en efectivo", "Es de otro día"] },
+  { id: "10", fecha: "02/06", concepto: "Impuesto por extracción", categoria: "Ignorada", debe: 600, saldo: 1969512.61, estado: "ignorada", tachado: true, sub: "impuesto bancario", acciones: ["Reactivar"] },
+];
+
+function ConciliacionView() {
+  const [filtro, setFiltro] = useState<string>("todas");
+  const [modo, setModo] = useState<"lista" | "agrupado">("lista");
+  const [colapsados, setColapsados] = useState<Set<string>>(new Set());
+  const toggleGrupo = (k: string) => setColapsados((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+
+  const cuenta = (k: string) => k === "todas" ? CONC_FILAS.length : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === k).length;
+  const visibles = filtro === "todas" ? CONC_FILAS : CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === filtro);
+
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <span style={{ ...selStyle, display: "inline-flex", alignItems: "center", gap: 8 }}>MercadoPago <span style={{ color: "var(--pase-text-muted)" }}>▾</span></span>
+        <span style={{ fontSize: "var(--pase-fs-base)", color: "var(--pase-text-muted)" }}>
+          Inicial <b style={{ color: "var(--pase-text)" }}>$3.002.112,67</b> → Final <b style={{ color: "var(--pase-text)" }}>$838.469,38</b> · <span style={{ color: "var(--pase-celeste)" }}>cuadra</span>
+        </span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {CONC_PILLS.map((p) => (
+            <button key={p.key} onClick={() => setFiltro(p.key)} style={concPill(filtro === p.key)}>
+              {p.label} <span style={{ opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>{cuenta(p.key)}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "inline-flex", padding: 3, background: "var(--pase-bg-soft)", borderRadius: 8, border: "0.5px solid var(--pase-border)" }}>
+          {(["lista", "agrupado"] as const).map((m) => (
+            <button key={m} onClick={() => setModo(m)} style={concSeg(modo === m)}>{m === "lista" ? "Lista" : "Agrupado"}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: -6 }}>Vista preliminar — datos de ejemplo para ver el diseño.</div>
+
+      <Card padding="md">
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--pase-fs-sm)" }}>
+            <thead>
+              <tr style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)", textAlign: "left" }}>
+                <th style={thCell}>Fecha</th><th style={thCell}>Concepto</th><th style={thCell}>Categoría</th>
+                <th style={{ ...thCell, textAlign: "right" }}>Debe</th><th style={{ ...thCell, textAlign: "right" }}>Haber</th><th style={{ ...thCell, textAlign: "right" }}>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {modo === "lista" && visibles.map((f) => <ConcFila key={f.id} f={f} />)}
+              {modo === "agrupado" && CONC_GRUPO_ORDEN
+                .filter((g) => filtro === "todas" || g.key === filtro)
+                .flatMap((g) => {
+                  const rows = CONC_FILAS.filter((f) => CONC_GRUPO[f.estado] === g.key);
+                  if (rows.length === 0) return [];
+                  const cerrado = colapsados.has(g.key);
+                  const header = (
+                    <tr key={"h-" + g.key} onClick={() => toggleGrupo(g.key)} style={{ cursor: "pointer", background: "var(--pase-bg-soft)" }}>
+                      <td colSpan={6} style={{ padding: "7px 8px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: "var(--pase-fs-sm)" }}>
+                          <span style={{ display: "inline-block", transform: cerrado ? "rotate(-90deg)" : "none", transition: "transform .15s", color: "var(--pase-text-muted)" }}>▾</span>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: g.color }} />
+                          <b style={{ color: "var(--pase-text)", fontWeight: 500 }}>{g.label}</b>
+                          <span style={{ color: "var(--pase-text-muted)" }}>{rows.length}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                  return cerrado ? [header] : [header, ...rows.map((f) => <ConcFila key={f.id} f={f} />)];
+                })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <div style={subMuted}>
+        Cada acción impacta de verdad: clasificar un ingreso alimenta el Cashflow; linkear o crear un egreso alimenta el EERR y el P&L real. El puntito de color es el estado de cada línea.
+      </div>
+    </div>
+  );
+}
+
+function ConcFila({ f }: { f: FilaConc }) {
+  return (
+    <tr style={{ borderTop: "0.5px solid var(--pase-border)" }}>
+      <td style={{ ...tdCell, color: "var(--pase-text-muted)", whiteSpace: "nowrap" }}>{f.fecha}</td>
+      <td style={tdCell}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: CONC_COLOR[f.estado], marginTop: 5, flex: "0 0 auto" }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={f.tachado ? { textDecoration: "line-through", color: "var(--pase-text-muted)" } : undefined}>{f.concepto}</div>
+            {(f.sub || f.acciones) && (
+              <div style={{ marginTop: 3, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.5 }}>
+                {f.sub && <span>{f.sub}{f.acciones ? " · " : ""}</span>}
+                {f.acciones?.map((a, i) => (
+                  <span key={i}>
+                    <button style={concLink}>{a}</button>
+                    {i < f.acciones!.length - 1 && <span style={{ color: "var(--pase-border-strong)", margin: "0 5px" }}>·</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </td>
+      <td style={tdCell}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 8px", borderRadius: 8, border: "0.5px solid " + (f.categoriaVacia ? "#D97706" : "var(--pase-border-strong)"), fontSize: "var(--pase-fs-xs)", color: f.categoriaVacia ? "#D97706" : "var(--pase-text)", whiteSpace: "nowrap" }}>
+          {f.categoria} <span style={{ color: "var(--pase-text-muted)" }}>▾</span>
+        </span>
+      </td>
+      <td style={{ ...tdCell, textAlign: "right", color: "#B91C1C", fontVariantNumeric: "tabular-nums" }}>{f.debe ? fmt_$(f.debe) : ""}</td>
+      <td style={{ ...tdCell, textAlign: "right", color: "var(--pase-celeste)", fontVariantNumeric: "tabular-nums" }}>{f.haber ? fmt_$(f.haber) : ""}</td>
+      <td style={{ ...tdCell, textAlign: "right", fontWeight: 500, fontVariantNumeric: "tabular-nums", ...(f.saldo == null ? { color: "var(--pase-text-muted)" } : {}) }}>{f.saldo == null ? "—" : fmt_$(f.saldo)}</td>
+    </tr>
+  );
+}
+
+const concPill = (active: boolean): React.CSSProperties => ({
+  fontSize: "var(--pase-fs-sm)", padding: "5px 12px", borderRadius: 999,
+  border: "0.5px solid " + (active ? "transparent" : "var(--pase-border)"),
+  background: active ? "var(--pase-celeste)" : "var(--pase-bg)",
+  color: active ? "#fff" : "var(--pase-text-muted)", cursor: "pointer",
+  fontFamily: "var(--pase-font)", display: "inline-flex", gap: 6, alignItems: "center",
+});
+const concSeg = (active: boolean): React.CSSProperties => ({
+  fontSize: "var(--pase-fs-sm)", padding: "5px 13px", border: "none", borderRadius: 6, cursor: "pointer",
+  background: active ? "var(--pase-bg)" : "transparent", color: active ? "var(--pase-text)" : "var(--pase-text-muted)",
+  fontWeight: active ? 500 : 400, fontFamily: "var(--pase-font)",
+});
+const concLink: React.CSSProperties = {
+  border: "none", background: "none", padding: 0, color: "var(--pase-celeste)", cursor: "pointer",
+  fontSize: "var(--pase-fs-xs)", fontFamily: "var(--pase-font)",
+};
 
 /* ----------------------------- helpers ----------------------------- */
 
