@@ -494,6 +494,7 @@ const CONC_FILAS: FilaConc[] = [
 ];
 
 function ConciliacionView() {
+  const [cuenta, setCuenta] = useState<string>("MercadoPago");
   const [filtro, setFiltro] = useState<string>("todas");
   const [modo, setModo] = useState<"lista" | "agrupado">("lista");
   const [colapsados, setColapsados] = useState<Set<string>>(new Set());
@@ -505,7 +506,11 @@ function ConciliacionView() {
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <span style={{ ...selStyle, display: "inline-flex", alignItems: "center", gap: 8 }}>MercadoPago <span style={{ color: "var(--pase-text-muted)" }}>▾</span></span>
+        <select value={cuenta} onChange={(e) => setCuenta(e.target.value)} style={selStyle}>
+          <option value="Efectivo">Efectivo</option>
+          <option value="MercadoPago">MercadoPago</option>
+          <option value="Banco">Banco</option>
+        </select>
         <span style={{ fontSize: "var(--pase-fs-base)", color: "var(--pase-text-muted)" }}>
           Inicial <b style={{ color: "var(--pase-text)" }}>$3.002.112,67</b> → Final <b style={{ color: "var(--pase-text)" }}>$838.469,38</b> · <span style={{ color: "var(--pase-celeste)" }}>cuadra</span>
         </span>
