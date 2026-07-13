@@ -16,6 +16,7 @@ import {
   type CashflowResumen, type ResumenCategoria, type CashflowCuenta,
   type CashflowPyl, type PylLinea,
 } from "../lib/cashflow";
+import { useCategorias } from "../lib/useCategorias";
 import { mpLineasParaCashflow } from "../lib/mpExtractoParser";
 import { bancoLineasParaCashflow } from "../lib/bancoExtractoParser";
 import type { CashflowExtractoParseado } from "../lib/cashflowExtracto";
@@ -361,11 +362,15 @@ function GananciaView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes
 
 type EstadoConc = "conciliada" | "clasificar" | "falta" | "elegir" | "sobra" | "ignorada" | "diferencia";
 
+interface FilaConcRaw {
+  fecha: string; monto: number; descripcion: string;
+  movId?: string; facturas?: Array<{ tipo: string; id: string; total: number; nro?: string | null }>;
+}
 interface FilaConc {
   id: string; fecha: string; concepto: string; categoria: string; categoriaVacia?: boolean;
   estadoLabel?: string;
   debe?: number; haber?: number; saldo?: number | null;
-  estado: EstadoConc; sub?: string; acciones?: string[]; tachado?: boolean;
+  estado: EstadoConc; sub?: string; tachado?: boolean; raw?: FilaConcRaw;
 }
 
 // Cada estado cae en un grupo/pill; "diferencia" viaja con "faltan cargar".
@@ -388,10 +393,12 @@ const CONC_GRUPO_ORDEN: { key: string; label: string; color: string }[] = [
 ];
 
 // Cruce real que devuelve fn_cruzar_extracto_mp (shape mínima que consumimos).
+interface FactPend { tipo: string; id?: string; nro?: string | null; total?: number; facturas?: Array<{ id: string; nro: string | null; total: number }> }
 interface CruceFila {
   idx: number; fecha: string; monto: number; descripcion: string;
   estado: string; num_candidatos: number;
   bloque: { proveedor: string; suma_extracto: number; suma_pase: number | null; dif: number } | null;
+  facturas_pendientes?: FactPend[];
 }
 interface CruceSobra { id: string; fecha: string; importe: number; detalle: string }
 interface CruceLite { extracto: CruceFila[]; sobrantes: CruceSobra[] }
@@ -422,11 +429,17 @@ function mapCruce(cruce: CruceLite): FilaConc[] {
     else if (e === "falta") sub = "Salió del banco, no está cargado en el sistema";
     else if (e === "diferencia" && f.bloque)
       sub = `${f.bloque.proveedor}: extracto ${fmt_$(f.bloque.suma_extracto)} vs sistema ${f.bloque.suma_pase == null ? "—" : fmt_$(f.bloque.suma_pase)} · dif ${fmt_$(f.bloque.dif)}`;
+    const facturas: NonNullable<FilaConcRaw["facturas"]> = [];
+    for (const fp of f.facturas_pendientes ?? []) {
+      if (fp.facturas) for (const inner of fp.facturas) facturas.push({ tipo: "factura", id: inner.id, total: inner.total, nro: inner.nro });
+      else if (fp.id) facturas.push({ tipo: fp.tipo, id: fp.id, total: fp.total ?? Math.abs(f.monto), nro: fp.nro ?? null });
+    }
     out.push({
       id: `ext-${f.idx}`, fecha: fmtDDMM(f.fecha), concepto: f.descripcion, categoria: "",
       estadoLabel: EST_LABEL[e], estado: e, sub,
       debe: f.monto < 0 ? Math.abs(f.monto) : undefined,
       haber: f.monto > 0 ? f.monto : undefined, saldo: null,
+      raw: { fecha: f.fecha, monto: f.monto, descripcion: f.descripcion, facturas: facturas.length ? facturas : undefined },
     });
   }
   for (const s of cruce.sobrantes ?? []) {
@@ -434,6 +447,7 @@ function mapCruce(cruce: CruceLite): FilaConc[] {
       id: `sob-${s.id}`, fecha: fmtDDMM(s.fecha), concepto: s.detalle, categoria: "",
       estadoLabel: EST_LABEL.sobra, estado: "sobra", sub: "Cargado en el sistema, no está en el extracto",
       debe: Math.abs(s.importe), saldo: null,
+      raw: { fecha: s.fecha, monto: s.importe, descripcion: s.detalle, movId: s.id },
     });
   }
   return out;
@@ -447,6 +461,9 @@ function ConciliacionView({ lid, periodoMes }: { lid: number; periodoMes: string
   const [filtro, setFiltro] = useState<string>("todas");
   const [modo, setModo] = useState<"lista" | "agrupado">("lista");
   const [colapsados, setColapsados] = useState<Set<string>>(new Set());
+  const [version, setVersion] = useState(0);
+  const [crearGasto, setCrearGasto] = useState<FilaConc | null>(null);
+  const mesTxt = periodoMes.slice(0, 7);
   const toggleGrupo = (k: string) => setColapsados((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   // Carga real: trae las líneas del extracto MP guardado y las cruza con el
@@ -480,10 +497,32 @@ function ConciliacionView({ lid, periodoMes }: { lid: number; periodoMes: string
       setLoading(false);
     })();
     return () => { cancel = true; };
-  }, [lid, periodoMes, cuenta]);
+  }, [lid, periodoMes, cuenta, version]);
 
   const contar = (k: string) => k === "todas" ? filas.length : filas.filter((f) => CONC_GRUPO[f.estado] === k).length;
   const visibles = filtro === "todas" ? filas : filas.filter((f) => CONC_GRUPO[f.estado] === filtro);
+
+  // Acciones — reusan las RPCs probadas de /conciliacion-extracto.
+  async function anular(f: FilaConc) {
+    if (!f.raw?.movId) return;
+    const motivo = window.prompt("Motivo de la anulación:");
+    if (!motivo || !motivo.trim()) return;
+    const { error } = await db.rpc("anular_movimiento", { p_mov_id: f.raw.movId, p_motivo: `[Conciliación ${mesTxt}] ${motivo.trim()}` });
+    if (error) { setError(translateRpcError(error.message)); return; }
+    setVersion((v) => v + 1);
+  }
+  async function pagarFacturas(f: FilaConc) {
+    const facturas = f.raw?.facturas;
+    if (!facturas?.length || !f.raw) return;
+    if (!window.confirm(`¿Marcar ${facturas.length} comprobante(s) como pagado(s) por MercadoPago?`)) return;
+    for (const fac of facturas) {
+      const { error } = fac.tipo === "remito"
+        ? await db.rpc("pagar_remito", { p_remito_id: fac.id, p_monto: fac.total, p_cuenta: "MercadoPago", p_fecha: f.raw.fecha, p_idempotency_key: crypto.randomUUID() })
+        : await db.rpc("pagar_factura", { p_factura_id: fac.id, p_monto: fac.total, p_cuenta: "MercadoPago", p_fecha: f.raw.fecha, p_detalle: `[Concil. ${mesTxt}] ${f.concepto}`, p_idempotency_key: crypto.randomUUID(), p_generar_saldo: false, p_cerrar_factura: false });
+      if (error) { setError(translateRpcError(error.message)); return; }
+    }
+    setVersion((v) => v + 1);
+  }
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
@@ -528,7 +567,7 @@ function ConciliacionView({ lid, periodoMes }: { lid: number; periodoMes: string
               </tr>
             </thead>
             <tbody>
-              {modo === "lista" && visibles.map((f) => <ConcFila key={f.id} f={f} />)}
+              {modo === "lista" && visibles.map((f) => <ConcFila key={f.id} f={f} onCrear={() => setCrearGasto(f)} onPagar={() => pagarFacturas(f)} onAnular={() => anular(f)} />)}
               {modo === "agrupado" && CONC_GRUPO_ORDEN
                 .filter((g) => filtro === "todas" || g.key === filtro)
                 .flatMap((g) => {
@@ -547,7 +586,7 @@ function ConciliacionView({ lid, periodoMes }: { lid: number; periodoMes: string
                       </td>
                     </tr>
                   );
-                  return cerrado ? [header] : [header, ...rows.map((f) => <ConcFila key={f.id} f={f} />)];
+                  return cerrado ? [header] : [header, ...rows.map((f) => <ConcFila key={f.id} f={f} onCrear={() => setCrearGasto(f)} onPagar={() => pagarFacturas(f)} onAnular={() => anular(f)} />)];
                 })}
             </tbody>
           </table>
@@ -555,25 +594,38 @@ function ConciliacionView({ lid, periodoMes }: { lid: number; periodoMes: string
       </Card>
 
       <div style={subMuted}>
-        Datos reales, cruzados con el mismo motor que ya usás en Conciliación. Los botones para resolver (crear gasto, marcar factura pagada, anular) se enchufan en el próximo paso.
+        Datos reales, cruzados con el mismo motor probado. Cada acción escribe en el sistema: crear gasto, marcar factura pagada y anular impactan tu EERR y tu Caja.
       </div>
+
+      {crearGasto && (
+        <CrearGastoModal fila={crearGasto} lid={lid} mesTxt={mesTxt}
+          onClose={() => setCrearGasto(null)}
+          onDone={() => { setCrearGasto(null); setVersion((v) => v + 1); }} />
+      )}
     </div>
   );
 }
 
-function ConcFila({ f }: { f: FilaConc }) {
+function ConcFila({ f, onCrear, onPagar, onAnular }: { f: FilaConc; onCrear: () => void; onPagar: () => void; onAnular: () => void }) {
+  const acc: { label: string; fn: () => void }[] = [];
+  if (f.estado === "falta") {
+    if (f.raw?.facturas?.length) acc.push({ label: `Marcar ${f.raw.facturas.length} comprobante(s) pagado(s)`, fn: onPagar });
+    acc.push({ label: "Crear gasto", fn: onCrear });
+  } else if (f.estado === "sobra") {
+    acc.push({ label: "Anular", fn: onAnular });
+  }
   return (
     <tr style={{ borderTop: "0.5px solid var(--pase-border)" }}>
       <td style={{ ...tdCell, color: "var(--pase-text-muted)", whiteSpace: "nowrap" }}>{f.fecha}</td>
       <td style={{ ...tdCell, maxWidth: 340 }}>
         <div style={f.tachado ? { textDecoration: "line-through", color: "var(--pase-text-muted)" } : undefined}>{f.concepto}</div>
-        {(f.sub || f.acciones) && (
+        {(f.sub || acc.length > 0) && (
           <div style={{ marginTop: 3, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.5 }}>
-            {f.sub && <span>{f.sub}{f.acciones ? " · " : ""}</span>}
-            {f.acciones?.map((a, i) => (
+            {f.sub && <span>{f.sub}{acc.length ? " · " : ""}</span>}
+            {acc.map((a, i) => (
               <span key={i}>
-                <button style={concLink}>{a}</button>
-                {i < f.acciones!.length - 1 && <span style={{ color: "var(--pase-border-strong)", margin: "0 5px" }}>·</span>}
+                <button style={concLink} onClick={a.fn}>{a.label}</button>
+                {i < acc.length - 1 && <span style={{ color: "var(--pase-border-strong)", margin: "0 5px" }}>·</span>}
               </span>
             ))}
           </div>
@@ -610,6 +662,69 @@ const concLink: React.CSSProperties = {
   border: "none", background: "none", padding: 0, color: "var(--pase-celeste)", cursor: "pointer",
   fontSize: "var(--pase-fs-xs)", fontFamily: "var(--pase-font)",
 };
+
+/** Crear un gasto real (crear_gasto → EERR + Caja) desde una fila del extracto. */
+function CrearGastoModal({ fila, lid, mesTxt, onClose, onDone }: {
+  fila: FilaConc; lid: number; mesTxt: string; onClose: () => void; onDone: () => void;
+}) {
+  const cats = useCategorias();
+  const [tipo, setTipo] = useState("");
+  const [cat, setCat] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const TIPOS = ["Mercadería (CMV)", "Gasto Fijo", "Gasto Variable", "Publicidad", "Comisión", "Impuesto", "Otros"];
+  const catsDisp =
+    tipo === "Mercadería (CMV)" ? cats.CATEGORIAS_COMPRA
+      : tipo === "Gasto Fijo" ? cats.GASTOS_FIJOS
+        : tipo === "Gasto Variable" ? cats.GASTOS_VARIABLES
+          : tipo === "Publicidad" ? cats.GASTOS_PUBLICIDAD
+            : tipo === "Comisión" ? cats.COMISIONES_CATS
+              : tipo === "Impuesto" ? cats.GASTOS_IMPUESTOS
+                : tipo === "Otros" ? ["OTROS"] : [];
+  const monto = Math.abs(fila.raw?.monto ?? 0);
+
+  async function crear() {
+    if (!tipo) { setErr("Elegí un tipo"); return; }
+    if (!cat) { setErr("Elegí una categoría"); return; }
+    if (!fila.raw) return;
+    setSaving(true); setErr(null);
+    const detalle = `[Concil. ${mesTxt}] ${fila.raw.descripcion}`;
+    const { error } = await db.rpc("crear_gasto", {
+      p_fecha: fila.raw.fecha, p_local_id: lid, p_categoria: cat, p_tipo: tipo,
+      p_monto: monto, p_detalle: detalle, p_cuenta: "MercadoPago",
+      p_plantilla_id: null, p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) { setErr(translateRpcError(error.message)); setSaving(false); return; }
+    void db.rpc("fn_aprender_gasto_alias", { p_local_id: lid, p_descripcion: fila.raw.descripcion, p_categoria: cat, p_tipo: tipo });
+    setSaving(false); onDone();
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} title="Crear gasto" subtitle={`${mesTxt} · MercadoPago`} preventCloseOnOverlay
+      footer={<>
+        <button className="btn" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-acc" disabled={saving} onClick={crear}>{saving ? "Creando…" : "Crear gasto"}</button>
+      </>}>
+      <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)" }}>
+          {fila.concepto} · <b style={{ color: "var(--pase-text)" }}>{fmt_$(monto)}</b> · {fila.fecha}
+        </div>
+        <label style={{ display: "grid", gap: 4 }}><span style={subMuted}>Tipo</span>
+          <select value={tipo} onChange={(e) => { setTipo(e.target.value); setCat(""); }} style={selStyle}>
+            <option value="">Elegí…</option>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label style={{ display: "grid", gap: 4 }}><span style={subMuted}>Categoría</span>
+          <select value={cat} onChange={(e) => setCat(e.target.value)} style={selStyle}>
+            <option value="">{tipo ? "Elegí…" : "(elegí el tipo primero)"}</option>
+            {catsDisp.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        {err && <div style={{ color: "#B91C1C", fontSize: "var(--pase-fs-sm)" }}>{err}</div>}
+      </div>
+    </Modal>
+  );
+}
 
 /* ----------------------------- helpers ----------------------------- */
 
