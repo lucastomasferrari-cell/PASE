@@ -592,6 +592,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
         value: g.total + (adelantosPorEmp[empId] || []).reduce((s, it) => s + it.monto, 0),
       })).sort((a, b) => b.value - a.value);
       if (restoSinAsignar > 0.5) personalItems.push({ label: "Mano de obra / otros", value: restoSinAsignar });
+      if (especialesSueldos > 0.5) personalItems.push({ label: "Aguinaldos / vacaciones", value: especialesSueldos });
       if (totalCargasSociales > 0) personalItems.push({ label: "Cargas sociales", value: totalCargasSociales });
       if (totalBoletasSindicales > 0) personalItems.push({ label: "Boletas sindicales", value: totalBoletasSindicales });
       const input = {

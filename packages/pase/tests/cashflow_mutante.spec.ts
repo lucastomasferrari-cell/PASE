@@ -113,4 +113,45 @@ test.describe("Cashflow — mutante (carga + clasificación + resumen)", () => {
       .select("id", { count: "exact", head: true }).eq("extracto_id", ext.extracto_id);
     expect(count).toBe(3); // sigue habiendo 3, no 6
   });
+
+  // Regresión (Lucas 12-jul): el aguinaldo (movimiento cat='SUELDOS' con
+  // pago_especial_id_ref, liquidacion_id NULL) DEBE contar en Sueldos del P&L,
+  // tanto devengado como percibido. Antes quedaba afuera (inflaba la ganancia).
+  test("cashflow_pyl_mes cuenta el aguinaldo (pago_especial) en Sueldos — devengado y percibido", async () => {
+    const monto = 123456;
+    const { data: emps } = await db.from("rrhh_empleados").select("id").eq("tenant_id", tenantId).limit(1);
+    if (!emps || emps.length === 0) throw new Error("Falta seed: al menos un empleado en el tenant de prueba");
+    const empId = emps[0].id as string;
+    const peId = crypto.randomUUID();
+    const movId = crypto.randomUUID();
+    const detalle = `[test ${SENT}] aguinaldo`;
+
+    // Idempotencia ante corridas previas que hayan dejado basura en el período.
+    await db.from("movimientos").delete()
+      .eq("local_id", localId).eq("cat", "SUELDOS")
+      .gte("fecha", "2030-01-01").lt("fecha", "2030-02-01")
+      .ilike("detalle", `%${SENT}%`).then(() => {}, () => {});
+
+    try {
+      await db.from("rrhh_pagos_especiales").insert({
+        id: peId, empleado_id: empId, tipo: "aguinaldo",
+        monto, monto_pagado: monto, pendiente: false, tenant_id: tenantId,
+      });
+      await db.from("movimientos").insert({
+        id: movId, fecha: "2030-01-15", cuenta: "MercadoPago", tipo: "Pago Aguinaldo",
+        cat: "SUELDOS", importe: -monto, detalle, local_id: localId,
+        pago_especial_id_ref: peId, tenant_id: tenantId, anulado: false,
+      });
+
+      const { data, error } = await db.rpc("cashflow_pyl_mes", { p_local_id: localId, p_periodo_mes: PERIODO });
+      expect(error).toBeNull();
+      const pyl = data as { devengado: { sueldos: number }; percibido: { sueldos: number } };
+      // Período aislado → el único sueldo del mes es este aguinaldo.
+      expect(Number(pyl.devengado.sueldos)).toBe(monto);
+      expect(Number(pyl.percibido.sueldos)).toBe(monto);
+    } finally {
+      await db.from("movimientos").delete().eq("id", movId).then(() => {}, () => {});
+      await db.from("rrhh_pagos_especiales").delete().eq("id", peId).then(() => {}, () => {});
+    }
+  });
 });
