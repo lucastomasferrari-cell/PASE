@@ -69,6 +69,10 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
     const cargar = async () => {
       setLoading(true);
       const { descriptor, categoria } = state;
+      // "Sin categoría" es la etiqueta que pone ordenarPorCategoria (eerrDetalle.ts)
+      // a las facturas/gastos con cat NULL o vacía. Hay que buscarlas por cat
+      // IS NULL / '' — NO por el texto literal (bug: el drill-down no mostraba nada).
+      const esSinCat = categoria === "Sin categoría";
       const [yr, mo] = mes.split("-").map(Number) as [number, number];
       const lastDay = new Date(yr, mo, 0).getDate();
       const desde = mes + "-01", hasta = mes + "-" + String(lastDay).padStart(2, "0");
@@ -80,9 +84,9 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
       if (descriptor.gastoTipo || descriptor.otros) {
         let gq = db.from("gastos")
           .select("id, fecha, monto, categoria, subcategoria, detalle, tipo")
-          .eq("categoria", categoria)
           .gte("fecha", desde).lte("fecha", hasta)
           .or("estado.neq.anulado,estado.is.null");
+        gq = esSinCat ? gq.or("categoria.is.null,categoria.eq.") : gq.eq("categoria", categoria);
         if (descriptor.gastoTipo) gq = gq.eq("tipo", descriptor.gastoTipo);
         gq = applyLocalScope(gq, user, lid);
         tareas.push(gq.then(({ data }) => {
@@ -104,9 +108,9 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
       if (descriptor.facturaBucket || descriptor.cmv) {
         let fq = db.from("facturas")
           .select("id, fecha, total, nro, detalle, prov_id, bucket, proveedores(nombre)")
-          .eq("cat", categoria)
           .gte("fecha", desde).lte("fecha", hasta)
           .or("estado.neq.anulada,estado.is.null");
+        fq = esSinCat ? fq.or("cat.is.null,cat.eq.") : fq.eq("cat", categoria);
         if (descriptor.facturaBucket) fq = fq.eq("bucket", descriptor.facturaBucket);
         if (descriptor.cmv) fq = fq.or("bucket.is.null,bucket.eq.cat_compra");
         fq = applyLocalScope(fq, user, lid);
