@@ -291,7 +291,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     // Discriminación fiscal AR (Lucas 10-jun) — todos 0 por default.
     iva27: 0, no_gravado: 0, exento: 0,
     iibb_caba: 0, iibb_ba: 0, iibb_otros: 0, iibb_otros_jurisdiccion: "",
-    perc_ganancias: 0, retencion_suss: 0,
+    perc_ganancias: 0, retencion_suss: 0, solo_iva: false,
   };
   const [form, setForm] = useState<FormFactura>(emptyForm);
   const [items, setItems] = useState<ItemFactura[]>([]);
@@ -688,6 +688,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       iibb_otros_jurisdiccion: f.iibb_otros_jurisdiccion ?? "",
       perc_ganancias: Number(f.perc_ganancias ?? 0),
       retencion_suss: Number(f.retencion_suss ?? 0),
+      solo_iva: !!f.solo_iva,
     });
     setItems([]);
     setModal(true);

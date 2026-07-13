@@ -131,7 +131,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const lid = localActivo ? parseInt(String(localActivo)) : null;
     let vq = db.from("ventas").select("monto, local_id").gte("fecha", desde).lte("fecha", hasta);
     vq = applyLocalScope(vq, user, lid);
-    let fq = db.from("facturas").select("total, bucket, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulada,estado.is.null");
+    let fq = db.from("facturas").select("total, bucket, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulada,estado.is.null").eq("solo_iva", false);
     fq = applyLocalScope(fq, user, lid);
     let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulado,estado.is.null");
     gq = applyLocalScope(gq, user, lid);
@@ -227,7 +227,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
       // Antes SELECT * traía JSON + campos auditoría innecesarios para reporte.
       let vq = db.from("ventas").select("fecha, monto, medio, local_id").gte("fecha",desde).lte("fecha",hasta);
       vq = applyLocalScope(vq, user, lid);
-      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo, bucket").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulada,estado.is.null");
+      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo, bucket").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulada,estado.is.null").eq("solo_iva", false);
       fq = applyLocalScope(fq, user, lid);
       let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulado,estado.is.null");
       gq = applyLocalScope(gq, user, lid);

@@ -50,6 +50,9 @@ export interface FormFactura {
   iibb_otros_jurisdiccion: string;
   perc_ganancias: number;
   retencion_suss: number;
+  // Solo para IVA: la factura existe para el Libro IVA pero NO computa en el
+  // resultado (EERR/Cashflow), porque el costo ya está cargado como gasto.
+  solo_iva: boolean;
 }
 
 // Forma del state form (cargar remito valorado).
