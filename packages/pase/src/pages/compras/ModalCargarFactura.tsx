@@ -349,12 +349,6 @@ export function ModalCargarFactura({
             </div>
             <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
           </div>
-          {!esEdicion && (
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", margin: "2px 0 6px", fontWeight: 400 }}>
-              <input type="checkbox" checked={form.solo_iva} onChange={e => setForm({ ...form, solo_iva: e.target.checked })} style={{ marginTop: 3 }} />
-              <span style={{ fontSize: 12, color: "var(--muted2)" }}>Solo para IVA — <b style={{ color: "var(--pase-text)" }}>no computa en el resultado</b> (el costo ya está cargado como gasto). Aparece en el Libro IVA pero no en el EERR.</span>
-            </label>
-          )}
           <div className="form2">
             <div className="field"><label>Vencimiento</label><input type="date" value={form.venc} onChange={e => setForm({ ...form, venc: e.target.value })} /></div>
             <div className="field"><label>Neto Gravado *</label><CurrencyInput value={form.neto} onChange={v => setForm({ ...form, neto: v })} aria-label="Neto gravado" /></div>

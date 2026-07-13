@@ -85,8 +85,6 @@ export interface Factura {
   iibb_otros_jurisdiccion?: string | null;
   perc_ganancias?: number;
   retencion_suss?: number;
-  // Solo IVA: existe para el Libro IVA pero NO computa en el EERR/Cashflow.
-  solo_iva?: boolean;
   // Path al archivo de comprobante en Supabase Storage (bucket "facturas").
   // Set por LectorFacturasIA al subir, leído por Compras → "Ver factura".
   imagen_url?: string | null;
