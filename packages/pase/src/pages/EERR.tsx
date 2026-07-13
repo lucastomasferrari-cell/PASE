@@ -94,6 +94,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [facturas,setFacturas]=useState<Factura[]>([]);
   const [gastos,setGastos]=useState<Gasto[]>([]);
   const [sueldos,setSueldos]=useState(0);
+  const [especialesSueldos,setEspecialesSueldos]=useState(0);
   const [sueldosDetalle,setSueldosDetalle]=useState<LiquidacionConEmpleado[]>([]);
   const [sueldoMovsPorLiq,setSueldoMovsPorLiq]=useState<Map<string,number>|null>(null);
   // Adelantos (y otros gastos de empleado) atribuidos a cada empleado, para
@@ -230,7 +231,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
       fq = applyLocalScope(fq, user, lid);
       let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulado,estado.is.null");
       gq = applyLocalScope(gq, user, lid);
-      const [{data:v},{data:f},{data:g},{data:liqData},{data:sueldoMovsData}]=await Promise.all([
+      const [{data:v},{data:f},{data:g},{data:liqData},{data:sueldoMovsData},{data:especialesData}]=await Promise.all([
         vq,
         fq,
         gq,
@@ -243,6 +244,15 @@ export default function EERR({ user, localActivo }: EERRProps) {
           .eq("cat", "SUELDOS")
           .eq("anulado", false)
           .not("liquidacion_id", "is", null),
+        // Aguinaldos y vacaciones (pagar_aguinaldo/pagar_vacaciones) → movimiento
+        // cat='SUELDOS' con pago_especial_id_ref (liquidacion_id NULL). El EERR los
+        // omitía; se cuentan como sueldo del mes en que se pagan (Lucas 12-jul).
+        db.from("movimientos")
+          .select("importe, local_id")
+          .eq("cat", "SUELDOS")
+          .eq("anulado", false)
+          .not("pago_especial_id_ref", "is", null)
+          .gte("fecha", desde).lte("fecha", hasta),
       ]);
       setVentas((v as Venta[]) || []);
       setFacturas((f as Factura[]) || []);
@@ -294,7 +304,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
       })() : null);
       const gastosEmpFilt = gastosEmpleado.filter(x => !lid || x.local_id === lid);
       const extraLabor = gastosEmpFilt.reduce((s, x) => s + (x.monto || 0), 0);
-      setSueldos(sueldosTotal + extraLabor);
+      const especialesTotal = ((especialesData as {importe:number, local_id:number}[]) || [])
+        .filter(m => !lid || m.local_id === lid)
+        .reduce((s, m) => s + Math.abs(m.importe || 0), 0);
+      setEspecialesSueldos(especialesTotal);
+      setSueldos(sueldosTotal + extraLabor + especialesTotal);
 
       // Atribuir cada gasto de empleado (adelanto/feriado/etc.) a su empleado,
       // para que el desglose de Sueldos muestre el sueldo completo por persona.
@@ -910,7 +924,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
               }).sort((a,b)=>b.total-a.total);
               return (
                 <div style={{paddingBottom:8}}>
-                  {filas.length===0&&restoSinAsignar<=0.5?(
+                  {filas.length===0&&restoSinAsignar<=0.5&&especialesSueldos<=0.5?(
                     <div className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>Sin sueldos pagados este mes</span></div>
                   ):(<>
                     {filas.map(({emp,total,liqs,ade})=>(
@@ -941,6 +955,18 @@ export default function EERR({ user, localActivo }: EERRProps) {
                         <div>
                           <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(restoSinAsignar)}</span>
                           <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(restoSinAsignar)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {especialesSueldos>0.5&&(
+                      <div className="eerr-row">
+                        <span style={{fontSize:11,color:"var(--muted2)"}}>
+                          Aguinaldos / vacaciones
+                          <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>SAC pagado este mes</span>
+                        </span>
+                        <div>
+                          <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(especialesSueldos)}</span>
+                          <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(especialesSueldos)}</span>
                         </div>
                       </div>
                     )}
