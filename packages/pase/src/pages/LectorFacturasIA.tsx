@@ -71,7 +71,7 @@ export default function LectorFacturasIA({ user, locales, localActivo, onSaved }
   // Locales del dropdown — solo los autorizados (encargado/admin/dueño).
   const visLocs = localesVisibles(user);
   const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
-  const { CATEGORIAS_COMPRA, categoriaToBucket } = useCategorias();
+  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, categoriaToBucket } = useCategorias();
   const [archivo,setArchivo]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
   const [loading,setLoading]=useState(false);
@@ -589,7 +589,13 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
 
                 <div className="field"><label>Proveedor *</label>
                   <div style={{display:"flex",gap:6}}>
-                    <select value={form.prov_id} onChange={e=>setForm({...form,prov_id:e.target.value})}
+                    <select value={form.prov_id} onChange={e=>{
+                        const pid=e.target.value;
+                        const prov=proveedores.find(p=>String(p.id)===pid);
+                        // Al elegir proveedor se autocompleta su categoría default
+                        // (proveedores.cat). El usuario la puede cambiar abajo.
+                        setForm(f=>({...f,prov_id:pid,...(prov?.cat?{cat:prov.cat}:{})}));
+                      }}
                       style={{flex:1,border:campoBorder("razon_social")}}>
                       <option value="">Seleccioná...</option>
                       {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
@@ -603,6 +609,35 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
                       })}>
                       + Nuevo
                     </button>
+                  </div>
+                </div>
+                <div className="field"><label>Categoría EERR</label>
+                  <select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}
+                    style={{width:"100%",border: form.cat ? "1px solid var(--bd)" : "1px solid var(--acc)"}}>
+                    <option value="">Sin categoría → cae en CMV (mercadería)</option>
+                    <optgroup label="Mercadería (CMV)">
+                      {CATEGORIAS_COMPRA.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                    <optgroup label="Gastos Fijos">
+                      {GASTOS_FIJOS.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                    <optgroup label="Gastos Variables">
+                      {GASTOS_VARIABLES.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                    <optgroup label="Publicidad y MKT">
+                      {GASTOS_PUBLICIDAD.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                    <optgroup label="Comisiones">
+                      {COMISIONES_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                    <optgroup label="Impuestos">
+                      {GASTOS_IMPUESTOS.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                  </select>
+                  <div style={{fontSize:10,color:"var(--muted)",marginTop:3}}>
+                    {form.cat
+                      ? "Viene de la categoría del proveedor. Cambiala si no corresponde."
+                      : "⚠️ Sin categoría cae en Mercadería (CMV). Elegí una si es un gasto."}
                   </div>
                 </div>
                 <div className="form2">
