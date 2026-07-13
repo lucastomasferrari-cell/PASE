@@ -71,7 +71,7 @@ export default function LectorFacturasIA({ user, locales, localActivo, onSaved }
   // Locales del dropdown — solo los autorizados (encargado/admin/dueño).
   const visLocs = localesVisibles(user);
   const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
-  const { CATEGORIAS_COMPRA } = useCategorias();
+  const { CATEGORIAS_COMPRA, categoriaToBucket } = useCategorias();
   const [archivo,setArchivo]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
   const [loading,setLoading]=useState(false);
@@ -464,6 +464,10 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
         estado, pagos: [], imagen_url,
         fecha: form.fecha || null, venc: form.venc || null,
         tipo: "factura",
+        // bucket: deriva del tipo de la cat en config_categorias, IGUAL que el
+        // form manual (Compras.tsx:577). Sin esto la factura del Lector quedaba
+        // con bucket=NULL → el EERR la trataba como CMV sin importar la categoría.
+        bucket: form.cat ? (categoriaToBucket[form.cat] ?? null) : null,
       };
       const {error:insErr} = await db.rpc("crear_factura_completa", {
         p_factura: nueva,
