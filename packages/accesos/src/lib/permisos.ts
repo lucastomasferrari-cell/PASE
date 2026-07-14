@@ -27,7 +27,7 @@ export const CATEGORIAS: CategoriaPermisos[] = [
       { slug: 'caja', label: 'Caja', descripcion: 'Ver y operar la caja / tesorería.' },
       { slug: 'ventas', label: 'Ventas', descripcion: 'Cargar y ver cierres de ventas.' },
       { slug: 'compras', label: 'Compras', descripcion: 'Cargar/pagar facturas y remitos.' },
-      { slug: 'cmv', label: 'CMV', descripcion: 'Costo de mercadería por rubro con drill-down a cada compra.' },
+      { slug: 'cmv', label: 'Prime Cost', descripcion: 'CMV + costo laboral: prime cost por mes con drill-down a compras y sueldos.' },
       { slug: 'remitos', label: 'Remitos', descripcion: 'Gestionar remitos.' },
       { slug: 'gastos', label: 'Gastos', descripcion: 'Cargar gastos sin factura.' },
       { slug: 'proveedores', label: 'Proveedores', descripcion: 'ABM de proveedores.' },

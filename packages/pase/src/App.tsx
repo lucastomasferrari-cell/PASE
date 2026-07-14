@@ -29,7 +29,7 @@ const Ventas = lazy(() => import("./pages/Ventas"));
 const Compras = lazy(() => import("./pages/Compras"));
 const Caja = lazy(() => import("./pages/Caja"));
 const EERR = lazy(() => import("./pages/EERR"));
-const CMV = lazy(() => import("./pages/CMV"));
+const PrimeCost = lazy(() => import("./pages/PrimeCost"));
 const Contador = lazy(() => import("./pages/herramientas/ContadorIVA"));
 const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
@@ -1005,7 +1005,7 @@ function AppMain() {
               } />
               <Route path="/reportes" element={<EERR {...props}/>} />
               <Route path="/cmv" element={
-                user && tienePermiso(user, "cmv") ? <CMV user={user} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+                user && tienePermiso(user, "cmv") ? <PrimeCost user={user} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
               } />
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
               <Route path="/utilidades" element={<Utilidades {...props}/>} />

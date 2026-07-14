@@ -67,7 +67,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // etapa (cruce compras × stock × ventas por receta, hoy boceto).
   // OJO: el sidebar VISIBLE se arma desde el array `nav` hardcodeado en
   // Layout.tsx, no desde acá — este array alimenta getDefaultRoute/redirects.
-  { path: "/cmv",                        slug: "cmv",           label: "CMV",             sec: "Operación" },
+  { path: "/cmv",                        slug: "cmv",           label: "Prime Cost",      sec: "Operación" },
 
   // === Dirección ===
   // Finanzas fusionada en Negocio (rediseño 11-jun) — /finanzas redirige.

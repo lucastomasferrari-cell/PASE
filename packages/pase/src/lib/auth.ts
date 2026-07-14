@@ -84,7 +84,7 @@ export const MODULOS = [
   // CMV (Operación, 14-jul): desglose del Costo de Mercadería por rubro con el
   // drill-down de Reportes (rubro → compras → compra). Módulo propio para que
   // sea grantable desde Usuarios. Dueño/superadmin lo ven siempre (bypass).
-  { slug:"cmv", label:"CMV", icon:"🧮" },
+  { slug:"cmv", label:"Prime Cost (CMV + labor)", icon:"🧮" },
   { slug:"ventas", label:"Ventas", icon:"↑" },
   // 'reservas' OCULTADO 2026-05-18 (Lucas: "no sirve de nada y en todo
   // caso vive en COMANDA"). La tabla `reservas` y la página standalone
