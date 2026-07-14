@@ -29,6 +29,7 @@ const Ventas = lazy(() => import("./pages/Ventas"));
 const Compras = lazy(() => import("./pages/Compras"));
 const Caja = lazy(() => import("./pages/Caja"));
 const EERR = lazy(() => import("./pages/EERR"));
+const CMV = lazy(() => import("./pages/CMV"));
 const Contador = lazy(() => import("./pages/herramientas/ContadorIVA"));
 const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
@@ -1003,6 +1004,9 @@ function AppMain() {
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />
               <Route path="/reportes" element={<EERR {...props}/>} />
+              <Route path="/cmv" element={
+                user && tienePermiso(user, "compras") ? <CMV user={user} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+              } />
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
               <Route path="/utilidades" element={<Utilidades {...props}/>} />
               <Route path="/ayuda" element={<Ayuda/>} />

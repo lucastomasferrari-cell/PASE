@@ -61,6 +61,11 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // (estilo Compras). Reemplaza las 2 entries que estaban sueltas en
   // Dirección. Permiso bajo slug 'rentabilidad'.
   { path: "/recetario",                  slug: "rentabilidad",  label: "Recetario",       sec: "Operación" },
+  // CMV (Operación, 14-jul): desglose del Costo de Mercadería por rubro con el
+  // mismo drill-down que Reportes (rubro → compras → compra). Slug 'compras':
+  // quien maneja las compras ve su rollup de CMV. Es el hogar de la próxima
+  // etapa (cruce compras × stock × ventas por receta, hoy boceto).
+  { path: "/cmv",                        slug: "compras",       label: "CMV",             sec: "Operación" },
 
   // === Dirección ===
   // Finanzas fusionada en Negocio (rediseño 11-jun) — /finanzas redirige.
