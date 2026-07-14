@@ -22,5 +22,12 @@ export default defineConfig([
       ecmaVersion: 2022,
       globals: globals.browser,
     },
+    rules: {
+      // Convención del paquete: carga de datos on-mount con flag de loading
+      // (useEffect(() => void cargar(), [cargar])). La regla nueva de react-hooks
+      // la marca como falso positivo en TODAS las páginas Admin. Se desactiva a
+      // nivel paquete en vez de sembrar disables por línea.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ]);

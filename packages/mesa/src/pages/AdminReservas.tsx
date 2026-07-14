@@ -164,7 +164,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
       table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ccc;padding:5px 8px;text-align:left}
       th{background:#f0f4f8}</style></head><body>
       <h1>Reservas — ${localNombre}</h1><p>${filtradas.length} reservas · ${totalPersonas} comensales</p>${filas}
-      <script>window.onload=function(){window.print()}<\/script></body></html>`);
+      <script>window.onload=function(){window.print()}</script></body></html>`);
     w.document.close();
   }
 

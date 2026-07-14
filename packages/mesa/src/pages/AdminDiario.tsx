@@ -5,11 +5,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Users, X, Check, Armchair, Ban, MessageCircle, CalendarX, UserPlus, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, X, Check, Armchair, Ban, MessageCircle, CalendarX, CalendarClock, UserPlus, Pencil } from 'lucide-react';
 import {
   listReservas, listMesasDelLocal, cambiarEstadoReserva, sentarDePaso,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/lib/reservasService';
+import { getEstadoDia, setExcepcion, borrarExcepcion, type EstadoDiaReservas } from '@/lib/excepcionesService';
 import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
 import { calcularRango, bloqueTimeline } from '@/lib/reservasUtils';
 import { WalkInDialog } from '@/components/WalkInDialog';
@@ -132,6 +133,7 @@ export function AdminDiario({ localId, localNombre }: Props) {
         {!mismoDia(fecha, hoy) && (
           <button onClick={() => setFecha(new Date())} className="text-sm text-brand-600 hover:underline">Hoy</button>
         )}
+        <DiaEspecialControl localId={localId} fecha={fecha} />
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-ink-muted">{reservas.length} reservas · {totalCovers} comensales</span>
           <button onClick={() => setDePaso(true)}
@@ -226,6 +228,127 @@ export function AdminDiario({ localId, localNombre }: Props) {
   );
 }
 
+
+function fechaISOLocal(f: Date) {
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+}
+
+// Botón "día especial": abrir/cerrar la fecha que estás viendo, sin tocar el
+// horario semanal. Escribe una excepción por fecha que el motor de reservas
+// respeta (afecta la disponibilidad PÚBLICA; las reservas manuales del panel no).
+function DiaEspecialControl({ localId, fecha }: { localId: number; fecha: Date }) {
+  const [estado, setEstado] = useState<EstadoDiaReservas | null>(null);
+  const [panel, setPanel] = useState(false);
+  const [modo, setModo] = useState<'abierto' | 'cerrado'>('cerrado');
+  const [abre, setAbre] = useState('20:00');
+  const [cierra, setCierra] = useState('00:00');
+  const [guardando, setGuardando] = useState(false);
+
+  const fechaISO = fechaISOLocal(fecha);
+  const dow = fecha.getDay();
+
+  const cargar = useCallback(async () => {
+    const { data, error } = await getEstadoDia(localId, fechaISO, dow);
+    if (error) { toast.error(error); return; }
+    setEstado(data);
+    if (data?.excepcion) {
+      setModo(data.excepcion.cerrado ? 'cerrado' : 'abierto');
+      setAbre(data.excepcion.abre ?? data.normalAbre ?? '20:00');
+      setCierra(data.excepcion.cierra ?? data.normalCierra ?? '00:00');
+    } else {
+      setModo(data?.normalAbierto ? 'cerrado' : 'abierto'); // sugerir lo contrario a lo normal
+      setAbre(data?.normalAbre ?? '20:00');
+      setCierra(data?.normalCierra ?? '00:00');
+    }
+  }, [localId, fechaISO, dow]);
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  const excep = estado?.excepcion ?? null;
+  const efectivoAbierto = excep ? !excep.cerrado : !!estado?.normalAbierto;
+
+  async function guardar() {
+    setGuardando(true);
+    const { error } = await setExcepcion(localId, fechaISO, modo === 'cerrado', abre, cierra);
+    setGuardando(false);
+    if (error) { toast.error(error); return; }
+    toast.success('Día especial guardado');
+    setPanel(false); void cargar();
+  }
+  async function volverNormal() {
+    const { error } = await borrarExcepcion(localId, fechaISO);
+    if (error) { toast.error(error); return; }
+    toast.success('Volvió al horario normal');
+    setPanel(false); void cargar();
+  }
+
+  return (
+    <>
+      <button onClick={() => setPanel(true)}
+              title="Abrir o cerrar este día puntual, sin cambiar el horario semanal"
+              className={`rounded-lg border px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5 ${
+                excep
+                  ? (excep.cerrado ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700')
+                  : 'border-ink/15 bg-white text-ink-soft hover:bg-brand-50'
+              }`}>
+        <CalendarClock className="h-4 w-4" />
+        {excep
+          ? (excep.cerrado ? 'Cerrado (especial)' : `Abierto especial ${excep.abre}–${excep.cierra}`)
+          : (efectivoAbierto ? 'Reservas: abiertas' : 'Reservas: cerradas')}
+      </button>
+
+      {panel && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setPanel(false)}>
+          <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-medium">Día especial</h3>
+                <p className="text-sm text-ink-muted">{labelFecha(fecha)}</p>
+              </div>
+              <button onClick={() => setPanel(false)} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
+            </div>
+
+            <p className="text-xs text-ink-muted">
+              Normalmente este día está{' '}
+              {estado?.normalAbierto
+                ? <strong>abierto {estado.normalAbre}–{estado.normalCierra}</strong>
+                : <strong>cerrado</strong>}. Acá lo cambiás <strong>solo para esta fecha</strong>, sin tocar el horario semanal.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setModo('abierto')}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium ${modo === 'abierto' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-ink/15 bg-white text-ink-soft'}`}>Abierto</button>
+              <button onClick={() => setModo('cerrado')}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium ${modo === 'cerrado' ? 'border-red-300 bg-red-50 text-red-700' : 'border-ink/15 bg-white text-ink-soft'}`}>Cerrado</button>
+            </div>
+
+            {modo === 'abierto' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ink-soft">Desde</label>
+                  <input type="time" value={abre} onChange={(e) => setAbre(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ink-soft">Hasta</label>
+                  <input type="time" value={cierra} onChange={(e) => setCierra(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              {excep && (
+                <button onClick={() => void volverNormal()} className="flex-1 rounded-lg border border-ink/15 py-2.5 text-sm font-medium hover:bg-ink/5">Volver a lo normal</button>
+              )}
+              <button onClick={() => void guardar()} disabled={guardando}
+                      className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 function FilaTimeline({
   label, sublabel, reservas, rangoIni, anchoGrid, nowLeft, onSel, horas, destacado,
