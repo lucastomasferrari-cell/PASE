@@ -428,4 +428,9 @@ tbody tr.clickable:hover {
 @media (min-width: 1025px) and (max-width: 1280px) {
   .main { padding: 24px 28px 28px; }
   .grid4 { grid-template-columns: repeat(2, 1fr); }
+  /* En este rango .main baja su padding derecho a 28px, pero la barra flotante
+     (campana/tema/avatar, position:fixed a ~137px del borde) sigue ahí y tapaba
+     los controles derechos del header (ej. el selector de mes). Reservamos ese
+     ancho SOLO en el header — los paneles de abajo siguen a ancho completo. */
+  .ph-row { padding-right: 130px; }
 }
