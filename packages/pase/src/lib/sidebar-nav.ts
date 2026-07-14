@@ -62,10 +62,12 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // Dirección. Permiso bajo slug 'rentabilidad'.
   { path: "/recetario",                  slug: "rentabilidad",  label: "Recetario",       sec: "Operación" },
   // CMV (Operación, 14-jul): desglose del Costo de Mercadería por rubro con el
-  // mismo drill-down que Reportes (rubro → compras → compra). Slug 'compras':
-  // quien maneja las compras ve su rollup de CMV. Es el hogar de la próxima
+  // mismo drill-down que Reportes (rubro → compras → compra). Módulo propio
+  // 'cmv' (en MODULOS) → grantable desde Usuarios. Es el hogar de la próxima
   // etapa (cruce compras × stock × ventas por receta, hoy boceto).
-  { path: "/cmv",                        slug: "compras",       label: "CMV",             sec: "Operación" },
+  // OJO: el sidebar VISIBLE se arma desde el array `nav` hardcodeado en
+  // Layout.tsx, no desde acá — este array alimenta getDefaultRoute/redirects.
+  { path: "/cmv",                        slug: "cmv",           label: "CMV",             sec: "Operación" },
 
   // === Dirección ===
   // Finanzas fusionada en Negocio (rediseño 11-jun) — /finanzas redirige.

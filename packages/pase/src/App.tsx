@@ -1005,7 +1005,7 @@ function AppMain() {
               } />
               <Route path="/reportes" element={<EERR {...props}/>} />
               <Route path="/cmv" element={
-                user && tienePermiso(user, "compras") ? <CMV user={user} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+                user && tienePermiso(user, "cmv") ? <CMV user={user} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
               } />
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
               <Route path="/utilidades" element={<Utilidades {...props}/>} />

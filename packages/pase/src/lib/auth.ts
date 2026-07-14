@@ -26,7 +26,7 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   // permisos de UI (todos los módulos del MODULOS array).
   superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","rentabilidad","mensajeria"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","cmv","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","rentabilidad","mensajeria"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["caja","ventas"] },
   // Rol "compras" incluye compras_anular por retro-compatibilidad (antes
   // anulaba sin chequeo). Si querés un "compras lite" sin poder anular,
@@ -81,6 +81,10 @@ export const MODULOS = [
   // Sidebar consolidado actual (Operación / Dirección / Módulos / Sistema)
   { slug:"caja", label:"Caja", icon:"💰" },
   { slug:"compras", label:"Compras", icon:"📄" },
+  // CMV (Operación, 14-jul): desglose del Costo de Mercadería por rubro con el
+  // drill-down de Reportes (rubro → compras → compra). Módulo propio para que
+  // sea grantable desde Usuarios. Dueño/superadmin lo ven siempre (bypass).
+  { slug:"cmv", label:"CMV", icon:"🧮" },
   { slug:"ventas", label:"Ventas", icon:"↑" },
   // 'reservas' OCULTADO 2026-05-18 (Lucas: "no sirve de nada y en todo
   // caso vive en COMANDA"). La tabla `reservas` y la página standalone
