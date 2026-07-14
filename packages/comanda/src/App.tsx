@@ -60,6 +60,7 @@ const PosLayout = lazy(() => import('./pages/Pos/PosLayout').then(m => ({ defaul
 const SalonView = lazy(() => import('./pages/Pos/SalonView').then(m => ({ default: m.SalonView })));
 const MostradorView = lazy(() => import('./pages/Pos/MostradorView').then(m => ({ default: m.MostradorView })));
 const PedidosHub = lazy(() => import('./pages/Pos/PedidosHub').then(m => ({ default: m.PedidosHub })));
+const MarketplaceHomeAdmin = lazy(() => import('./pages/Marketplace/MarketplaceHomeAdmin').then(m => ({ default: m.MarketplaceHomeAdmin })));
 const PedidoDetalle = lazy(() => import('./pages/Pos/PedidoDetalle').then(m => ({ default: m.PedidoDetalle })));
 const VentaScreen = lazy(() => import('./pages/Pos/VentaScreen').then(m => ({ default: m.VentaScreen })));
 const HandheldView = lazy(() => import('./pages/Pos/HandheldView').then(m => ({ default: m.HandheldView })));
@@ -252,6 +253,8 @@ export default function App() {
 
                 {/* Admin con sidebar permanente (sprint 6) */}
                 <Route element={<AdminLayout />}>
+                  {/* ── Marketplace ───────────────────────────────────── */}
+                  <Route path="/marketplace/inicio" element={<MarketplaceHomeAdmin />} />
                   {/* ── Reportes ──────────────────────────────────────── */}
                   <Route path="/reportes" element={<Navigate to="/reportes/dashboard" replace />} />
                   <Route path="/reportes" element={<ReportesLayout />}>

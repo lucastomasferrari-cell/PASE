@@ -1,6 +1,6 @@
 import {
   BarChart3, BookOpen, Utensils, Users, DollarSign,
-  Globe, Printer, Megaphone, User, Plug, Settings, CreditCard, Package,
+  Globe, Printer, Megaphone, User, Plug, Settings, CreditCard, Package, Store,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -130,6 +130,21 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
       { slug: 'logbook',         label: 'Logbook',           href: '/caja/logbook' },
       { slug: 'conciliacion-mp', label: 'Conciliación MP',   href: '/pagos/conciliacion-mp', badge: 'soon' },
       { slug: 'settlements',     label: 'Settlements',       href: '/pagos/settlements',     badge: 'soon' },
+    ],
+  },
+  {
+    slug: 'marketplace',
+    label: 'Marketplace',
+    icon: Store,
+    href: '/marketplace/inicio',
+    requiredPermission: 'comanda.online.gestionar',
+    subItems: [
+      { slug: 'inicio',   label: 'Inicio',            href: '/marketplace/inicio' },
+      { slug: 'pedidos',  label: 'Pedidos',           href: '/pos/pedidos' },
+      { slug: 'config',   label: 'Configuración tienda', href: '/configuracion/local' },
+      { slug: 'precios',  label: 'Lista de precios',  href: '/menu/lista-precios' },
+      { slug: 'resenas',  label: 'Reseñas',           href: '/clientes/resenas' },
+      { slug: 'reportes', label: 'Reportes (canales)', href: '/reportes/canales' },
     ],
   },
   {
