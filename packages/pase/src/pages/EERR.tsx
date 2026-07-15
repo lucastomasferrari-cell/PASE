@@ -40,7 +40,6 @@ const DETALLE_SECCIONES: Record<string, DetalleDescriptor> = {
   comision:   { gastoTipo: "comision",    facturaBucket: "gasto_comision" },
   impuesto:   { gastoTipo: "impuesto",    facturaBucket: "gasto_impuesto" },
   otros:      { gastoTipo: null,          facturaBucket: null,               otros: true },
-  retiro:     { gastoTipo: "retiro_socio", facturaBucket: null },
 };
 
 // Recharts pesa ~250KB. Se code-splittea aparte para que el chunk inicial
@@ -88,7 +87,7 @@ const fmtMesLabel = (mes: string): string => {
 };
 
 export default function EERR({ user, localActivo }: EERRProps) {
-  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, RETIROS_SOCIOS } = useCategorias();
+  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } = useCategorias();
   const { mediosDisponibles } = useMediosCobro();
   const [ventas,setVentas]=useState<Venta[]>([]);
   const [facturas,setFacturas]=useState<Factura[]>([]);
@@ -365,19 +364,16 @@ export default function EERR({ user, localActivo }: EERRProps) {
   // propia (Lucas 16-jun). Se excluye de Gastos Fijos para no contar doble.
   const totalBoletasSindicales=gastos.filter((g)=>g.categoria==="BOLETAS SINDICALES").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo"&&g.categoria!=="CARGAS SOCIALES"&&g.categoria!=="BOLETAS SINDICALES").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_fijo"),"total");
-  const totalGastosVar=gastos.filter((g)=>g.tipo==="variable").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_variable"),"total");
+  // PROPINA excluida del EERR (Lucas 10-jul): la propina es plata que el
+  // cliente paga al mozo, no gasto operativo del negocio. Se filtra tanto
+  // del total como del desglose por categoría (ver porCatVar más abajo).
+  const totalGastosVar=gastos.filter((g)=>g.tipo==="variable" && g.categoria !== "PROPINA").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_variable"),"total");
   const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
   const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
   const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_impuesto"),"total");
   const totalOtrosGastos=gastos.filter((g)=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo)).reduce((s, g)=>s+(g.monto||0),0);
-  // Retiros de socios: distribución de utilidades / compras personales pagadas
-  // por el negocio. NO suma a gastos operativos; se muestra DESPUÉS de Util.
-  // Neta. Incluye TODO el tipo retiro_socio (Retiro socio, COMPRA ONLINE, etc.)
-  // EXCEPTO "RETIRO EFECTIVO", que es un movimiento de caja ya contado y el EERR
-  // ignora a propósito (Lucas 22-jun: COMPRA ONLINE SÍ es retiro de socios).
-  const ES_RETIRO = (g: { tipo: string; categoria: string | null }) =>
-    g.tipo === "retiro_socio" && g.categoria !== "RETIRO EFECTIVO";
-  const totalRetiros=gastos.filter(ES_RETIRO).reduce((s, g)=>s+(g.monto||0),0);
+  // Retiros de socios: excluidos del EERR (Lucas 10-jul). La distribución de
+  // utilidades se ve en el módulo Utilidades/Reparto, no acá.
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalBoletasSindicales-totalPublicidad-totalComisiones-totalImpuestos-totalOtrosGastos;
@@ -386,9 +382,6 @@ export default function EERR({ user, localActivo }: EERRProps) {
   // día. Benchmark típico ≤60% de las ventas (verde); 60-65% amarillo; >65% rojo.
   const primeCost=totalCMV+sueldos+totalCargasSociales+totalBoletasSindicales;
   const primePct=totalVentas>0?(primeCost/totalVentas)*100:0;
-  // utilNetaPostRetiros: lo que queda al socio después de retirar lo que
-  // efectivamente retiró. Si retiró todo, es ~0; si no retiró, == utilNeta.
-  const utilNetaPostRetiros=utilNeta-totalRetiros;
   const pct=(n: number)=>totalVentas>0?((n/totalVentas)*100).toFixed(1)+"%":"0%";
 
   // Itera sobre los medios que tienen ventas en el período (no sobre un
@@ -425,11 +418,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
   ];
   const porCatCMV=ordenarPorCategoria(facturasCMV.map(f=>({cat:f.cat,monto:Number(f.total||0)})), CATEGORIAS_COMPRA);
   const porCatFijos=ordenarPorCategoria(itemsGastoFact("fijo","gasto_fijo",["CARGAS SOCIALES","BOLETAS SINDICALES"]), GASTOS_FIJOS.filter(c=>c!=="CARGAS SOCIALES"&&c!=="BOLETAS SINDICALES"));
-  const porCatVar=ordenarPorCategoria(itemsGastoFact("variable","gasto_variable"), GASTOS_VARIABLES);
+  const porCatVar=ordenarPorCategoria(itemsGastoFact("variable","gasto_variable",["PROPINA"]), GASTOS_VARIABLES);
   const porCatPub=ordenarPorCategoria(itemsGastoFact("publicidad","gasto_publicidad"), GASTOS_PUBLICIDAD);
   const porCatCom=ordenarPorCategoria(itemsGastoFact("comision","gasto_comision"), COMISIONES_CATS);
   const porCatImp=ordenarPorCategoria(itemsGastoFact("impuesto","gasto_impuesto"), GASTOS_IMPUESTOS);
-  const porCatRet=ordenarPorCategoria(gastos.filter(ES_RETIRO).map(g=>({cat:g.categoria,monto:Number(g.monto||0)})), RETIROS_SOCIOS);
   const otrosGastosArr=gastos.filter(g=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo));
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
@@ -806,17 +798,6 @@ export default function EERR({ user, localActivo }: EERRProps) {
                   <ERow label="Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
                   {totalOtrosGastos!==0&&<ERow label="Otros Gastos" valor={-totalOtrosGastos} color="var(--danger)" big={false}/>}
                   <ERow label="Utilidad Neta" valor={utilNeta} color={utilNeta>=0?"var(--success)":"var(--danger)"} big={true}/>
-                  {/* Retiros de socios: distribución de utilidades. NO restan
-                      a Util. Neta arriba — la utilidad del negocio se ve sin
-                      contar lo que se llevaron los socios. Esta sección
-                      informa cuánto se distribuyó. */}
-                  {totalRetiros !== 0 && (
-                    <>
-                      <div style={{borderTop:"1px dashed var(--bd2)",margin:"8px 0"}}/>
-                      <ERow label="Retiros de Socios" valor={-totalRetiros} color="var(--info)" big={false}/>
-                      <ERow label="Resultado del socio" valor={utilNetaPostRetiros} color={utilNetaPostRetiros>=0?"var(--success)":"var(--danger)"} big={false}/>
-                    </>
-                  )}
                 </div>
               ) : (
                 <div style={{padding:"4px 0 12px",overflowX:"auto"}}>
@@ -991,9 +972,6 @@ export default function EERR({ user, localActivo }: EERRProps) {
             <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.comision!)}/>
             <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.impuesto!)}/>
             {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.otros!)}/>}
-            {totalRetiros !== 0 && (
-              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.retiro!)}/>
-            )}
           </div>
         </>
       )}
