@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Delete } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Delete, LayoutGrid, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
+import { db } from '@/lib/supabase';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -15,14 +17,15 @@ import { cn } from '@/lib/utils';
 // conserva su índigo/navy — sólo esta pantalla de entrada usa el celeste.
 const labelCls = 'block text-sm font-medium text-[#1A3A5E] dark:text-[#F0F4F8] mb-1.5';
 const keyCls =
-  'h-14 rounded-lg border border-[#D0DCEA] dark:border-[#3F4D6E] '
-  + 'text-xl font-medium text-[#1A3A5E] dark:text-[#F0F4F8] '
+  'h-11 rounded-lg border border-[#D0DCEA] dark:border-[#3F4D6E] '
+  + 'text-lg font-medium text-[#1A3A5E] dark:text-[#F0F4F8] '
   + 'hover:bg-[#EAF3FB] dark:hover:bg-[#1E3155] active:scale-[0.97] '
   + 'transition disabled:opacity-50 grid place-items-center select-none';
 
 export function PinPad() {
   const { user } = useAuth();
   const { loginPin } = useAuthPos();
+  const navigate = useNavigate();
   const [localId, setLocalActivo] = useLocalActivo(user);
   const [locales, setLocales] = useState<LocalSimple[]>([]);
   const [pin, setPin] = useState('');
@@ -38,7 +41,8 @@ export function PinPad() {
     if (pin.length === 4 && !trying && localId !== null) {
       void trySubmit();
     }
-  }, [pin, trying, localId]); // trySubmit referenciada antes de declarar — OK por hoisting de funciones nombradas
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- trySubmit referenciada antes de declarar (hoisting); no debe re-crear el effect.
+  }, [pin, trying, localId]);
 
   // Soporte teclado físico
   useEffect(() => {
@@ -90,32 +94,39 @@ export function PinPad() {
     setError(null);
   }
 
+  // Cierra la sesión del DISPOSITIVO (Supabase). El AuthGate detecta que ya no
+  // hay sesión y manda a /login. Sirve si es la cuenta equivocada.
+  async function cerrarSesion() {
+    await db.auth.signOut();
+    navigate('/login', { replace: true });
+  }
+
   return (
     <div className="min-h-screen grid place-items-center px-4 bg-[#EFF3F8] dark:bg-[#0C1220]">
-      <div className="relative w-full max-w-[400px] rounded-2xl border border-[#E0EAF4] dark:border-[#2A3550] bg-white dark:bg-[#1A2540] shadow-[0_2px_4px_rgba(26,58,94,0.04),0_4px_16px_rgba(26,58,94,0.08)] p-8">
-        <div className="absolute top-4 right-4">
+      <div className="relative w-full max-w-[320px] rounded-2xl border border-[#E0EAF4] dark:border-[#2A3550] bg-white dark:bg-[#1A2540] shadow-[0_2px_4px_rgba(26,58,94,0.04),0_4px_16px_rgba(26,58,94,0.08)] p-6">
+        <div className="absolute top-3 right-3">
           <ThemeToggle />
         </div>
 
         {/* Marca */}
-        <div className="mb-6">
-          <div className="text-[26px] leading-none font-medium tracking-tight text-[#1A3A5E] dark:text-[#F0F4F8]">
+        <div className="mb-4">
+          <div className="text-[22px] leading-none font-medium tracking-tight text-[#1A3A5E] dark:text-[#F0F4F8]">
             comanda<span className="text-[#F5C518]">.</span>
           </div>
-          <p className="mt-2 text-xs text-[#6E8CAB] dark:text-[#93A8C2]">
+          <p className="mt-1.5 text-xs text-[#6E8CAB] dark:text-[#93A8C2]">
             Ingresá tu PIN de 4 dígitos.
           </p>
         </div>
 
         {/* Selector de local */}
         {locales.length > 1 && (
-          <div className="mb-5">
+          <div className="mb-4">
             <label className={labelCls}>Local</label>
             <Select
               value={localId !== null ? String(localId) : ''}
               onValueChange={(v) => setLocalActivo(Number(v))}
             >
-              <SelectTrigger className="h-11 text-sm rounded-lg border-[#D0DCEA] dark:border-[#3F4D6E] bg-white dark:bg-[#0C1220]">
+              <SelectTrigger className="h-10 text-sm rounded-lg border-[#D0DCEA] dark:border-[#3F4D6E] bg-white dark:bg-[#0C1220]">
                 <SelectValue placeholder="Elegir local…" />
               </SelectTrigger>
               <SelectContent>
@@ -130,12 +141,12 @@ export function PinPad() {
         )}
 
         {/* PIN dots */}
-        <div className="flex justify-center gap-3 my-7" aria-live="polite">
+        <div className="flex justify-center gap-3 my-5" aria-live="polite">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
               className={cn(
-                'h-4 w-4 rounded-full border-2 transition-colors',
+                'h-3.5 w-3.5 rounded-full border-2 transition-colors',
                 pin.length > i
                   ? 'bg-[#75AADB] border-[#75AADB]'
                   : 'border-[#D0DCEA] dark:border-[#3F4D6E] bg-transparent',
@@ -152,7 +163,7 @@ export function PinPad() {
         )}
 
         {/* Keypad */}
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-3 gap-2">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
             <button key={digit} type="button" className={keyCls} disabled={trying}
               onClick={() => handleDigit(digit)}>
@@ -174,8 +185,20 @@ export function PinPad() {
           </button>
         </div>
 
-        <p className="text-xs text-[#6E8CAB] dark:text-[#93A8C2] text-center mt-6">
-          Si no tenés PIN, andá a Settings → Empleados POS desde otro dispositivo.
+        {/* Salidas: no todos vienen a operar el POS. */}
+        <div className="mt-5 pt-4 border-t border-[#E0EAF4] dark:border-[#2A3550] flex items-center justify-between gap-2">
+          <button type="button" onClick={() => navigate('/reportes/dashboard')}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1A3A5E] dark:text-[#93A8C2] hover:text-[#75AADB] transition-colors">
+            <LayoutGrid className="h-3.5 w-3.5" /> Panel de administración
+          </button>
+          <button type="button" onClick={() => void cerrarSesion()}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6E8CAB] dark:text-[#93A8C2] hover:text-[#C0392B] transition-colors">
+            <LogOut className="h-3.5 w-3.5" /> Cerrar sesión
+          </button>
+        </div>
+
+        <p className="text-[11px] text-[#6E8CAB] dark:text-[#93A8C2] text-center mt-3">
+          ¿No tenés PIN? Pedíselo al encargado, o crealo en Configuración → Empleados.
         </p>
       </div>
     </div>
