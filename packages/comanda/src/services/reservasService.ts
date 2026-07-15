@@ -1,20 +1,12 @@
-// reservasService — reservas de mesa online.
+// reservasService — LECTURAS de reservas para el POS/CRM de COMANDA.
 //
-// La gestión de reservas vive en la app MESA. En COMANDA sólo queda el alta
-// pública desde la TIENDA online (/tienda/:slug/reservar → TiendaReservar) y
-// lecturas de admin para el POS/CRM.
-//
-// Para cliente público (sin auth), usadas por TiendaReservar:
-//   - getReservasInfoPublico   → config del local
-//   - checkDisponibilidadReserva → ¿hay cupo para fecha + N personas?
-//   - crearReservaPublica      → crea reserva
-//
-// Para admin (con auth):
+// La reserva (alta pública, agenda, estados, mapa) vive TODA en la app MESA
+// (mesa-orpin). COMANDA sólo LEE reservas para mostrarlas en el piso del salón
+// y en el historial del cliente. Si necesitás el alta/edición pública, es MESA.
 //   - listReservas            → reservas del local con filtros
 //   - cambiarEstado           → confirmar / sentar / finalizar / no_show / cancelar
 
 import { db } from '../lib/supabase';
-import { dbAnon } from '../lib/supabaseAnon';
 import { translateError } from '../lib/errors';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -48,82 +40,6 @@ export interface Reserva {
   recordatorio_enviado_at: string | null;
   // CRM 360° (24-jun)
   cliente_id: number | null;
-}
-
-export interface ReservasInfoPublico {
-  local_id: number;
-  local_nombre: string;
-  activas: boolean;
-  capacidad_max: number;
-  anticipacion_min_hs: number;
-  anticipacion_max_dias: number;
-  duracion_estimada_min: number;
-  horarios: Array<{ dia: number; abre: string; cierra: string }>;
-  telefono_obligatorio: boolean;
-  notas_publicas: string | null;
-  requiere_confirmacion: boolean;
-  // Excepciones por fecha (días especiales) en la ventana de reservas. Una
-  // excepción GANA sobre el horario semanal: abre un día que normalmente cierra
-  // (cerrado=false) o cierra uno que abre (cerrado=true). Migración 202607142100.
-  excepciones?: Array<{ fecha: string; cerrado: boolean; abre: string | null; cierra: string | null }>;
-}
-
-// ─── Public (anon) ────────────────────────────────────────────────────
-
-export async function getReservasInfoPublico(slug: string): Promise<{ data: ReservasInfoPublico | null; error: string | null }> {
-  const { data, error } = await dbAnon.rpc('fn_get_reservas_info_publico', { p_local_slug: slug });
-  if (error) return { data: null, error: translateError(error) };
-  const arr = data as ReservasInfoPublico[] | null;
-  return { data: arr?.[0] ?? null, error: null };
-}
-
-export interface DisponibilidadReserva {
-  disponible: boolean;
-  motivo: string;
-  personas_actuales: number;
-  capacidad_max: number;
-}
-
-export async function checkDisponibilidadReserva(args: {
-  slug: string;
-  fechaHora: string; // ISO
-  personas: number;
-}): Promise<{ data: DisponibilidadReserva | null; error: string | null }> {
-  const { data, error } = await dbAnon.rpc('fn_check_disponibilidad_reserva', {
-    p_local_slug: args.slug,
-    p_fecha_hora: args.fechaHora,
-    p_personas: args.personas,
-  });
-  if (error) return { data: null, error: translateError(error) };
-  const arr = data as DisponibilidadReserva[] | null;
-  return { data: arr?.[0] ?? null, error: null };
-}
-
-export async function crearReservaPublica(args: {
-  slug: string;
-  clienteNombre: string;
-  clienteTelefono?: string;
-  clienteEmail?: string;
-  fechaHora: string;
-  personas: number;
-  notas?: string;
-  idempotencyKey?: string;
-}): Promise<{ data: { id: number; estado: EstadoReserva } | null; error: string | null }> {
-  const { data, error } = await dbAnon.rpc('fn_crear_reserva_publica', {
-    p_local_slug: args.slug,
-    p_cliente_nombre: args.clienteNombre,
-    p_cliente_telefono: args.clienteTelefono,
-    p_cliente_email: args.clienteEmail ?? null,
-    p_fecha_hora: args.fechaHora,
-    p_personas: args.personas,
-    p_notas: args.notas ?? null,
-    p_idempotency_key: args.idempotencyKey ?? null,
-  });
-  if (error) return { data: null, error: translateError(error) };
-  const arr = data as Array<{ id: number; estado: EstadoReserva }> | null;
-  const row = arr?.[0];
-  if (!row) return { data: null, error: 'Sin resultado' };
-  return { data: row, error: null };
 }
 
 // ─── Admin (auth) ─────────────────────────────────────────────────────

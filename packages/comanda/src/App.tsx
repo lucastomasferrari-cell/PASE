@@ -132,7 +132,6 @@ const InventarioConteo = lazy(() => import('./pages/Inventario/InventarioConteo'
 const InventarioTransferencias = lazy(() => import('./pages/Inventario/InventarioTransferencias').then(m => ({ default: m.InventarioTransferencias })));
 const MermasOneTap = lazy(() => import('./pages/Inventario/MermasOneTap').then(m => ({ default: m.MermasOneTap })));
 const ReservasMudadas = lazy(() => import('./pages/Salon/ReservasMudadas').then(m => ({ default: m.ReservasMudadas })));
-const TiendaReservar = lazy(() => import('./pages/Tienda/TiendaReservar').then(m => ({ default: m.TiendaReservar })));
 const CuponesAdmin = lazy(() => import('./pages/Marketing/CuponesAdmin').then(m => ({ default: m.CuponesAdmin })));
 const EventosGiftcardsAdmin = lazy(() => import('./pages/Marketing/EventosGiftcardsAdmin').then(m => ({ default: m.EventosGiftcardsAdmin })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
@@ -236,7 +235,6 @@ export default function App() {
                   <Route path="checkout" element={<TiendaCheckout />} />
                   <Route path="confirmacion/:ventaId" element={<TiendaConfirmacion />} />
                   <Route path="seguimiento" element={<TiendaSeguimiento />} />
-                  <Route path="reservar" element={<TiendaReservar />} />
                 </Route>
                 <Route path="/kds/:estacion" element={<KdsView />} />
                 <Route path="/menu/:token" element={<MenuQrView />} />

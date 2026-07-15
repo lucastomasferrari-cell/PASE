@@ -121,12 +121,6 @@ function Header({ local }: { local: LocalPublico }) {
             Sign in
           </button>
           <Link
-            to={`/tienda/${local.slug}/reservar`}
-            className="px-2 py-1 text-foreground/70 hover:text-foreground transition-colors"
-          >
-            Reservar
-          </Link>
-          <Link
             to={`/tienda/${local.slug}/seguimiento`}
             className="px-2 py-1 text-foreground/70 hover:text-foreground transition-colors"
           >
