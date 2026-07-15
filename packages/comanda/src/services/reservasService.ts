@@ -96,6 +96,30 @@ export async function checkDisponibilidadReserva(args: {
   return { data: arr?.[0] ?? null, error: null };
 }
 
+export interface SlotDisponibilidad {
+  hora: string;       // 'HH:MM'
+  disponible: boolean;
+  restantes: number;  // mesas/lugares libres en ese turno
+}
+
+// Turnos del día para la página pública. fn_slots_disponibilidad_publico ya
+// contempla el horario semanal, las EXCEPCIONES (días especiales), la
+// anticipación y el cupo → es la ÚNICA fuente de verdad de disponibilidad. El
+// cliente NO recalcula turnos (antes los generaba a mano y divergía del motor).
+export async function getSlotsDisponibilidadPublico(args: {
+  slug: string;
+  fecha: string;   // 'YYYY-MM-DD'
+  personas: number;
+}): Promise<{ data: SlotDisponibilidad[]; error: string | null }> {
+  const { data, error } = await dbAnon.rpc('fn_slots_disponibilidad_publico', {
+    p_local_slug: args.slug,
+    p_fecha: args.fecha,
+    p_personas: args.personas,
+  });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data as SlotDisponibilidad[]) ?? [], error: null };
+}
+
 export async function crearReservaPublica(args: {
   slug: string;
   clienteNombre: string;

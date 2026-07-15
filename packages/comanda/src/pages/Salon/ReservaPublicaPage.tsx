@@ -16,10 +16,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   getReservasInfoPublico,
-  checkDisponibilidadReserva,
+  getSlotsDisponibilidadPublico,
   crearReservaPublica,
   cancelarReservaPublica,
   type ReservasInfoPublico,
+  type SlotDisponibilidad,
 } from '@/services/reservasService';
 import { cn } from '@/lib/utils';
 
@@ -55,24 +56,6 @@ function fmtFechaLarga(iso: string): string {
 function fmtFechaHora(fechaIso: string, hora: string): string {
   const d = new Date(fechaIso + 'T00:00:00');
   return `${DIAS_ES[d.getDay()]} ${d.getDate()} de ${MESES_ES[d.getMonth()]} a las ${hora}`;
-}
-
-// Genera slots cada 30 min desde abre hasta (cierre - durMinutos)
-function generarSlots(abre: string, cierra: string, durMinutos: number): string[] {
-  const [ah, am] = abre.split(':').map(Number);
-  const [ch, cm] = cierra.split(':').map(Number);
-  const inicioMin = (ah ?? 0) * 60 + (am ?? 0);
-  let cierreMin   = (ch ?? 0) * 60 + (cm ?? 0);
-  // Cierre a medianoche (00:00) o "antes" que la apertura → fin del día.
-  // Espeja fn_slots_disponibilidad_publico (v_fin := 24*60 si v_fin <= v_cur).
-  // Sin esto, un día 20:00–00:00 daba finMin negativo → cero turnos.
-  if (cierreMin <= inicioMin) cierreMin = 24 * 60;
-  const finMin    = cierreMin - durMinutos;
-  const slots: string[] = [];
-  for (let m = inicioMin; m <= finMin; m += 30) {
-    slots.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
-  }
-  return slots;
 }
 
 // ─── Mini calendario de mes ───────────────────────────────────────────────────
@@ -235,10 +218,9 @@ export function ReservaPublicaPage() {
   const [hora, setHora]       = useState<string | null>(null);
   const [personas, setPersonas] = useState(2);
 
-  // Disponibilidad
-  const [disponible, setDisponible]   = useState<boolean | null>(null);
-  const [motivoError, setMotivoError] = useState<string | null>(null);
-  const [chequeando, setChequeando]   = useState(false);
+  // Turnos del día (fuente de verdad: fn_slots_disponibilidad_publico).
+  const [slots, setSlots]           = useState<SlotDisponibilidad[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   // Step 2: datos
   const [nombre, setNombre]     = useState('');
@@ -271,27 +253,31 @@ export function ReservaPublicaPage() {
     ? new Date(`${fecha}T${hora}:00`).toISOString()
     : null;
 
-  // Live check de disponibilidad al cambiar fecha/hora/personas
+  // Trae los turnos del día del SERVIDOR (fn_slots_disponibilidad_publico), que
+  // ya contempla horario semanal + excepciones + anticipación + cupo. Al cambiar
+  // fecha o personas se re-piden. La validación final vive en el alta
+  // (fn_crear_reserva_publica re-chequea), así que acá alcanza con lo que el
+  // servidor devuelve — el cliente no recalcula disponibilidad.
   useEffect(() => {
-    if (!fechaHoraISO || !slug) {
-      setDisponible(null);
-      setMotivoError(null);
-      return;
-    }
+    if (!fecha || !slug) { setSlots([]); return; }
+    let cancel = false;
     const t = setTimeout(async () => {
-      setChequeando(true);
-      const { data, error } = await checkDisponibilidadReserva({ slug, fechaHora: fechaHoraISO, personas });
-      setChequeando(false);
-      if (error) { setDisponible(false); setMotivoError(error); return; }
-      setDisponible(data?.disponible ?? false);
-      setMotivoError(data?.disponible ? null : (data?.motivo ?? null));
-    }, 400);
-    return () => clearTimeout(t);
-  }, [fechaHoraISO, personas, slug]);
+      setSlotsLoading(true);
+      const { data } = await getSlotsDisponibilidadPublico({ slug, fecha, personas });
+      if (cancel) return;
+      setSlots(data);
+      setSlotsLoading(false);
+    }, 250);
+    return () => { cancel = true; clearTimeout(t); };
+  }, [fecha, personas, slug]);
+
+  // Turno seleccionado + su disponibilidad (derivada de los slots del servidor).
+  const slotSel = slots.find((s) => s.hora === hora) ?? null;
+  const disponible = hora ? (slotSel?.disponible ?? false) : null;
 
   async function handleReservar() {
     if (!fechaHoraISO || !slug) return;
-    if (!disponible) { toast.error(ERRORES[motivoError ?? ''] ?? motivoError ?? 'Sin disponibilidad'); return; }
+    if (!disponible) { toast.error('Sin disponibilidad'); return; }
     if (nombre.trim().length < 2) { toast.error('Cargá tu nombre'); return; }
     if (info?.telefono_obligatorio && telefono.trim().length < 6) {
       toast.error('El teléfono es obligatorio para este local'); return;
@@ -328,28 +314,13 @@ export function ReservaPublicaPage() {
     setCancelOk(true);
   }
 
-  // Excepciones por fecha (días especiales): mapa ISO → excepción. GANA sobre
-  // el horario semanal (abre un día cerrado, o cierra uno abierto).
+  // ¿Qué días se pueden elegir en el calendario? Metadato liviano para no pedir
+  // turnos de los 30 días de golpe: una excepción manda (abre un día cerrado o
+  // cierra uno abierto); si no hay, vale el horario semanal. La disponibilidad
+  // REAL de cada turno la resuelve el servidor cuando se elige el día.
   const excepcionesPorFecha = new Map(
     (info?.excepciones ?? []).map((e) => [e.fecha, e] as const),
   );
-
-  // Slots de horario para la fecha seleccionada. Si hay excepción ese día, manda
-  // la excepción; si no, el horario semanal.
-  const slotsDelDia: string[] = (() => {
-    if (!fecha || !info) return [];
-    const exc = excepcionesPorFecha.get(fecha);
-    if (exc) {
-      if (exc.cerrado || !exc.abre || !exc.cierra) return [];
-      return generarSlots(exc.abre, exc.cierra, info.duracion_estimada_min);
-    }
-    const dow = new Date(fecha + 'T00:00:00').getDay();
-    const horario = info.horarios.find((h) => h.dia === dow);
-    if (!horario) return [];
-    return generarSlots(horario.abre, horario.cierra, info.duracion_estimada_min);
-  })();
-
-  // ¿La fecha está abierta para reservar? Excepción manda; si no, horario semanal.
   const diasSemanaAbiertos = info?.horarios.map((h) => h.dia) ?? [];
   const esDiaHabilitado = (d: Date): boolean => {
     const exc = excepcionesPorFecha.get(isoDate(d));
@@ -513,38 +484,45 @@ export function ReservaPublicaPage() {
             onSelect={(iso) => {
               setFecha(iso);
               setHora(null);
-              setDisponible(null);
             }}
           />
 
-          {/* Slots de horario */}
-          {fecha && slotsDelDia.length === 0 && (
+          {/* Turnos del día — vienen del servidor con su disponibilidad y cupo */}
+          {fecha && slotsLoading && (
+            <p className="text-sm text-center text-muted-foreground flex items-center justify-center gap-2">
+              <Clock className="h-4 w-4 animate-pulse" /> Buscando horarios…
+            </p>
+          )}
+
+          {fecha && !slotsLoading && slots.length === 0 && (
             <p className="text-sm text-center text-muted-foreground">
               Este día el local está cerrado.
             </p>
           )}
 
-          {fecha && slotsDelDia.length > 0 && (
+          {fecha && !slotsLoading && slots.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">
                 {fmtFechaLarga(fecha)}
               </p>
               <div className="grid grid-cols-4 gap-2">
-                {slotsDelDia.map((slot) => {
-                  const esSeleccionado = slot === hora;
+                {slots.map((s) => {
+                  const esSeleccionado = s.hora === hora;
                   return (
                     <button
-                      key={slot}
+                      key={s.hora}
                       type="button"
-                      onClick={() => setHora(slot)}
+                      disabled={!s.disponible}
+                      onClick={() => setHora(s.hora)}
+                      title={s.disponible ? undefined : 'Sin lugar en este horario'}
                       className={cn(
                         'py-2 rounded-lg text-sm font-medium border transition-colors',
-                        esSeleccionado
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background hover:bg-accent border-border',
+                        !s.disponible && 'opacity-40 cursor-not-allowed line-through',
+                        s.disponible && esSeleccionado && 'bg-primary text-primary-foreground border-primary',
+                        s.disponible && !esSeleccionado && 'bg-background hover:bg-accent border-border',
                       )}
                     >
-                      {slot}
+                      {s.hora}
                     </button>
                   );
                 })}
@@ -552,19 +530,17 @@ export function ReservaPublicaPage() {
             </div>
           )}
 
-          {/* Feedback disponibilidad */}
-          {hora && (
+          {/* Feedback del turno elegido */}
+          {hora && slotSel && (
             <div className={cn(
               'rounded-lg p-3 text-sm flex items-center gap-2',
-              chequeando && 'bg-muted text-muted-foreground',
-              !chequeando && disponible && 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-              !chequeando && disponible === false && 'bg-red-50 text-red-800 border border-red-200',
+              disponible
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                : 'bg-red-50 text-red-800 border border-red-200',
             )}>
-              {chequeando
-                ? <><Clock className="h-4 w-4 animate-pulse shrink-0" /> Verificando…</>
-                : disponible
-                ? <><Check className="h-4 w-4 shrink-0" /> ¡Hay lugar! 🎉</>
-                : <><AlertCircle className="h-4 w-4 shrink-0" /> {ERRORES[motivoError ?? ''] ?? motivoError ?? 'Sin disponibilidad'}</>
+              {disponible
+                ? <><Check className="h-4 w-4 shrink-0" /> ¡Hay lugar! 🎉{slotSel.restantes > 0 ? ` · ${slotSel.restantes} disponible${slotSel.restantes === 1 ? '' : 's'}` : ''}</>
+                : <><AlertCircle className="h-4 w-4 shrink-0" /> Sin lugar en ese horario — probá otro</>
               }
             </div>
           )}
