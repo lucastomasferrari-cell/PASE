@@ -26,6 +26,10 @@ export interface PerfilLocalData {
     anticipacion_max_dias: number | null;
     telefono_obligatorio: boolean;
     email_obligatorio?: boolean;
+    // Excepciones por fecha (días especiales) en la ventana de reservas. Una
+    // excepción GANA sobre el horario semanal: abre un día que normalmente cierra
+    // (cerrado=false) o cierra uno que abre (cerrado=true). Migración 202607150900.
+    excepciones?: Array<{ fecha: string; cerrado: boolean; abre: string | null; cierra: string | null }>;
   };
   hay_mesa_ahora: boolean | null;
   populares: Array<{ nombre: string; foto_url: string | null; precio: number; vendidos: number }>;

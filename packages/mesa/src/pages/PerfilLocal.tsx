@@ -305,29 +305,34 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     return () => { vivo = false; };
   }, [slug]);
 
-  // Scroller de fecha: sólo los días que el negocio ABRE (según horarios del
-  // local), hasta 30 días abiertos hacia adelante. Así no se muestran días
-  // cerrados (que darían "sin turnos") y se puede llegar a fechas futuras.
+  // Scroller de fecha: sólo los días ABIERTOS, hasta 30 hacia adelante. Un día
+  // está abierto si hay una EXCEPCIÓN que lo abre; si no hay excepción, vale el
+  // horario semanal. Una excepción "cerrado" tapa un día que abriría. Así el
+  // scroller muestra los días especiales (ej. un lunes abierto por excepción) y
+  // oculta los que se cerraron puntualmente.
   const dias = useMemo(() => {
     // getDay(): 0=Dom … 6=Sáb → clave de horarios
     const keys = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab'] as const;
     const hor = perfil.local.horarios;
+    const excMap = new Map((perfil.reservas.excepciones ?? []).map((e) => [e.fecha, e] as const));
     const out: { iso: string; dow: string; num: string; mes: string }[] = [];
     const base = new Date();
     for (let i = 0; i < 120 && out.length < 30; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
-      const k = keys[d.getDay()]!;
-      if (hor && !hor[k]) continue; // cerrado ese día
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const exc = excMap.get(iso);
+      const abierto = exc ? !exc.cerrado : !!(hor && hor[keys[d.getDay()]!]);
+      if (!abierto) continue; // cerrado ese día
       out.push({
-        iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        iso,
         dow: d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', ''),
         num: String(d.getDate()),
         mes: d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''),
       });
     }
     return out;
-  }, [perfil.local.horarios]);
+  }, [perfil.local.horarios, perfil.reservas.excepciones]);
 
   // Si la fecha elegida cayó en un día cerrado (o es la de hoy y hoy cierra),
   // saltar al primer día abierto disponible.
