@@ -28,8 +28,11 @@ export interface Usuario {
   cuentas_operables?: string[] | null;
   rol_id?: string | null;       // FK (UUID) a tabla roles (RBAC)
   apps_permitidas?: string[];   // 'pase' | 'comanda' | 'mesa' | 'habitue' | 'accesos'
-  permisos?: string[];          // resuelto vía LEFT JOIN
-  locales?: number[];           // ids de locales asignados
+  permisos?: string[];          // resuelto vía LEFT JOIN (permisos de PASE)
+  locales?: number[];           // ids de locales asignados (PASE, vía usuario_locales)
+  // Config POR APP (migración 202607152300). Por ahora guarda los locales de
+  // COMANDA/MESA/Habitué; el enforcement por app llega a medida que cada app lo lee.
+  accesos_por_app?: Record<string, { locales?: number[] }>;
   created_at?: string;
 }
 
@@ -113,6 +116,7 @@ export async function actualizarUsuario(id: number, patch: Partial<Usuario>): Pr
   if (patch.cuentas_operables !== undefined) upd.cuentas_operables = patch.cuentas_operables;
   if (patch.rol_id !== undefined) upd.rol_id = patch.rol_id;
   if (patch.apps_permitidas !== undefined) upd.apps_permitidas = patch.apps_permitidas;
+  if (patch.accesos_por_app !== undefined) upd.accesos_por_app = patch.accesos_por_app;
 
   const { error } = await db().from('usuarios').update(upd).eq('id', id);
   return { error: error?.message ?? null };
