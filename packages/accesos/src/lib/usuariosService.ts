@@ -30,9 +30,10 @@ export interface Usuario {
   apps_permitidas?: string[];   // 'pase' | 'comanda' | 'mesa' | 'habitue' | 'accesos'
   permisos?: string[];          // resuelto vía LEFT JOIN (permisos de PASE)
   locales?: number[];           // ids de locales asignados (PASE, vía usuario_locales)
-  // Config POR APP (migración 202607152300). Por ahora guarda los locales de
-  // COMANDA/MESA/Habitué; el enforcement por app llega a medida que cada app lo lee.
-  accesos_por_app?: Record<string, { locales?: number[] }>;
+  // Config POR APP (migración 202607152300). Guarda locales + permisos de las
+  // apps no-PASE (COMANDA/MESA/Habitué); el enforcement por app llega a medida
+  // que cada app lo lee (PASE ya; COMANDA en la Fase 2).
+  accesos_por_app?: Record<string, { locales?: number[]; permisos?: string[] }>;
   created_at?: string;
 }
 

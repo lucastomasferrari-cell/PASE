@@ -22,7 +22,7 @@ import { listRoles, type Rol } from '@/lib/rolesService';
 import { logAudit } from '@/lib/auditService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, type AppKey } from '@/lib/apps';
-import { CATEGORIAS } from '@/lib/permisos';
+import { catalogoPermisosApp } from '@/lib/permisosApps';
 import { Accesos } from './Accesos';
 
 interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
@@ -31,8 +31,6 @@ type LocalSimple = { id: number; nombre: string };
 // Apps que operan por local (muestran selector de locales). Instagram y Accesos
 // son a nivel tenant → no piden locales.
 const APPS_CON_LOCALES = new Set<AppKey>(['pase', 'comanda', 'mesa', 'habitue']);
-// Apps con catálogo de permisos granular en Accesos (hoy solo PASE).
-const APPS_CON_PERMISOS = new Set<AppKey>(['pase']);
 
 function nombre(u: Usuario) { return u.nombre || u.email; }
 
@@ -210,7 +208,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
   const [apps, setApps] = useState<string[]>(usuario?.apps_permitidas ?? ['pase']);
   const [locsPase, setLocsPase] = useState<number[]>(usuario?.locales ?? []);
   const [permisos, setPermisosState] = useState<string[]>(usuario?.permisos ?? []);
-  const [accesosApp, setAccesosApp] = useState<Record<string, { locales?: number[] }>>(usuario?.accesos_por_app ?? {});
+  const [accesosApp, setAccesosApp] = useState<Record<string, { locales?: number[]; permisos?: string[] }>>(usuario?.accesos_por_app ?? {});
   const [abierto, setAbierto] = useState<Set<string>>(new Set()); // todo cerrado por defecto
   const [guardando, setGuardando] = useState(false);
 
@@ -237,6 +235,18 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
     const cur = localesDeApp(key);
     const todos = ids.every((id) => cur.includes(id));
     setLocalesDeApp(key, todos ? cur.filter((id) => !ids.includes(id)) : [...new Set([...cur, ...ids])]);
+  }
+
+  // Permisos por app: PASE usa el modelo real (permisos, con "viene del rol");
+  // el resto (COMANDA) se guarda en accesosApp[app].permisos, on/off simple.
+  function permisosDeApp(key: string): string[] {
+    return key === 'pase' ? permisos : (accesosApp[key]?.permisos ?? []);
+  }
+  function togglePermApp(key: string, slug: string) {
+    if (key === 'pase') { togglePerm(slug); return; }
+    const cur = permisosDeApp(key);
+    const next = cur.includes(slug) ? cur.filter((x) => x !== slug) : [...cur, slug];
+    setAccesosApp((a) => ({ ...a, [key]: { ...a[key], permisos: next } }));
   }
 
   async function resetear() {
@@ -360,7 +370,9 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       {APPS.map((a) => {
         const on = apps.includes(a.key);
         const usaLoc = APPS_CON_LOCALES.has(a.key);
-        const tienePerm = APPS_CON_PERMISOS.has(a.key);
+        const catPerms = catalogoPermisosApp(a.key);
+        const esPase = a.key === 'pase';
+        const permApp = permisosDeApp(a.key);
         const nLoc = localesDeApp(a.key).length;
         const op = a.tier === 'operativa';
         return (
@@ -387,30 +399,33 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                                    onToggle={(id) => toggleLocalApp(a.key, id)} onToggleMarca={(ids) => toggleMarcaApp(a.key, ids)} />
                   </div>
                 )}
-                {tienePerm ? (
+                {catPerms ? (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-ink-soft">Permisos <span className="font-normal text-ink-muted">· arrancan del rol, tocá para ajustar</span></p>
-                    <div className="flex flex-wrap gap-4 text-[11px] text-ink-soft bg-brand-50 rounded-lg px-3 py-2">
-                      <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-ink/10 border border-ink/15" />Viene del rol</span>
-                      <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-500" />Ajuste</span>
-                      <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-ink/20" />Sin acceso</span>
-                    </div>
-                    {CATEGORIAS.map((cat) => (
+                    <p className="text-xs font-medium text-ink-soft">Permisos {esPase && <span className="font-normal text-ink-muted">· arrancan del rol, tocá para ajustar</span>}</p>
+                    {esPase && (
+                      <div className="flex flex-wrap gap-4 text-[11px] text-ink-soft bg-brand-50 rounded-lg px-3 py-2">
+                        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-ink/10 border border-ink/15" />Viene del rol</span>
+                        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-500" />Ajuste</span>
+                        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-ink/20" />Sin acceso</span>
+                      </div>
+                    )}
+                    {catPerms.map((cat) => (
                       <div key={cat.titulo} className="rounded-xl border border-ink/10 p-3">
                         <p className="text-sm font-medium mb-2">{cat.titulo}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {cat.permisos.map((p) => {
-                            const inUser = permisos.includes(p.slug);
-                            const inRole = rolePerms.has(p.slug);
+                            const inUser = permApp.includes(p.slug);
+                            const inRole = esPase && rolePerms.has(p.slug);
                             const cls = inUser ? 'bg-brand-500 text-white border-brand-500' : inRole ? 'bg-ink/5 text-ink-soft border-transparent' : 'bg-white text-ink-soft border-ink/15';
-                            return <button key={p.slug} type="button" onClick={() => togglePerm(p.slug)} title={p.descripcion} className={`text-xs px-2.5 py-1 rounded-full border ${cls}`}>{p.label}</button>;
+                            return <button key={p.slug} type="button" onClick={() => togglePermApp(a.key, p.slug)} title={p.descripcion} className={`text-xs px-2.5 py-1 rounded-full border ${cls}`}>{p.label}</button>;
                           })}
                         </div>
                       </div>
                     ))}
+                    {!esPase && <p className="text-[10px] text-ink-muted">Se aplican cuando la persona entra a {a.nombre} con su cuenta (enganche por email — próxima fase).</p>}
                   </div>
                 ) : usaLoc ? (
-                  <p className="text-[11px] text-ink-muted inline-flex items-center gap-1.5"><Lock className="h-3 w-3" /> Los permisos de {a.nombre} llegan en la próxima fase. Por ahora: acceso + locales.</p>
+                  <p className="text-[11px] text-ink-muted inline-flex items-center gap-1.5"><Lock className="h-3 w-3" /> {a.nombre} todavía no tiene permisos por rol. Por ahora: acceso + locales.</p>
                 ) : (
                   <p className="text-[11px] text-ink-muted">{op ? 'Entra sin PIN con su rol.' : 'Acceso a nivel cuenta (sin locales ni permisos por ahora).'}</p>
                 )}
