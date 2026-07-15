@@ -1,6 +1,6 @@
 import {
-  BarChart3, BookOpen, Utensils, Users, DollarSign,
-  Globe, Printer, Megaphone, User, Plug, Settings, CreditCard, Package,
+  BarChart3, BookOpen, Utensils, Clock, DollarSign,
+  Globe, Printer, Plug, Settings, CreditCard, Package,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -97,20 +97,24 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     subItems: [
       { slug: 'mesas',           label: 'Mesas',              href: '/salon/mesas' },
       { slug: 'servicios',       label: 'Servicios y turnos', href: '/salon/servicios', badge: 'soon' },
+      // Reservas se gestionan en MESA. Este item es el cartel "se mudaron a MESA".
+      // Config. reservas SACADA (limpieza 15-jul) → vive en MESA (Config reservas).
       { slug: 'reservas',        label: 'Reservas',           href: '/salon/reservas' },
-      { slug: 'config-reservas', label: 'Config. reservas',   href: '/salon/config-reservas' },
     ],
   },
   {
+    // Sección OPERATIVA del turno. Lo de gente/accesos se sacó (limpieza 15-jul):
+    //  - Lista (RRHH) → PASE (Equipo)
+    //  - Usuarios POS → Accesos (POS del local)
+    //  - Permisos legacy → Accesos (Roles)
+    // El slug queda 'empleados' porque las rutas viven en /empleados/* (no tocar
+    // para no romper el resaltado activo ni App.tsx). Solo cambia el label.
     slug: 'empleados',
-    label: 'Empleados',
-    icon: Users,
-    href: '/empleados/lista',
+    label: 'Turno',
+    icon: Clock,
+    href: '/empleados/mi-cierre',
     requiredPermission: 'comanda.empleados.ver',
     subItems: [
-      { slug: 'lista',         label: 'Lista (RRHH)',     href: '/empleados/lista' },
-      { slug: 'usuarios-pos',  label: 'Usuarios POS',     href: '/empleados/usuarios-pos' },
-      { slug: 'permisos',      label: 'Permisos legacy',  href: '/empleados/permisos' },
       { slug: 'mi-cierre',     label: 'Mi cierre del día', href: '/empleados/mi-cierre' },
       { slug: 'propinas',      label: 'Reparto propinas', href: '/empleados/propinas' },
       { slug: 'horarios',      label: 'Trabajando ahora', href: '/empleados/horarios' },
@@ -162,32 +166,10 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
       { slug: 'tablets-kds', label: 'Tablets KDS',    href: '/hardware/tablets-kds', badge: 'soon' },
     ],
   },
-  {
-    slug: 'marketing',
-    label: 'Marketing',
-    icon: Megaphone,
-    href: '/marketing/promociones',
-    requiredPermission: 'comanda.marketing.gestionar',
-    subItems: [
-      { slug: 'promociones', label: 'Promociones y descuentos', href: '/marketing/promociones', badge: 'soon' },
-      { slug: 'cupones',     label: 'Cupones',                  href: '/marketing/cupones' },
-      { slug: 'eventos',     label: 'Eventos y Giftcards',      href: '/marketing/eventos' },
-      { slug: 'fidelidad',   label: 'Programa de fidelidad',    href: '/marketing/fidelidad',   badge: 'soon' },
-      { slug: 'campanas',    label: 'Email/WhatsApp campaigns', href: '/marketing/campanas',    badge: 'soon' },
-    ],
-  },
-  {
-    slug: 'clientes',
-    label: 'Clientes',
-    icon: User,
-    href: '/clientes/lista',
-    requiredPermission: 'comanda.clientes.ver',
-    subItems: [
-      { slug: 'lista',     label: 'Lista de clientes',  href: '/clientes/lista',     badge: 'soon' },
-      { slug: 'historial', label: 'Historial pedidos',  href: '/clientes/historial', badge: 'soon' },
-      { slug: 'resenas',   label: 'Reseñas',            href: '/clientes/resenas' },
-    ],
-  },
+  // Secciones Marketing y Clientes SACADAS del sidebar (limpieza 15-jul):
+  //  - Marketing (Cupones, Fidelidad, Campañas) → Habitué; Eventos/Giftcards → MESA.
+  //  - Clientes (Comensales, Historial) → Habitué; Reseñas → MESA/Habitué.
+  // Las rutas siguen en App.tsx por si se necesita volver, pero no tienen link.
   {
     slug: 'integraciones',
     label: 'Integraciones',
