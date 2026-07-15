@@ -1,10 +1,13 @@
 // reservasService — reservas de mesa online.
 //
-// Para cliente público (sin auth):
+// La gestión de reservas vive en la app MESA. En COMANDA sólo queda el alta
+// pública desde la TIENDA online (/tienda/:slug/reservar → TiendaReservar) y
+// lecturas de admin para el POS/CRM.
+//
+// Para cliente público (sin auth), usadas por TiendaReservar:
 //   - getReservasInfoPublico   → config del local
-//   - checkDisponibilidad      → ¿hay cupo para fecha + N personas?
+//   - checkDisponibilidadReserva → ¿hay cupo para fecha + N personas?
 //   - crearReservaPublica      → crea reserva
-//   - cancelarReservaPublica   → cancela si matchea telefono
 //
 // Para admin (con auth):
 //   - listReservas            → reservas del local con filtros
@@ -96,30 +99,6 @@ export async function checkDisponibilidadReserva(args: {
   return { data: arr?.[0] ?? null, error: null };
 }
 
-export interface SlotDisponibilidad {
-  hora: string;       // 'HH:MM'
-  disponible: boolean;
-  restantes: number;  // mesas/lugares libres en ese turno
-}
-
-// Turnos del día para la página pública. fn_slots_disponibilidad_publico ya
-// contempla el horario semanal, las EXCEPCIONES (días especiales), la
-// anticipación y el cupo → es la ÚNICA fuente de verdad de disponibilidad. El
-// cliente NO recalcula turnos (antes los generaba a mano y divergía del motor).
-export async function getSlotsDisponibilidadPublico(args: {
-  slug: string;
-  fecha: string;   // 'YYYY-MM-DD'
-  personas: number;
-}): Promise<{ data: SlotDisponibilidad[]; error: string | null }> {
-  const { data, error } = await dbAnon.rpc('fn_slots_disponibilidad_publico', {
-    p_local_slug: args.slug,
-    p_fecha: args.fecha,
-    p_personas: args.personas,
-  });
-  if (error) return { data: [], error: translateError(error) };
-  return { data: (data as SlotDisponibilidad[]) ?? [], error: null };
-}
-
 export async function crearReservaPublica(args: {
   slug: string;
   clienteNombre: string;
@@ -145,20 +124,6 @@ export async function crearReservaPublica(args: {
   const row = arr?.[0];
   if (!row) return { data: null, error: 'Sin resultado' };
   return { data: row, error: null };
-}
-
-export async function cancelarReservaPublica(args: {
-  reservaId: number;
-  telefono: string;
-  motivo?: string;
-}): Promise<{ ok: boolean; error: string | null }> {
-  const { data, error } = await dbAnon.rpc('fn_cancelar_reserva_publica', {
-    p_reserva_id: args.reservaId,
-    p_telefono: args.telefono,
-    p_motivo: args.motivo ?? null,
-  });
-  if (error) return { ok: false, error: translateError(error) };
-  return { ok: !!data, error: null };
 }
 
 // ─── Admin (auth) ─────────────────────────────────────────────────────
