@@ -11,11 +11,12 @@ import {
 } from 'lucide-react';
 import {
   listReservas, listMesasDelLocal,
-  cambiarEstadoReserva, asignarMesaReserva,
+  cambiarEstadoReserva,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/lib/reservasService';
 import { whatsAppUrl, mensajeConfirmacionReserva, enviarOFallback } from '@/lib/whatsapp';
 import { ReservaForm } from '@/components/ReservaForm';
+import { AsignarMesaControl } from '@/components/AsignarMesaControl';
 
 interface Props { localId: number; localNombre: string; }
 
@@ -216,8 +217,8 @@ export function AdminReservas({ localId, localNombre }: Props) {
               <p className="text-xs normal-case tracking-wide text-ink-muted mb-2">{labelFecha(new Date(dia))}</p>
               <div className="space-y-2">
                 {rs.map((r) => (
-                  <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa} localNombre={localNombre}
-                               onEditar={() => setEditando(r)} onAccion={accion} />
+                  <FilaReserva key={r.id} r={r} mesas={mesas} localNombre={localNombre}
+                               onEditar={() => setEditando(r)} onAccion={accion} onReload={() => void reload()} />
                 ))}
               </div>
             </div>
@@ -240,18 +241,22 @@ export function AdminReservas({ localId, localNombre }: Props) {
 }
 
 function FilaReserva({
-  r, mesas, nombreMesa, localNombre, onEditar, onAccion,
+  r, mesas, localNombre, onEditar, onAccion, onReload,
 }: {
   r: Reserva;
   mesas: MesaSimple[];
-  nombreMesa: (id: number | null) => string | null;
   localNombre: string;
   onEditar: () => void;
   onAccion: (p: Promise<{ error: string | null }>, okMsg: string) => void;
+  onReload: () => void;
 }) {
   const cfg = ESTADO_CFG[r.estado];
   const editable = r.estado === 'pendiente' || r.estado === 'confirmada';
-  const mesaTxt = nombreMesa(r.mesa_id);
+  // Muestra la(s) mesa(s) asignada(s): combinadas → "Mesa 3 + 4"; una → "Mesa 5".
+  const idsAsignadas = r.mesas_ids?.length ? r.mesas_ids : (r.mesa_id ? [r.mesa_id] : []);
+  const mesaTxt = idsAsignadas.length
+    ? idsAsignadas.map((id) => { const m = mesas.find((x) => x.id === id); return m ? m.numero : `#${id}`; }).join(' + ').replace(/^/, 'Mesa ')
+    : null;
   const waUrl = r.cliente_telefono
     ? whatsAppUrl(r.cliente_telefono, mensajeConfirmacionReserva({
         clienteNombre: r.cliente_nombre, localNombre, fechaHora: r.fecha_hora, personas: r.personas,
@@ -282,23 +287,9 @@ function FilaReserva({
 
       {/* Acciones por estado */}
       <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        {/* Asignar mesa (no terminal) */}
-        {(r.estado === 'pendiente' || r.estado === 'confirmada' || r.estado === 'sentada') && mesas.length > 0 && (
-          <select
-            value={r.mesa_id ?? ''}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) return;
-              onAccion(asignarMesaReserva({ reservaId: r.id, mesaId: Number(v) }), 'Mesa asignada');
-            }}
-            className="text-xs rounded-lg border border-ink/15 px-2 py-1.5 bg-white max-w-[110px]"
-            title="Asignar mesa"
-          >
-            <option value="">Mesa…</option>
-            {mesas.map((m) => (
-              <option key={m.id} value={m.id}>Mesa {m.numero}{m.zona ? ` · ${m.zona}` : ''}</option>
-            ))}
-          </select>
+        {/* Asignar mesa(s): Auto (motor elige/combina) o manual múltiple */}
+        {editable && mesas.length > 0 && (
+          <AsignarMesaControl reserva={r} mesas={mesas} onDone={onReload} />
         )}
 
         {waUrl && r.estado !== 'cancelada' && r.estado !== 'no_show' && r.estado !== 'finalizada' && (

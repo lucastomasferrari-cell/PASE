@@ -15,6 +15,7 @@ import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
 import { calcularRango, bloqueTimeline } from '@/lib/reservasUtils';
 import { WalkInDialog } from '@/components/WalkInDialog';
 import { ReservaForm } from '@/components/ReservaForm';
+import { AsignarMesaControl } from '@/components/AsignarMesaControl';
 
 interface Props { localId: number; localNombre: string; }
 
@@ -68,6 +69,26 @@ export function AdminDiario({ localId, localNombre }: Props) {
   }, [localId, fecha]);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  // Auto-refresco silencioso cada 25s: el timeline se mantiene al día sin que el
+  // staff recargue (una reserva entrante o un cambio desde otra pantalla aparece
+  // solo). No refresca si la pestaña está en segundo plano ni mientras hay un
+  // popover/modal abierto (para no pisar lo que el usuario está mirando/editando).
+  useEffect(() => {
+    let cancelado = false;
+    const id = setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (sel || editando || dePaso) return;
+      const [r, m] = await Promise.all([
+        listReservas({ localId, desde: startOfDay(fecha), hasta: endOfDay(fecha) }),
+        listMesasDelLocal(localId),
+      ]);
+      if (cancelado || r.error) return;
+      setReservas(r.data.filter((x) => x.estado !== 'cancelada'));
+      setMesas(m.data);
+    }, 25_000);
+    return () => { cancelado = true; clearInterval(id); };
+  }, [localId, fecha, sel, editando, dePaso]);
 
   // Rango horario: se ajusta a la franja real del día (primera reserva →
   // última salida) en vez de un fijo 12–24 que dejaba medio timeline vacío.
@@ -197,8 +218,9 @@ export function AdminDiario({ localId, localNombre }: Props) {
 
       {/* Popover de detalle / acciones */}
       {sel && (
-        <DetalleReserva r={sel} localNombre={localNombre} onClose={() => setSel(null)} onAccion={accionRapida}
-                        onEditar={() => { setEditando(sel); setSel(null); }} />
+        <DetalleReserva r={sel} mesas={mesas} localNombre={localNombre} onClose={() => setSel(null)} onAccion={accionRapida}
+                        onEditar={() => { setEditando(sel); setSel(null); }}
+                        onReload={() => { setSel(null); void reload(); }} />
       )}
 
       {/* Editar reserva */}
@@ -395,15 +417,17 @@ function FilaTimeline({
 }
 
 function DetalleReserva({
-  r, localNombre, onClose, onAccion, onEditar,
+  r, mesas, localNombre, onClose, onAccion, onEditar, onReload,
 }: {
-  r: Reserva; localNombre: string; onClose: () => void;
+  r: Reserva; mesas: MesaSimple[]; localNombre: string; onClose: () => void;
   onAccion: (r: Reserva, e: 'confirmada' | 'sentada' | 'finalizada' | 'no_show' | 'cancelada') => void;
   onEditar: () => void;
+  onReload: () => void;
 }) {
   const waUrl = r.cliente_telefono
     ? whatsAppUrl(r.cliente_telefono, mensajeConfirmacionReserva({ clienteNombre: r.cliente_nombre, localNombre, fechaHora: r.fecha_hora, personas: r.personas }))
     : null;
+  const asignable = r.estado === 'pendiente' || r.estado === 'confirmada';
   return (
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
@@ -416,6 +440,12 @@ function DetalleReserva({
         </div>
         {r.cliente_telefono && <p className="text-sm text-ink-soft">{r.cliente_telefono}</p>}
         {r.notas && <p className="text-sm bg-muted/50 rounded p-2 text-ink-soft italic">{r.notas}</p>}
+        {asignable && mesas.length > 0 && (
+          <div className="flex items-center justify-between gap-2 border-t border-ink/10 pt-3">
+            <span className="text-xs text-ink-muted">Mesa</span>
+            <AsignarMesaControl reserva={r} mesas={mesas} onDone={onReload} size="md" />
+          </div>
+        )}
         <div className="flex flex-wrap gap-2 pt-1">
           {r.estado === 'pendiente' && (
             <BtnQ tono="brand" icon={<Check className="h-4 w-4" />} label="Confirmar" onClick={() => {

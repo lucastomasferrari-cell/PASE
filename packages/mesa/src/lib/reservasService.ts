@@ -25,6 +25,7 @@ export interface Reserva {
   motivo_cancelacion: string | null;
   cancelada_por_cliente: boolean;
   mesa_id: number | null;
+  mesas_ids: number[] | null;
   created_at: string;
   confirmada_at: string | null;
   cancelada_at: string | null;
@@ -88,6 +89,9 @@ const ERR_RESERVAS: Array<[string, string]> = [
   ['MESA_NO_ENCONTRADA', 'No se encontró la mesa.'],
   ['MESA_OTRO_LOCAL', 'Esa mesa pertenece a otro local.'],
   ['MESA_OCUPADA', 'Esa mesa ya está ocupada en ese horario.'],
+  ['MESA_SIN_CAPACIDAD', 'La mesa es chica para esa cantidad de personas. Elegí una más grande o combiná varias.'],
+  ['MESA_IDS_REQUERIDAS', 'Elegí al menos una mesa.'],
+  ['SIN_MESA', 'No hay ninguna mesa (ni combinación) libre que alcance para esa cantidad en ese horario.'],
   ['NOMBRE_REQUERIDO', 'Falta el nombre del cliente.'],
   ['PERSONAS_INVALIDAS', 'La cantidad de personas es inválida (1 a 50).'],
   ['FECHA_REQUERIDA', 'Falta la fecha y hora.'],
@@ -175,6 +179,32 @@ export async function asignarMesaReserva(args: {
   });
   if (error) return { error: traducirError(error.message) };
   return { error: null };
+}
+
+// Asignar una COMBINACIÓN de mesas a mano (ej. 2 banquetas contiguas para 2p).
+// Valida server-side: capacidad total suficiente, todas libres, del mismo local.
+export async function asignarMesasReserva(args: {
+  reservaId: number;
+  mesaIds: number[];
+}): Promise<{ error: string | null }> {
+  const { error } = await db().rpc('fn_asignar_mesas_reserva', {
+    p_reserva_id: args.reservaId,
+    p_mesa_ids: args.mesaIds,
+  });
+  if (error) return { error: traducirError(error.message) };
+  return { error: null };
+}
+
+// Auto-asignar: el motor elige (y combina si hace falta) la mejor mesa/tramo
+// libre — mismo criterio que la reserva pública. Devuelve las mesas asignadas.
+export async function autoAsignarMesaReserva(args: {
+  reservaId: number;
+}): Promise<{ mesaIds: number[] | null; error: string | null }> {
+  const { data, error } = await db().rpc('fn_autoasignar_mesa_reserva', {
+    p_reserva_id: args.reservaId,
+  });
+  if (error) return { mesaIds: null, error: traducirError(error.message) };
+  return { mesaIds: (data as number[] | null) ?? [], error: null };
 }
 
 // "De paso" / walk-in: cliente que llega sin reserva y se sienta al instante.

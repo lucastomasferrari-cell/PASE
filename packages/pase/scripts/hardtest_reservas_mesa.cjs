@@ -138,8 +138,7 @@ async function expectErr(codeSubstr, fn) {
   });
   await test("overlap real: banqueta ocupada 20:00-22:00 no admite 21:00 (admin asignar)", async () => {
     await asUser(DUENO);
-    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 order by id limit 1`, [LOCAL, BARRA])).id;
-    await crearPub({ tel: "1190000A", fh: T20, personas: 1, zona: BARRA }); // ocupa alguna banqueta (motor elige)
+    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 and deleted_at is null and reservable order by id limit 1`, [LOCAL, BARRA])).id;
     // fuerzo ocupar b1 a las 20:00 con asignación admin
     const rocc = (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "Occ", "1190000B", null, T20, 1, null, null])).id;
     await q(`select fn_asignar_mesa_reserva($1,$2)`, [rocc, b1]);
@@ -218,7 +217,7 @@ async function expectErr(codeSubstr, fn) {
   });
   await test("REABRIR cancelada libera y re-chequea mesa (si otro la tomó, la suelta)", async () => {
     await asUser(DUENO);
-    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 order by id limit 1`, [LOCAL, BARRA])).id;
+    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 and deleted_at is null and reservable order by id limit 1`, [LOCAL, BARRA])).id;
     // reserva A en b1 a las 20:00, luego cancelada
     const a = (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "A", "1145000000", null, T20, 1, null, null])).id;
     await q(`select fn_asignar_mesa_reserva($1,$2)`, [a, b1]);
@@ -235,7 +234,7 @@ async function expectErr(codeSubstr, fn) {
   console.log("\n── G7. Asignar mesa (admin) ──");
   await test("asignar banqueta libre OK; ocupada → MESA_OCUPADA", async () => {
     await asUser(DUENO);
-    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 order by id limit 1`, [LOCAL, BARRA])).id;
+    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 and deleted_at is null and reservable order by id limit 1`, [LOCAL, BARRA])).id;
     const id1 = (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "Asig1", "1141000000", null, T20, 1, null, null])).id;
     await q(`select fn_asignar_mesa_reserva($1,$2)`, [id1, b1]);
     const chk = await one(`select mesa_id from reservas where id=$1`, [id1]); assert(String(chk.mesa_id) === String(b1), "no asignó");
@@ -284,7 +283,7 @@ async function expectErr(codeSubstr, fn) {
   console.log("\n── G10. Editar fecha no debe doblar la mesa ──");
   await test("editar mueve a horario con mesa ocupada → NO dobla (suelta o bloquea)", async () => {
     await asUser(DUENO);
-    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 order by id limit 1`, [LOCAL, BARRA])).id;
+    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 and deleted_at is null and reservable order by id limit 1`, [LOCAL, BARRA])).id;
     // A ocupa b1 a las 20:00
     const a = (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "A", "1146000000", null, T20, 1, null, null])).id;
     await q(`select fn_asignar_mesa_reserva($1,$2)`, [a, b1]);
@@ -303,7 +302,7 @@ async function expectErr(codeSubstr, fn) {
   });
   await test("editar sin conflicto conserva la mesa", async () => {
     await asUser(DUENO);
-    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 order by id limit 1`, [LOCAL, BARRA])).id;
+    const b1 = (await one(`select id from mesas where local_id=$1 and zona=$2 and deleted_at is null and reservable order by id limit 1`, [LOCAL, BARRA])).id;
     const a = (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "A", "1146000002", null, T20, 1, null, null])).id;
     await q(`select fn_asignar_mesa_reserva($1,$2)`, [a, b1]);
     await q(`select fn_editar_reserva($1,$2)`, [a, "A editado"]); // solo nombre
@@ -493,6 +492,66 @@ async function expectErr(codeSubstr, fn) {
     const i = await one(`select excepciones from fn_get_reservas_info_publico($1)`, [SLUG]);
     const e = (i.excepciones || []).find(x => x.fecha === DL);
     assert(e && e.cerrado === false && e.abre === "20:00", "no expone la excepción del lunes: " + JSON.stringify(i.excepciones));
+  });
+
+  console.log("\n── G15. Admin: combinar mesas + auto-asignar (migración 202607152200) ──");
+  const bqLive = async () => rows(`select id, capacidad from mesas where local_id=$1 and zona=$2 and deleted_at is null and reservable order by id`, [LOCAL, BARRA]);
+  const crearAdmin = async (pers, tel) => (await one(`select fn_crear_reserva($1,$2,$3,$4,$5,$6,$7,$8) id`, [LOCAL, "G15", tel, null, T20, pers, null, null])).id;
+
+  await test("combinar manual: grupo que no entra en una banqueta → asigna 2 (mesa_id=1ª, mesas_ids=2)", async () => {
+    await asUser(DUENO);
+    const bqs = await bqLive();
+    const need = CAPBQ + 1; // fuerza combinar 2 banquetas
+    const id = await crearAdmin(need, "1148000001");
+    await q(`select fn_asignar_mesas_reserva($1,$2)`, [id, [bqs[0].id, bqs[1].id]]);
+    const row = await one(`select mesa_id, mesas_ids from reservas where id=$1`, [id]);
+    assert(String(row.mesa_id) === String(bqs[0].id) && (row.mesas_ids || []).length === 2, JSON.stringify(row));
+  });
+  await test("combinar con capacidad insuficiente → MESA_SIN_CAPACIDAD", async () => {
+    await asUser(DUENO);
+    const bqs = await bqLive();
+    const id = await crearAdmin(CAPBQ * 2 + 1, "1148000002"); // 2 banquetas no alcanzan
+    await expectErr("MESA_SIN_CAPACIDAD", () => q(`select fn_asignar_mesas_reserva($1,$2)`, [id, [bqs[0].id, bqs[1].id]]));
+  });
+  await test("combinar con una banqueta ocupada → MESA_OCUPADA", async () => {
+    await asUser(DUENO);
+    const bqs = await bqLive();
+    const occ = await crearAdmin(1, "1148000003");
+    await q(`select fn_asignar_mesa_reserva($1,$2)`, [occ, bqs[0].id]);
+    const id = await crearAdmin(CAPBQ + 1, "1148000004");
+    await expectErr("MESA_OCUPADA", () => q(`select fn_asignar_mesas_reserva($1,$2)`, [id, [bqs[0].id, bqs[1].id]]));
+  });
+  await test("combinar array vacío → MESA_IDS_REQUERIDAS", async () => {
+    await asUser(DUENO);
+    const id = await crearAdmin(2, "1148000005");
+    await expectErr("MESA_IDS_REQUERIDAS", () => q(`select fn_asignar_mesas_reserva($1,$2::bigint[])`, [id, []]));
+  });
+  await test("combinar ids duplicadas se deduplican (misma banqueta 2 veces → 1)", async () => {
+    await asUser(DUENO);
+    const bqs = await bqLive();
+    const id = await crearAdmin(1, "1148000006");
+    await q(`select fn_asignar_mesas_reserva($1,$2)`, [id, [bqs[2].id, bqs[2].id]]);
+    const row = await one(`select mesas_ids from reservas where id=$1`, [id]);
+    assert((row.mesas_ids || []).length === 1, "no dedup: " + JSON.stringify(row.mesas_ids));
+  });
+  await test("auto-asignar: el motor asigna y la capacidad alcanza", async () => {
+    await asUser(DUENO);
+    const need = CAPBQ + 1;
+    const id = await crearAdmin(need, "1148000007");
+    const ids = (await one(`select fn_autoasignar_mesa_reserva($1) ids`, [id])).ids;
+    assert(Array.isArray(ids) && ids.length >= 1, "no asignó: " + JSON.stringify(ids));
+    const cap = (await one(`select coalesce(sum(capacidad),0) s from mesas where id = any($1)`, [ids])).s;
+    assert(Number(cap) >= need, `cap ${cap} < ${need}`);
+    const row = await one(`select mesa_id, mesas_ids from reservas where id=$1`, [id]);
+    assert(String(row.mesa_id) === String(ids[0]) && (row.mesas_ids || []).length === ids.length, JSON.stringify(row));
+  });
+  await test("auto-asignar sin lugar libre → SIN_MESA (y conserva la reserva por el rollback interno)", async () => {
+    await asUser(DUENO);
+    const id = await crearAdmin(2, "1148000008");
+    await q(`update mesas set reservable=false where local_id=$1`, [LOCAL]); // el savepoint del test lo revierte
+    await expectErr("SIN_MESA", () => q(`select fn_autoasignar_mesa_reserva($1)`, [id]));
+    const st = await one(`select estado from reservas where id=$1`, [id]);
+    assert(st.estado === "pendiente", "la reserva no debería haberse tocado: " + JSON.stringify(st));
   });
 
   await q("ROLLBACK");
