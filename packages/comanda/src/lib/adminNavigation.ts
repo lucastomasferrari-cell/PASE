@@ -1,6 +1,6 @@
 import {
   BarChart3, BookOpen, Utensils, Clock, DollarSign,
-  Globe, Printer, Plug, Settings, CreditCard, Package,
+  Globe, Printer, Plug, Settings, CreditCard, Package, Store,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -137,13 +137,27 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     ],
   },
   {
+    // Hub del marketplace propio (15-jul): concentra estadísticas + configuración
+    // + difusión de la tienda online. Rutas bajo /tienda-online (slug propio para
+    // que el resaltado no choque con la categoría 'online').
+    slug: 'tienda-online',
+    label: 'Tienda online',
+    icon: Store,
+    href: '/tienda-online',
+    requiredPermission: 'comanda.online.gestionar',
+    subItems: [
+      { slug: 'resumen',       label: 'Resumen',       href: '/tienda-online' },
+      { slug: 'configuracion', label: 'Configuración', href: '/tienda-online/configuracion' },
+      { slug: 'difusion',      label: 'Difusión',      href: '/tienda-online/difusion' },
+    ],
+  },
+  {
     slug: 'online',
     label: 'Online',
     icon: Globe,
-    href: '/online/tienda',
+    href: '/online/menu-qr',
     requiredPermission: 'comanda.online.gestionar',
     subItems: [
-      { slug: 'tienda',   label: 'Tienda online', href: '/online/tienda',   badge: 'soon' },
       { slug: 'menu-qr',  label: 'Menú QR',       href: '/online/menu-qr' },
       { slug: 'kds',      label: 'KDS',           href: '/online/kds' },
       { slug: 'tracking', label: 'Tracking pedidos', href: '/online/tracking', badge: 'soon' },

@@ -141,6 +141,7 @@ const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').
 const SettingsAuditoria = lazy(() => import('./pages/Settings/SettingsAuditoria').then(m => ({ default: m.SettingsAuditoria })));
 const SettingsKds = lazy(() => import('./pages/Settings/SettingsKds').then(m => ({ default: m.SettingsKds })));
 const SettingsMenuQr = lazy(() => import('./pages/Settings/SettingsMenuQr').then(m => ({ default: m.SettingsMenuQr })));
+const TiendaOnlineHub = lazy(() => import('./pages/Online/TiendaOnlineHub').then(m => ({ default: m.TiendaOnlineHub })));
 const SettingsEstaciones = lazy(() => import('./pages/Settings/SettingsEstaciones').then(m => ({ default: m.SettingsEstaciones })));
 // SPIKE OFFLINE (descartable, solo dev) — sandbox de validación de motor local-first.
 const SpikeOfflinePage = lazy(() => import('./spike-offline/SpikeOfflinePage').then(m => ({ default: m.SpikeOfflinePage })));
@@ -319,7 +320,10 @@ export default function App() {
                   <Route path="/online" element={<Navigate to="/online/menu-qr" replace />} />
                   <Route path="/online/menu-qr" element={<SettingsMenuQr />} />
                   <Route path="/online/kds" element={<SettingsKds />} />
-                  <Route path="/online/tienda" element={<StubRoute />} />
+                  <Route path="/tienda-online" element={<TiendaOnlineHub />} />
+                  <Route path="/tienda-online/configuracion" element={<TiendaOnlineHub />} />
+                  <Route path="/tienda-online/difusion" element={<TiendaOnlineHub />} />
+                  <Route path="/online/tienda" element={<Navigate to="/tienda-online" replace />} />
                   <Route path="/online/tracking" element={<TrackingDelivery />} />
                   <Route path="/online/dispatch" element={<DispatchMap />} />
 

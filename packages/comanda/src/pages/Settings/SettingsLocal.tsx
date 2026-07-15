@@ -1,14 +1,14 @@
+// Configuración del LOCAL a nivel POS. La config de la TIENDA ONLINE
+// (slug, delivery, horarios, marketplace, QR MP) se mudó a su hub propio
+// (Tienda online → Configuración) el 15-jul para concentrar el marketplace.
+// Acá quedan solo los ajustes operativos del POS + un puntero al hub.
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Upload, Trash2, ImageIcon, Store, ExternalLink, X, Plus } from 'lucide-react';
+import { Store, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { WarningIntegracionFalta } from '@/components/WarningIntegracionFalta';
 import { useLocalActivo } from '@/lib/localActivo';
-import {
-  getLocalSettings, updateLocalSettings, validarSlugUnico, subirMpQr, eliminarMpQr,
-  getMarketplaceLocal, updateMarketplaceLocal, subirMarketplaceFoto,
-  type LocalSettingsPatch, type MarketplaceLocal, type MarketplacePatch,
-} from '@/services/localSettingsService';
+import { getLocalSettings, updateLocalSettings, type LocalSettingsPatch } from '@/services/localSettingsService';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
 import type { ComandaLocalSettings, PosModo } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoneyInput } from '@/components/MoneyInput';
-import { PROVINCIAS_AR, buscarLocalidades } from '@/services/direccionesService';
-import { useDebouncedValue } from '@pase/shared/utils';
 import { featureFlags, setFeatureFlag } from '@/lib/featureFlags';
 
 const MODOS: { value: PosModo; label: string }[] = [
@@ -36,38 +32,13 @@ export function SettingsLocal() {
   const [settings, setSettings] = useState<ComandaLocalSettings | null>(null);
   const [patch, setPatch] = useState<LocalSettingsPatch>({});
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => { listLocalesAccesibles().then((r) => setLocales(r.data)); }, []);
 
-  // Marketplace state (tabla `locales`)
-  const [mp, setMp] = useState<MarketplaceLocal | null>(null);
-  const [mpPatch, setMpPatch] = useState<MarketplacePatch>({});
-  const [savingMp, setSavingMp] = useState(false);
-  const [tagDraft, setTagDraft] = useState('');
-  const [localidadQuery, setLocalidadQuery] = useState('');
-  const [localidadOpts, setLocalidadOpts] = useState<string[]>([]);
-  const debouncedLocQuery = useDebouncedValue(localidadQuery, 300);
-
   useEffect(() => {
     if (localId === null) return;
-    getLocalSettings(localId).then((r) => {
-      setSettings(r.data);
-      setPatch({});
-    });
-    getMarketplaceLocal(localId).then((r) => {
-      setMp(r.data);
-      setMpPatch({});
-    });
+    getLocalSettings(localId).then((r) => { setSettings(r.data); setPatch({}); });
   }, [localId]);
-
-  // Carga localidades cuando cambia provincia o query — DEBE ir antes
-  // del early return (regla react-hooks/rules-of-hooks).
-  useEffect(() => {
-    const prov = mp?.provincia ?? mpPatch.provincia;
-    if (!prov) { setLocalidadOpts([]); return; }
-    void buscarLocalidades(prov, debouncedLocQuery).then((opts) => setLocalidadOpts(opts));
-  }, [mp?.provincia, mpPatch.provincia, debouncedLocQuery]);
 
   if (!settings) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
 
@@ -77,127 +48,22 @@ export function SettingsLocal() {
     setPatch((p) => ({ ...p, [key]: value }));
   }
 
-  async function refrescar() {
-    if (localId === null) return;
-    const { data } = await getLocalSettings(localId);
-    if (data) setSettings(data);
-    setPatch({});
-  }
-
   async function guardar() {
-    if (!settings || !user?.tenant_id) return;
+    if (!settings) return;
     if (Object.keys(patch).length === 0) { toast.info('Sin cambios'); return; }
-
-    if (patch.slug && patch.slug !== settings.slug) {
-      // Validación cliente: solo letras minúsculas, números y guiones.
-      if (!/^[a-z0-9-]+$/.test(patch.slug)) {
-        toast.error('Slug inválido', {
-          description: 'Solo letras minúsculas, números y guiones (sin espacios ni acentos).',
-        });
-        return;
-      }
-      if (patch.slug.length < 2 || patch.slug.length > 50) {
-        toast.error('Slug debe tener entre 2 y 50 caracteres');
-        return;
-      }
-      const { disponible } = await validarSlugUnico(patch.slug, settings.local_id);
-      if (!disponible) {
-        toast.error('Ya hay otro local con este slug. Elegí otro.');
-        return;
-      }
-    }
     setSaving(true);
     const { error } = await updateLocalSettings(settings.id, patch);
     setSaving(false);
     if (error) { toast.error(error); return; }
     toast.success('Configuración guardada');
-    await refrescar();
-  }
-
-  async function handleUploadQr(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !settings || !user?.tenant_id) return;
-    // Validación cliente: imagen + < 2MB
-    if (!file.type.startsWith('image/')) {
-      toast.error('El archivo debe ser una imagen (PNG/JPG/WEBP)');
-      e.target.value = '';
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Imagen muy grande', { description: 'Máximo 2 MB.' });
-      e.target.value = '';
-      return;
-    }
-    setUploading(true);
-    const { url, error } = await subirMpQr(user.tenant_id, settings.local_id, file);
-    if (error || !url) { toast.error(error ?? 'Error subiendo'); setUploading(false); return; }
-    const { error: upErr } = await updateLocalSettings(settings.id, { mp_qr_url: url });
-    setUploading(false);
-    if (upErr) { toast.error(upErr); return; }
-    toast.success('QR de MP guardado correctamente');
-    await refrescar();
-    e.target.value = '';
-  }
-
-  async function handleDeleteQr() {
-    if (!settings || !user?.tenant_id) return;
-    if (!confirm('¿Eliminar QR de MP?')) return;
-    await eliminarMpQr(user.tenant_id, settings.local_id);
-    await updateLocalSettings(settings.id, { mp_qr_url: null });
-    toast.success('QR eliminado');
-    await refrescar();
-  }
-
-  // ── Marketplace helpers ────────────────────────────────────────────────
-  const mpMerged: MarketplaceLocal | null = mp ? { ...mp, ...mpPatch } as MarketplaceLocal : null;
-
-  function setMpField<K extends keyof MarketplacePatch>(key: K, value: MarketplacePatch[K]) {
-    setMpPatch((p) => ({ ...p, [key]: value }));
-  }
-
-  function agregarTag() {
-    const t = tagDraft.trim();
-    if (!t) return;
-    const actuales = mpMerged?.marketplace_tags ?? [];
-    if (actuales.includes(t)) { setTagDraft(''); return; }
-    setMpField('marketplace_tags', [...actuales, t]);
-    setTagDraft('');
-  }
-
-  function quitarTag(tag: string) {
-    const actuales = mpMerged?.marketplace_tags ?? [];
-    setMpField('marketplace_tags', actuales.filter((t) => t !== tag));
-  }
-
-  async function guardarMp() {
-    if (!mp || localId === null) return;
-    if (Object.keys(mpPatch).length === 0) { toast.info('Sin cambios marketplace'); return; }
-    setSavingMp(true);
-    const { error } = await updateMarketplaceLocal(localId, mpPatch);
-    setSavingMp(false);
-    if (error) {
-      // Detectar el error típico de la migration sin aplicar
-      if (error.includes('column') && error.includes('visible_marketplace')) {
-        toast.error('Migration 202605151970 pendiente', {
-          description: 'Aplicá la migration desde Supabase SQL Editor antes de usar esto.',
-        });
-      } else {
-        toast.error(error);
-      }
-      return;
-    }
-    toast.success('Marketplace actualizado');
-    // refrescar
-    const { data } = await getMarketplaceLocal(localId);
-    setMp(data);
-    setMpPatch({});
+    const { data } = await getLocalSettings(settings.local_id);
+    if (data) setSettings(data);
+    setPatch({});
   }
 
   function toggleModo(modo: PosModo) {
     const current = merged.features_pos_modos ?? ['salon', 'mostrador', 'pedidos'];
-    const next = current.includes(modo)
-      ? current.filter((m) => m !== modo)
-      : [...current, modo];
+    const next = current.includes(modo) ? current.filter((m) => m !== modo) : [...current, modo];
     if (next.length === 0) { toast.error('Tenés que habilitar al menos un modo'); return; }
     setField('features_pos_modos', next);
   }
@@ -208,445 +74,75 @@ export function SettingsLocal() {
         <Label>Local:</Label>
         <Select value={String(localId)} onValueChange={(v) => setLocalActivo(Number(v))}>
           <SelectTrigger className="w-[280px] h-10"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {locales.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>)}
-          </SelectContent>
+          <SelectContent>{locales.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Datos del local</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Slug público (tienda online)">
-              <Input
-                value={merged.slug}
-                onChange={(e) => setField('slug', e.target.value.toLowerCase().trim())}
-                placeholder="villa-crespo"
-                className="h-11"
-                pattern="^[a-z0-9-]+$"
-              />
-              {merged.slug && (
-                <p className="text-xs text-muted-foreground">
-                  Tu tienda va a estar en:{' '}
-                  <code className="px-1 py-0.5 rounded bg-muted text-[10px]">
-                    /tienda/{merged.slug}
-                  </code>
-                </p>
-              )}
-            </Field>
-            <Field label="Dirección">
-              <Input
-                value={merged.direccion ?? ''}
-                onChange={(e) => setField('direccion', e.target.value)}
-                className="h-11"
-              />
-            </Field>
-            <Field label="Teléfono">
-              <Input
-                value={merged.telefono ?? ''}
-                onChange={(e) => setField('telefono', e.target.value)}
-                className="h-11"
-              />
-            </Field>
-            <Field label="Instagram">
-              <Input
-                value={merged.instagram ?? ''}
-                onChange={(e) => setField('instagram', e.target.value)}
-                placeholder="@neko"
-                className="h-11"
-              />
-            </Field>
-            <Field label="Web">
-              <Input
-                value={merged.web ?? ''}
-                onChange={(e) => setField('web', e.target.value)}
-                placeholder="https://…"
-                className="h-11"
-              />
-            </Field>
+      {/* Puntero al hub de la tienda online */}
+      <Link to="/tienda-online/configuracion"
+        className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 hover:border-primary/50 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary"><Store className="h-5 w-5" /></div>
+          <div>
+            <div className="text-sm font-medium">Tienda online</div>
+            <div className="text-xs text-muted-foreground">Slug/link, delivery, horarios, marketplace y QR de MP se configuran en su propio hub.</div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <ArrowUpRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      </Link>
 
       <Card>
-        <CardHeader><CardTitle>QR de MercadoPago</CardTitle></CardHeader>
-        <CardContent>
-          {settings.mp_qr_url ? (
-            <div className="space-y-3">
-              <img src={settings.mp_qr_url} alt="QR MP" className="max-w-[200px] rounded border border-border" />
-              <Button variant="outline" onClick={handleDeleteQr} disabled={uploading}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-md border-2 border-dashed border-border p-8 text-center">
-              <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-4">PNG / JPG / WEBP</p>
-              <label className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer hover:bg-primary-hover transition-colors">
-                <Upload className="h-4 w-4" />
-                {uploading ? 'Subiendo…' : 'Subir QR'}
-                <input type="file" accept=".png,.jpg,.jpeg,.webp,image/*" className="hidden"
-                  onChange={handleUploadQr} disabled={uploading} />
-              </label>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Tienda online y delivery</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Ajustes del POS</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Costo envío default">
-              <MoneyInput value={Number(merged.costo_envio_default ?? 0)} onChange={(v) => setField('costo_envio_default', v)} />
-            </Field>
-            <Field label="Tiempo retiro (min)">
-              <Input type="number" min={0} value={merged.tiempo_retiro_min ?? 15}
-                onChange={(e) => setField('tiempo_retiro_min', Number(e.target.value))} className="h-11" />
-            </Field>
-            <Field label="Tiempo delivery (min)">
-              <Input type="number" min={0} value={merged.tiempo_delivery_min ?? 35}
-                onChange={(e) => setField('tiempo_delivery_min', Number(e.target.value))} className="h-11" />
-            </Field>
             <Field label="Auto-lock POS (min)">
               <Input type="number" min={0} max={240} value={merged.autolock_minutos ?? 60}
                 onChange={(e) => setField('autolock_minutos', Number(e.target.value))} className="h-11" />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Min sin tocar el POS antes de pedir PIN otra vez. <strong>0 = nunca</strong> (recomendado para servicio).
+                Minutos sin tocar el POS antes de pedir PIN otra vez. <strong>0 = nunca</strong> (recomendado para servicio).
               </p>
             </Field>
             <Field label="Descuento efectivo (%)">
               <Input type="number" min={0} max={100} step={0.5} value={merged.descuento_efectivo_pct ?? 0}
                 onChange={(e) => setField('descuento_efectivo_pct', Number(e.target.value))} className="h-11" />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Aparece como opción "Aplicar descuento en efectivo" en el menú Opciones del POS. <strong>0 = deshabilitado</strong> (no aparece la opción).
+                Aparece como "Aplicar descuento en efectivo" en Opciones del POS. <strong>0 = deshabilitado</strong>.
               </p>
             </Field>
           </div>
-          <div className="space-y-2">
-            <ToggleField
-              label="Tienda online activa"
-              checked={merged.tienda_activa ?? true}
-              onChange={(v) => setField('tienda_activa', v)}
-            />
-            <ToggleField
-              label="Acepta delivery"
-              checked={merged.acepta_delivery ?? true}
-              onChange={(v) => setField('acepta_delivery', v)}
-            />
-            <ToggleField
-              label="Usar cursos en el POS"
-              checked={merged.usar_cursos ?? true}
-              onChange={(v) => setField('usar_cursos', v)}
-            />
-            <p className="text-[10px] text-muted-foreground -mt-1 ml-1">
-              Restaurantes de mantel (entrada → principal → postre) lo usan para mandar cada round a la cocina cuando los comensales terminan el anterior. Si tu negocio manda todo junto (sushi, fast casual, cafetería), apagalo y la UI queda más simple.
-            </p>
-            {(merged.tienda_activa ?? true) && (
-              <>
-                <WarningIntegracionFalta provider="email"
-                  mensaje="Sin email conectado, los clientes no van a recibir confirmación cuando hagan un pedido." />
-                <WarningIntegracionFalta provider="whatsapp_api" tono="info"
-                  mensaje="Opcional pero recomendado: WhatsApp Business para confirmar pedidos por WA además del email." />
-              </>
-            )}
-          </div>
-
-          {/* Radio de delivery — vive en tabla `locales`, va al patch mp */}
-          {mpMerged && (
-            <div className="rounded-md border border-border p-3 space-y-2">
-              <Label>Radio máximo de entrega (km)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                min={0.5}
-                max={50}
-                value={mpMerged.radio_delivery_km ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setMpField('radio_delivery_km', v === '' ? null : Number(v));
-                }}
-                placeholder="Vacío = sin límite"
-                className="h-11 max-w-[200px]"
-              />
-              <p className="text-xs text-muted-foreground">
-                Si lo dejás vacío, no hay límite (cualquier dirección se acepta).
-                Sugerido para CABA típico: 3-5 km. La validación corre en el
-                checkout — si el cliente está fuera del radio, no puede pagar
-                y le mostramos el mensaje.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* HORARIOS DE ATENCIÓN — sprint 16/05 (marketplace abierto/cerrado) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Horarios de atención</CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Formato: <code className="px-1 py-0.5 rounded bg-muted text-[10px]">HH:MM-HH:MM</code>.
-            Para varios turnos separá con coma: <code className="px-1 py-0.5 rounded bg-muted text-[10px]">12:00-15:00,20:00-23:30</code>.
-            Vacío = cerrado ese día.
-            El marketplace muestra badge "Abierto ahora" según estos horarios (TZ Argentina).
+          <ToggleField label="Usar cursos en el POS" checked={merged.usar_cursos ?? true} onChange={(v) => setField('usar_cursos', v)} />
+          <p className="text-[10px] text-muted-foreground -mt-1 ml-1">
+            Restaurantes de mantel (entrada → principal → postre) mandan cada round a la cocina cuando terminan el anterior. Si mandás todo junto (sushi, fast casual, café), apagalo y la UI queda más simple.
           </p>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {[
-            { key: 'horario_lun' as const, label: 'Lunes' },
-            { key: 'horario_mar' as const, label: 'Martes' },
-            { key: 'horario_mie' as const, label: 'Miércoles' },
-            { key: 'horario_jue' as const, label: 'Jueves' },
-            { key: 'horario_vie' as const, label: 'Viernes' },
-            { key: 'horario_sab' as const, label: 'Sábado' },
-            { key: 'horario_dom' as const, label: 'Domingo' },
-          ].map((d) => (
-            <div key={d.key} className="grid grid-cols-[120px_1fr] items-center gap-2">
-              <Label className="text-sm">{d.label}</Label>
-              <Input
-                value={merged[d.key] ?? ''}
-                onChange={(e) => setField(d.key, e.target.value || null)}
-                placeholder="Ej: 12:00-15:00,20:00-23:30 (vacío = cerrado)"
-                className="h-9 text-sm font-mono"
-              />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* MARKETPLACE — sprint 8 (campos viven en tabla `locales`) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Store className="h-5 w-5" />
-            Marketplace público
-          </CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Si activás "Visible", este local aparece en{' '}
-            <a href="/marketplace" target="_blank" rel="noopener" className="text-primary hover:underline inline-flex items-center gap-0.5">
-              /marketplace <ExternalLink className="h-3 w-3" />
-            </a>{' '}
-            para que clientes nuevos te descubran y entren a tu tienda online sin intermediarios.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!mpMerged ? (
-            <div className="text-sm text-muted-foreground">Cargando…</div>
-          ) : (
-            <>
-              {/* Ubicación geo del local — para filtrar autocomplete del cliente
-                  y para futuro cálculo de distancia/radio delivery */}
-              <div className="rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">
-                <div className="text-xs font-semibold text-primary uppercase tracking-wide">
-                  📍 Ubicación del local (importante)
-                </div>
-                <p className="text-xs text-muted-foreground -mt-1">
-                  Sin esto, cuando un cliente busca "Belgrano 1234" le aparecen direcciones de
-                  todas las provincias. Configurá tu provincia/localidad para que solo vea las
-                  cercanas.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Provincia">
-                    <Select
-                      value={mpMerged.provincia ?? '_none'}
-                      onValueChange={(v) => {
-                        setMpField('provincia', v === '_none' ? null : v);
-                        setMpField('localidad', null); // reset localidad al cambiar provincia
-                      }}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Elegir provincia…" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <SelectItem value="_none">— Sin configurar —</SelectItem>
-                        {PROVINCIAS_AR.map((p) => (
-                          <SelectItem key={p} value={p}>{p}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Localidad (opcional)">
-                    {!mpMerged.provincia ? (
-                      <div className="h-10 px-3 flex items-center text-xs text-muted-foreground italic border border-dashed border-border rounded-md">
-                        Elegí provincia primero
-                      </div>
-                    ) : (
-                      <>
-                        <Input
-                          value={localidadQuery || mpMerged.localidad || ''}
-                          onChange={(e) => {
-                            setLocalidadQuery(e.target.value);
-                            setMpField('localidad', e.target.value || null);
-                          }}
-                          placeholder="Ej: Belgrano"
-                          className="h-10"
-                          list={`localidades-${localId}`}
-                        />
-                        <datalist id={`localidades-${localId}`}>
-                          {localidadOpts.map((l) => <option key={l} value={l} />)}
-                        </datalist>
-                      </>
-                    )}
-                  </Field>
-                </div>
-              </div>
-
-              <ToggleField
-                label="Visible en marketplace"
-                checked={mpMerged.visible_marketplace ?? false}
-                onChange={(v) => setMpField('visible_marketplace', v)}
-              />
-
-              <Field label="Descripción corta (1-2 frases)">
-                <Textarea
-                  value={mpMerged.marketplace_descripcion ?? ''}
-                  onChange={(e) => setMpField('marketplace_descripcion', e.target.value || null)}
-                  rows={2}
-                  placeholder="Ej: Sushi premium con delivery en CABA · Más de 20 variedades de rolls."
-                  maxLength={200}
-                />
-                <p className="text-[10px] text-muted-foreground text-right">
-                  {(mpMerged.marketplace_descripcion ?? '').length}/200
-                </p>
-              </Field>
-
-              <Field label="Tags (tipo de cocina / características)">
-                <div className="flex gap-1.5 flex-wrap mb-2">
-                  {(mpMerged.marketplace_tags ?? []).map((t) => (
-                    <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">
-                      {t}
-                      <button
-                        type="button"
-                        onClick={() => quitarTag(t)}
-                        className="hover:bg-primary/20 rounded-full p-0.5"
-                        aria-label={`Quitar ${t}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={tagDraft}
-                    onChange={(e) => setTagDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); agregarTag(); }
-                    }}
-                    placeholder="Ej: Sushi, Vegano, Delivery, Apto celíaco…"
-                    className="h-10"
-                  />
-                  <Button type="button" variant="outline" onClick={agregarTag} disabled={!tagDraft.trim()}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Enter para agregar. Los clientes pueden filtrar por estos tags.
-                </p>
-              </Field>
-
-              <Field label="Foto de portada (16:10)">
-                {mpMerged.marketplace_foto_url && (
-                  <img
-                    src={mpMerged.marketplace_foto_url}
-                    alt="Preview portada"
-                    className="mb-2 rounded-md border border-border max-h-40 w-full object-cover"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                )}
-                <div className="flex gap-2 items-center">
-                  <label className="inline-flex items-center gap-1 px-3 h-9 rounded-md border border-input bg-background text-sm hover:bg-accent cursor-pointer">
-                    <Upload className="h-3.5 w-3.5" />
-                    {mpMerged.marketplace_foto_url ? 'Cambiar foto' : 'Subir foto'}
-                    <input
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.webp"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file || !user?.tenant_id || localId === null) return;
-                        const { url, error } = await subirMarketplaceFoto(user.tenant_id, localId, file);
-                        if (error || !url) { toast.error(error ?? 'Error subiendo'); return; }
-                        setMpField('marketplace_foto_url', url);
-                        toast.success('Foto subida — recordá Guardar');
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-                  {mpMerged.marketplace_foto_url && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMpField('marketplace_foto_url', null)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Quitar
-                    </Button>
-                  )}
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  PNG/JPG/WEBP, máx 3MB. También podés pegar una URL externa:
-                </p>
-                <Input
-                  value={mpMerged.marketplace_foto_url ?? ''}
-                  onChange={(e) => setMpField('marketplace_foto_url', e.target.value || null)}
-                  placeholder="https://images.unsplash.com/photo-... (opcional)"
-                  className="h-9 text-xs"
-                />
-              </Field>
-
-              <div className="flex justify-end">
-                <Button onClick={guardarMp} disabled={savingMp || Object.keys(mpPatch).length === 0}>
-                  {savingMp ? 'Guardando…' : 'Guardar marketplace'}
-                </Button>
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader><CardTitle>Modos POS habilitados</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground mb-3">
-            Aparecen en el sidebar del POS. Por ej. un foodtruck puede tener solo Mostrador.
-          </p>
+          <p className="text-sm text-muted-foreground mb-3">Aparecen en el sidebar del POS. Un foodtruck puede tener solo Mostrador.</p>
           <div className="space-y-2">
             {MODOS.map((m) => (
-              <ToggleField
-                key={m.value}
-                label={m.label}
-                checked={(merged.features_pos_modos ?? ['salon','mostrador','pedidos']).includes(m.value)}
-                onChange={() => toggleModo(m.value)}
-              />
+              <ToggleField key={m.value} label={m.label}
+                checked={(merged.features_pos_modos ?? ['salon', 'mostrador', 'pedidos']).includes(m.value)}
+                onChange={() => toggleModo(m.value)} />
             ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* Feature flags experimentales — solo dueño los configura. Default off. */}
       <Card>
-        <CardHeader>
-          <CardTitle>Laboratorio (experimental)</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Laboratorio (experimental)</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-3">
-            Features en testing. Activá uno por vez y testealo antes de pasarlo a producción real.
-            Cualquier cambio acá te hace recargar la app.
+            Features en testing. Activá uno por vez y testealo antes de producción. Cualquier cambio recarga la app.
           </p>
           <div className="space-y-2">
-            <ToggleField
-              label="Offline-first (POS funciona sin internet — sync automático al volver)"
-              checked={featureFlags.offlineFirstVentas}
-              onChange={(v) => setFeatureFlag('offline_first_ventas', v)}
-            />
+            <ToggleField label="Offline-first (POS funciona sin internet — sync al volver)"
+              checked={featureFlags.offlineFirstVentas} onChange={(v) => setFeatureFlag('offline_first_ventas', v)} />
           </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Offline-first: cuando lo prendés, todas las operaciones del POS (abrir mesa, cargar items, mandar curso, cobrar, anular, descuentos, transferir mesa) escriben primero a la base local del browser y se sincronizan cuando vuelve internet.
-            Las URLs van a tener IDs negativos temporales mientras estés offline — eso es normal, se reemplazan por el ID real cuando sincroniza.
+            Offline-first: todas las operaciones del POS escriben primero a la base local del browser y sincronizan cuando vuelve internet. Las URLs tienen IDs negativos temporales mientras estés offline — es normal, se reemplazan al sincronizar.
           </p>
         </CardContent>
       </Card>
@@ -661,12 +157,7 @@ export function SettingsLocal() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
+  return <div className="space-y-2"><Label>{label}</Label>{children}</div>;
 }
 
 function ToggleField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
