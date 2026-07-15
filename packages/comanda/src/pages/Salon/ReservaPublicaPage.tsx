@@ -76,11 +76,13 @@ interface CalProps {
   selected: string | null;
   min: Date;
   max: Date;
-  diasHabilitados: number[]; // 0=dom…6=sab
+  // Predicado por FECHA: contempla el horario semanal + excepciones (días
+  // especiales), en vez de un simple filtro por día de la semana.
+  esDiaHabilitado: (d: Date) => boolean;
   onSelect: (iso: string) => void;
 }
 
-function MiniCalendario({ selected, min, max, diasHabilitados, onSelect }: CalProps) {
+function MiniCalendario({ selected, min, max, esDiaHabilitado, onSelect }: CalProps) {
   const [mesBase, setMesBase] = useState<Date>(() => {
     const d = new Date(min);
     d.setDate(1);
@@ -143,7 +145,7 @@ function MiniCalendario({ selected, min, max, diasHabilitados, onSelect }: CalPr
         {cells.map((d, idx) => {
           if (!d) return <div key={idx} />;
           const iso = isoDate(d);
-          const habilitado = diasHabilitados.includes(d.getDay()) && d >= min && d <= max;
+          const habilitado = esDiaHabilitado(d) && d >= min && d <= max;
           const esHoy = iso === isoDate(hoy());
           const seleccionado = iso === selected;
           return (
@@ -321,16 +323,34 @@ export function ReservaPublicaPage() {
     setCancelOk(true);
   }
 
-  // Slots de horario para la fecha seleccionada
+  // Excepciones por fecha (días especiales): mapa ISO → excepción. GANA sobre
+  // el horario semanal (abre un día cerrado, o cierra uno abierto).
+  const excepcionesPorFecha = new Map(
+    (info?.excepciones ?? []).map((e) => [e.fecha, e] as const),
+  );
+
+  // Slots de horario para la fecha seleccionada. Si hay excepción ese día, manda
+  // la excepción; si no, el horario semanal.
   const slotsDelDia: string[] = (() => {
     if (!fecha || !info) return [];
+    const exc = excepcionesPorFecha.get(fecha);
+    if (exc) {
+      if (exc.cerrado || !exc.abre || !exc.cierra) return [];
+      return generarSlots(exc.abre, exc.cierra, info.duracion_estimada_min);
+    }
     const dow = new Date(fecha + 'T00:00:00').getDay();
     const horario = info.horarios.find((h) => h.dia === dow);
     if (!horario) return [];
     return generarSlots(horario.abre, horario.cierra, info.duracion_estimada_min);
   })();
 
-  const diasHabilitados = info?.horarios.map((h) => h.dia) ?? [];
+  // ¿La fecha está abierta para reservar? Excepción manda; si no, horario semanal.
+  const diasSemanaAbiertos = info?.horarios.map((h) => h.dia) ?? [];
+  const esDiaHabilitado = (d: Date): boolean => {
+    const exc = excepcionesPorFecha.get(isoDate(d));
+    if (exc) return !exc.cerrado;
+    return diasSemanaAbiertos.includes(d.getDay());
+  };
   const minFecha = addDays(hoy(), Math.ceil((info?.anticipacion_min_hs ?? 0) / 24));
   const maxFecha = addDays(hoy(), info?.anticipacion_max_dias ?? 30);
 
@@ -484,7 +504,7 @@ export function ReservaPublicaPage() {
             selected={fecha}
             min={minFecha}
             max={maxFecha}
-            diasHabilitados={diasHabilitados}
+            esDiaHabilitado={esDiaHabilitado}
             onSelect={(iso) => {
               setFecha(iso);
               setHora(null);

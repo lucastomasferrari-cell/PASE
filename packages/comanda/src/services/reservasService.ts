@@ -59,6 +59,10 @@ export interface ReservasInfoPublico {
   telefono_obligatorio: boolean;
   notas_publicas: string | null;
   requiere_confirmacion: boolean;
+  // Excepciones por fecha (días especiales) en la ventana de reservas. Una
+  // excepción GANA sobre el horario semanal: abre un día que normalmente cierra
+  // (cerrado=false) o cierra uno que abre (cerrado=true). Migración 202607142100.
+  excepciones?: Array<{ fecha: string; cerrado: boolean; abre: string | null; cierra: string | null }>;
 }
 
 // ─── Public (anon) ────────────────────────────────────────────────────
