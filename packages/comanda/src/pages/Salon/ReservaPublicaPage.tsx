@@ -62,7 +62,12 @@ function generarSlots(abre: string, cierra: string, durMinutos: number): string[
   const [ah, am] = abre.split(':').map(Number);
   const [ch, cm] = cierra.split(':').map(Number);
   const inicioMin = (ah ?? 0) * 60 + (am ?? 0);
-  const finMin    = (ch ?? 0) * 60 + (cm ?? 0) - durMinutos;
+  let cierreMin   = (ch ?? 0) * 60 + (cm ?? 0);
+  // Cierre a medianoche (00:00) o "antes" que la apertura → fin del día.
+  // Espeja fn_slots_disponibilidad_publico (v_fin := 24*60 si v_fin <= v_cur).
+  // Sin esto, un día 20:00–00:00 daba finMin negativo → cero turnos.
+  if (cierreMin <= inicioMin) cierreMin = 24 * 60;
+  const finMin    = cierreMin - durMinutos;
   const slots: string[] = [];
   for (let m = inicioMin; m <= finMin; m += 30) {
     slots.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
