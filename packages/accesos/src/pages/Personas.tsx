@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Search, Plus, Check, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock,
-  ChevronDown, Copy, User as UserIcon,
+  ChevronDown, Copy, User as UserIcon, RotateCcw,
 } from 'lucide-react';
 import {
   listUsuarios, crearUsuario, actualizarUsuario, sincronizarUsuario,
@@ -22,6 +22,7 @@ import { listRoles, type Rol } from '@/lib/rolesService';
 import { logAudit } from '@/lib/auditService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, type AppKey } from '@/lib/apps';
+import { CATEGORIAS } from '@/lib/permisos';
 import { Accesos } from './Accesos';
 
 interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
@@ -206,10 +207,10 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
   const [tempPass, setTempPass] = useState<string | null>(null);
   const [apps, setApps] = useState<string[]>(usuario?.apps_permitidas ?? ['pase']);
   const [locsPase, setLocsPase] = useState<number[]>(usuario?.locales ?? []);
-  // Se preservan tal cual (no se editan acá): el ROL define qué puede hacer en
-  // PASE. Punto 3 (Lucas, 15-jul): acceso completo o no por app, sin permisos
-  // específicos en esta pantalla.
-  const [permisos] = useState<string[]>(usuario?.permisos ?? []);
+  // Permisos de PASE editables inline (Fase 1, 16-jul). Al elegir un rol se
+  // autocompletan con los del rol; el dueño puede tildar/destildar acá mismo.
+  // Se guardan por usuario en usuario_permisos (los respeta auth_tiene_permiso).
+  const [permisos, setPermisos] = useState<string[]>(usuario?.permisos ?? []);
   const [accesosApp, setAccesosApp] = useState<Record<string, { locales?: number[]; permisos?: string[] }>>(usuario?.accesos_por_app ?? {});
   const [abierto, setAbierto] = useState<Set<string>>(new Set()); // todo cerrado por defecto
   const [guardando, setGuardando] = useState(false);
@@ -219,6 +220,17 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
 
   function toggleOpen(k: string) { setAbierto((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; }); }
   function toggleApp(k: string) { setApps((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k]); }
+  function togglePermiso(slug: string) { setPermisos((p) => p.includes(slug) ? p.filter((x) => x !== slug) : [...p, slug]); }
+  // Autocompletar con los permisos del rol elegido (base editable después).
+  function elegirRol(id: string | null) {
+    setRolId(id);
+    const r = roles.find((x) => x.id === id) ?? null;
+    setPermisos(r ? [...r.permisos] : []);
+  }
+  // ¿Los permisos actuales difieren de los del rol? (para mostrar "personalizado").
+  const permisosPersonalizados = selectedRole
+    ? (permisos.length !== rolePerms.size || permisos.some((p) => !rolePerms.has(p)))
+    : permisos.length > 0;
 
   // Locales por app: PASE usa el modelo real (locsPase); el resto, accesosApp[app].
   function localesDeApp(key: string): number[] {
@@ -345,11 +357,11 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-ink-soft">Rol</label>
-            <select value={rolId ?? ''} onChange={(e) => setRolId(e.target.value || null)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+            <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
               <option value="">— Sin rol —</option>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
             </select>
-            {selectedRole && <p className="text-[11px] text-ink-muted">Trae {rolePerms.size} permiso{rolePerms.size === 1 ? '' : 's'} de PASE. Ajustá en cada app.</p>}
+            {selectedRole && <p className="text-[11px] text-ink-muted">Autocompleta {rolePerms.size} permiso{rolePerms.size === 1 ? '' : 's'} de PASE. Ajustalos abajo, en la app PASE.</p>}
           </div>
         </div>
       </Seccion>
@@ -372,7 +384,11 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                 {on ? 'Con acceso' : 'Sin acceso'}
               </span>
             }
-            sub={on ? (usaLoc ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'}` : (op ? 'Entra sin PIN' : 'Acceso completo')) : undefined}
+            sub={on ? (
+              a.key === 'pase'
+                ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'} · ${permisos.length} permiso${permisos.length === 1 ? '' : 's'}`
+                : (usaLoc ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'}` : (op ? 'Entra sin PIN' : 'Acceso completo'))
+            ) : undefined}
           >
             {!on ? (
               <div className="text-sm text-ink-muted">Sin acceso a {a.nombre}. Tocá "Sin acceso" arriba para dárselo.</div>
@@ -385,11 +401,22 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                                    onToggle={(id) => toggleLocalApp(a.key, id)} onToggleMarca={(ids) => toggleMarcaApp(a.key, ids)} />
                   </div>
                 )}
-                <p className="text-[11px] text-ink-muted inline-flex items-center gap-1.5">
-                  <Lock className="h-3 w-3" />
-                  {op ? `Entra a ${a.nombre} sin PIN, con acceso completo.` : `Acceso completo a ${a.nombre}.`}
-                  {' '}Lo que puede hacer lo define su <strong className="font-medium">rol{selectedRole ? ` (${selectedRole.nombre})` : ''}</strong>.
-                </p>
+                {a.key === 'pase' ? (
+                  <PermisosPase
+                    value={permisos}
+                    onToggle={togglePermiso}
+                    rolePerms={rolePerms}
+                    selectedRole={selectedRole}
+                    personalizado={permisosPersonalizados}
+                    onVolverAlRol={() => setPermisos(selectedRole ? [...selectedRole.permisos] : [])}
+                  />
+                ) : (
+                  <p className="text-[11px] text-ink-muted inline-flex items-center gap-1.5">
+                    <Lock className="h-3 w-3" />
+                    {op ? `Entra a ${a.nombre} sin PIN, con acceso completo.` : `Acceso completo a ${a.nombre}.`}
+                    {' '}Lo que puede hacer lo define su <strong className="font-medium">rol{selectedRole ? ` (${selectedRole.nombre})` : ''}</strong>.
+                  </p>
+                )}
               </div>
             )}
           </Seccion>
@@ -429,6 +456,62 @@ function Seccion({ titulo, sub, icon, right, abierto, onToggle, children }: {
       </button>
       {abierto && <div className="px-5 pb-5 pt-1 border-t border-ink/5">{children}</div>}
     </section>
+  );
+}
+
+// Editor de permisos de PASE. Agrupa el catálogo (CATEGORIAS) como el sidebar;
+// se autocompleta con los del rol y se tilda/destilda inline. Un puntito marca
+// los permisos que trae el rol pero fueron destildados.
+function PermisosPase({ value, onToggle, rolePerms, selectedRole, personalizado, onVolverAlRol }: {
+  value: string[];
+  onToggle: (slug: string) => void;
+  rolePerms: Set<string>;
+  selectedRole: Rol | null;
+  personalizado: boolean;
+  onVolverAlRol: () => void;
+}) {
+  const set = new Set(value);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-xs font-medium text-ink-soft">
+          Permisos en PASE <span className="font-normal text-ink-muted">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
+        </p>
+        {selectedRole && personalizado && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">Personalizado</span>
+            <button type="button" onClick={onVolverAlRol}
+                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-ink/15 hover:bg-ink/5 text-ink-soft">
+              <RotateCcw className="h-3 w-3" /> Volver a los del rol
+            </button>
+          </div>
+        )}
+      </div>
+      {!selectedRole && (
+        <p className="text-[11px] text-ink-muted">Elegí un rol arriba para autocompletar, o tildá los permisos a mano.</p>
+      )}
+      <div className="space-y-3">
+        {CATEGORIAS.map((cat) => (
+          <div key={cat.titulo} className="space-y-1.5">
+            <p className="text-[11px] font-medium text-ink-muted uppercase tracking-wide">{cat.titulo}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {cat.permisos.map((p) => {
+                const on = set.has(p.slug);
+                const delRol = rolePerms.has(p.slug);
+                return (
+                  <button key={p.slug} type="button" onClick={() => onToggle(p.slug)} title={p.descripcion ?? p.label}
+                          className={`text-xs px-3 py-1.5 rounded-full border inline-flex items-center gap-1.5 ${on ? 'bg-brand-500 text-white border-brand-500' : 'bg-white border-ink/15 text-ink-soft hover:bg-ink/5'}`}>
+                    {on && <Check className="h-3 w-3" />}
+                    {p.label}
+                    {delRol && !on && <span className="w-1.5 h-1.5 rounded-full bg-brand-300" title="Lo trae el rol (destildado)" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
