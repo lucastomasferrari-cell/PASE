@@ -1,5 +1,4 @@
-import { Menu, Bell, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Menu, Bell, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -19,7 +18,6 @@ interface Props {
 // confuso ("Buscar items, mesas, empleados…" sonaba a POS). Cuando se
 // implemente buscador real, se agrega de vuelta con placeholder admin-aware.
 export function AdminHeader({ onOpenSidebar }: Props) {
-  const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-20 bg-card border-b border-border h-14 flex items-center px-4 gap-2">
       {/* Hamburguesa mobile */}
@@ -40,15 +38,17 @@ export function AdminHeader({ onOpenSidebar }: Props) {
         <AdminBreadcrumb />
       </div>
 
-      {/* Cluster derecho: Volver al POS · tema · notificaciones · usuario */}
+      {/* Abrir el POS en otra pestaña con sesión propia (cuenta del local),
+          sin tocar esta sesión de admin. Así se usan los dos a la vez. */}
       <Button
         variant="ghost"
         size="sm"
         className="gap-1.5 shrink-0"
-        onClick={() => navigate('/pos')}
+        onClick={() => window.open('/login?sesion=nueva&next=/pos', '_blank', 'noopener')}
+        title="Abrir el POS en otra pestaña (con la cuenta del local)"
       >
-        <ArrowLeft className="h-4 w-4" />
-        <span className="hidden sm:inline">Volver al POS</span>
+        <ExternalLink className="h-4 w-4" />
+        <span className="hidden sm:inline">Abrir POS</span>
       </Button>
 
       <ThemeToggle />

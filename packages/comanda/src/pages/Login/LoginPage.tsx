@@ -56,7 +56,10 @@ export function LoginPage() {
       setError(traducirError(err.message));
       return;
     }
-    navigate('/catalogo', { replace: true });
+    // Volver a la zona desde donde vinimos (botones Admin↔POS pasan ?next=).
+    // Solo rutas internas (empiezan con "/") por seguridad.
+    const next = new URLSearchParams(window.location.search).get('next');
+    navigate(next && next.startsWith('/') ? next : '/catalogo', { replace: true });
   }
 
   return (

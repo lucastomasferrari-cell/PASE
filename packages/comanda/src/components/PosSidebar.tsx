@@ -1,13 +1,11 @@
-import { UtensilsCrossed, Coffee, Package, Wallet, ArrowLeft, LifeBuoy } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { UtensilsCrossed, Coffee, Package, Wallet, Settings, LifeBuoy } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useFeaturesPosModos } from '@/lib/useFeaturesPosModos';
-import { useAuthPos } from '@/lib/authPos';
 import { useLastPosModo } from '@/lib/lastPosModo';
 import { getConsoleErrors } from '@/lib/consoleCapture';
-import { AdminAccessDialog } from './dialogs/AdminAccessDialog';
-import type { PosModo, RolPos } from '@/types/database';
+import type { PosModo } from '@/types/database';
 
 interface ModoConfig {
   slug: PosModo;
@@ -21,17 +19,11 @@ const MODOS: ModoConfig[] = [
   { slug: 'pedidos',   label: 'Pedidos',   Icon: Package },
 ];
 
-// Roles POS con acceso directo al admin (sin PIN adicional).
-const ROLES_ADMIN: RolPos[] = ['encargado', 'manager', 'dueno'];
-
 export function PosSidebar() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const { empleado } = useAuthPos();
   const enabledModos = useFeaturesPosModos();
   const lastPosModo = useLastPosModo();
   const [tieneErrores, setTieneErrores] = useState(false);
-  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
 
   // Sabemos en qué modo estamos si la URL contiene su slug (/pos/salon, etc)
   // O si estamos en una venta/pedido detalle — ahí el modo lo persistieron esas
@@ -53,14 +45,11 @@ export function PosSidebar() {
     active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
   );
 
-  // Al tocar Admin: si el empleado del PIN actual tiene rol admin, va directo.
-  // Si no (cajero / bartender), abre el dialog que pide un PIN autorizado.
+  // Admin en OTRA pestaña con sesión aislada (16-jul): no comparte la cuenta
+  // del local. Se abre en /login (sesión nueva), la persona entra con SU cuenta
+  // y sus permisos mandan de verdad. La sesión del POS acá queda intacta.
   function handleAdminClick() {
-    if (empleado && ROLES_ADMIN.includes(empleado.rol_pos)) {
-      navigate('/catalogo');
-      return;
-    }
-    setAdminDialogOpen(true);
+    window.open('/login?sesion=nueva&next=/reportes/dashboard', '_blank', 'noopener');
   }
 
   return (
@@ -92,15 +81,15 @@ export function PosSidebar() {
         <span className="text-[10px] font-medium">Caja</span>
       </Link>
 
-      {/* Admin — siempre visible, pero requiere PIN de manager/encargado/dueño. */}
+      {/* Admin — abre en otra pestaña con login propio (no comparte la cuenta del local). */}
       <button
         type="button"
         onClick={handleAdminClick}
         className={linkCls(false)}
         aria-label="Administración"
-        title="Ir al panel de administración (requiere PIN admin)"
+        title="Abrir el panel de administración (entrás con tu cuenta, en otra pestaña)"
       >
-        <ArrowLeft className="h-5 w-5" />
+        <Settings className="h-5 w-5" />
         <span className="text-[10px] font-medium">Admin</span>
       </button>
 
@@ -121,11 +110,6 @@ export function PosSidebar() {
         </button>
       </div>
 
-      <AdminAccessDialog
-        open={adminDialogOpen}
-        onOpenChange={setAdminDialogOpen}
-        onAuthorized={() => { setAdminDialogOpen(false); navigate('/catalogo'); }}
-      />
     </aside>
   );
 }
