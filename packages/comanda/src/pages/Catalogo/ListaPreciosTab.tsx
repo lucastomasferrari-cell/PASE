@@ -10,6 +10,7 @@ import { tienePermiso } from '../../lib/auth';
 import { formatARS, parseARS, relativoCorto } from '../../lib/format';
 import { SearchInput } from '../../components/SearchInput';
 import { AumentoMasivoDialog } from './AumentoMasivoDialog';
+import type { CatalogoScope } from '@/lib/catalogoScope';
 import { useCatalogoScope, scopeToItemsFilter, scopeLocalId } from '@/lib/catalogoScope';
 import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 // useRealtimeTable sacado sprint optim egress 2026-05-16
@@ -20,9 +21,13 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
-interface Props { user: Usuario }
+interface Props {
+  user: Usuario;
+  /** Ver ItemsTab#Props.forceScope. */
+  forceScope?: CatalogoScope;
+}
 
-export function ListaPreciosTab({ user }: Props) {
+export function ListaPreciosTab({ user, forceScope }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [canales, setCanales] = useState<Canal[]>([]);
@@ -40,7 +45,8 @@ export function ListaPreciosTab({ user }: Props) {
   const [canalIdPreseleccionado, setCanalIdPreseleccionado] = useState<number | null>(null);
   const [lastChange, setLastChange] = useState<string | null>(null);
 
-  const [scope] = useCatalogoScope();
+  const [hookScope] = useCatalogoScope();
+  const scope = forceScope ?? hookScope;
   const puedeEditar = tienePermiso(user, 'comanda.precios.editar');
   const puedeAumento = tienePermiso(user, 'comanda.precios.aumento_masivo');
 
@@ -115,7 +121,7 @@ export function ListaPreciosTab({ user }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <CatalogoScopeSelector />
+          {!forceScope && <CatalogoScopeSelector hideMaestro />}
         {puedeAumento && (
           <div className="flex items-center gap-2">
             {canalFilter !== 'todos' && (

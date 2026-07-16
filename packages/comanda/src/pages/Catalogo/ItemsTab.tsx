@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { formatARS } from '@/lib/utils';
+import type { CatalogoScope } from '@/lib/catalogoScope';
 import { useCatalogoScope, scopeToItemsFilter, scopeLocalId } from '@/lib/catalogoScope';
 import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 import { ItemForm } from './ItemForm';
@@ -25,11 +26,18 @@ import { ImportarMenuDialog } from './ImportarMenuDialog';
 
 interface Props {
   user: Usuario;
+  /**
+   * Si viene, el tab bloquea el scope a ese valor y oculta el CatalogoScopeSelector.
+   * Se usa en las rutas /menu/maestro/* para forzar el editor a "maestro"
+   * (rutas dueño-only) mientras que las rutas /menu/* siguen funcionando con el
+   * selector de sucursal. Sin este prop, se comporta como antes (con selector).
+   */
+  forceScope?: CatalogoScope;
 }
 
 type EstadoFilter = ItemEstado | 'todos';
 
-export function ItemsTab({ user }: Props) {
+export function ItemsTab({ user, forceScope }: Props) {
   const [items, setItems] = useState<ItemConGrupo[]>([]);
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [marcas, setMarcas] = useState<MarcaLite[]>([]);
@@ -43,7 +51,8 @@ export function ItemsTab({ user }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<ItemConGrupo | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scope] = useCatalogoScope();
+  const [hookScope] = useCatalogoScope();
+  const scope = forceScope ?? hookScope;
 
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
   const puedeEliminar = tienePermiso(user, 'comanda.catalogo.eliminar');
@@ -99,7 +108,11 @@ export function ItemsTab({ user }: Props) {
         </div>
         {puedeEditar && (
           <div className="flex items-center gap-2 flex-wrap">
-            <CatalogoScopeSelector />
+            {/* Si el scope viene forzado (rutas /menu/maestro/*), no mostramos
+                el selector — el usuario está en la sección de marca dedicada y
+                el alcance está fijo en 'maestro'. En rutas /menu/* (sucursal),
+                el selector no muestra la opción 'maestro' (hideMaestro). */}
+            {!forceScope && <CatalogoScopeSelector hideMaestro />}
             {scope === 'maestro' && (
               <Button variant="outline" onClick={() => setImportOpen(true)}>
                 <Download className="h-4 w-4 mr-1.5" />

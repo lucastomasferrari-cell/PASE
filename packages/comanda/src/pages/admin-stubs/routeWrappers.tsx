@@ -32,3 +32,23 @@ export const CanalesRoute     = withUser(CanalesTab);
 export const ListaPreciosRoute = withUser(ListaPreciosTab);
 export const ModificadoresRoute = withUser(ModificadoresTab);
 export const EmpleadosListaRoute = withUser(SettingsEmpleados);
+
+// ─── Menú Marca (maestro dueño-only) ──────────────────────────────────
+// Wrappers que fuerzan el scope a 'maestro'. Las rutas /menu/maestro/*
+// las montan; el CatalogoScopeSelector queda oculto (forceScope lo silencia
+// dentro de cada tab). Estas rutas están gatadas por permiso en el sidebar.
+export const ItemsRouteMaestro = () => {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <ItemsTab user={user} forceScope="maestro" />;
+};
+export const GruposRouteMaestro = () => {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <GruposTab user={user} forceScope="maestro" />;
+};
+export const ListaPreciosRouteMaestro = () => {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <ListaPreciosTab user={user} forceScope="maestro" />;
+};

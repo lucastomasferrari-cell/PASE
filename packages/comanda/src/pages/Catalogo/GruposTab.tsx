@@ -22,14 +22,17 @@ import {
 } from '@/components/ui/select';
 import { DEFAULT_PICKER_COLOR } from '@/lib/utils';
 import { ColorRampPicker, type ColorRamp, COLOR_RAMPS } from '@/components/ColorRampPicker';
+import type { CatalogoScope } from '@/lib/catalogoScope';
 import { useCatalogoScope, scopeToItemsFilter, scopeLocalId } from '@/lib/catalogoScope';
 import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 
 interface Props {
   user: Usuario;
+  /** Ver ItemsTab#Props.forceScope. */
+  forceScope?: CatalogoScope;
 }
 
-export function GruposTab({ user }: Props) {
+export function GruposTab({ user, forceScope }: Props) {
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
@@ -39,7 +42,8 @@ export function GruposTab({ user }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<ItemGrupo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scope] = useCatalogoScope();
+  const [hookScope] = useCatalogoScope();
+  const scope = forceScope ?? hookScope;
 
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
   const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
@@ -80,7 +84,7 @@ export function GruposTab({ user }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <CatalogoScopeSelector />
+          {!forceScope && <CatalogoScopeSelector hideMaestro />}
           {marcas.length > 0 && (
             <Select value={marcaFilter} onValueChange={setMarcaFilter}>
               <SelectTrigger className="w-[180px] h-11"><SelectValue /></SelectTrigger>

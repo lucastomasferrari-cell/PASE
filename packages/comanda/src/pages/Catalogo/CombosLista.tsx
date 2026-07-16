@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { formatARS } from '@/lib/format';
 // useRealtimeTable sacado sprint optim egress 2026-05-16
 import { ComboEditorDialog } from '@/components/dialogs/ComboEditorDialog';
+import type { CatalogoScope } from '@/lib/catalogoScope';
 import { useCatalogoScope, scopeToItemsFilter } from '@/lib/catalogoScope';
 import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 
@@ -23,13 +24,19 @@ import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 // El item base se crea desde Items (con toggle es_combo). Acá solo se
 // configura la composición.
 
-export function CombosLista() {
+interface Props {
+  /** Ver ItemsTab#Props.forceScope. */
+  forceScope?: CatalogoScope;
+}
+
+export function CombosLista({ forceScope }: Props = {}) {
   const { user } = useAuth();
   const [combos, setCombos] = useState<Item[]>([]);
   const [todosItems, setTodosItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [scope] = useCatalogoScope();
+  const [hookScope] = useCatalogoScope();
+  const scope = forceScope ?? hookScope;
 
   const reload = useCallback(async () => {
     if (!user?.tenant_id) return;
@@ -65,7 +72,7 @@ export function CombosLista() {
             Un combo agrupa items en "slots" (Bebida, Acompañamiento, etc.) — el cliente arma su pedido eligiendo dentro de cada slot.
           </p>
         </div>
-        <CatalogoScopeSelector />
+        {!forceScope && <CatalogoScopeSelector hideMaestro />}
       </header>
 
       {/* Banner explicativo */}

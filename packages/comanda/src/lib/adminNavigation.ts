@@ -1,6 +1,7 @@
 import {
   BarChart3, BookOpen, Utensils, Clock, DollarSign,
   Globe, Printer, Plug, Settings, CreditCard, Package, Store,
+  Layers,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -52,6 +53,21 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
       { slug: 'empleados',         label: 'Performance empleados', href: '/reportes/empleados' },
       { slug: 'tiempos',           label: 'Tiempos',            href: '/reportes/tiempos' },
       { slug: 'auditoria',         label: 'Auditoría',          href: '/reportes/auditoria' },
+    ],
+  },
+  {
+    // Menú Marca (maestro) — solo dueño. Es la plantilla que se replica
+    // a cada sucursal vía "Importar a sucursal". Los encargados de local
+    // no lo pueden tocar (permission gate).
+    slug: 'menu-marca',
+    label: 'Menú Marca',
+    icon: Layers,
+    href: '/menu/maestro/items',
+    requiredPermission: 'comanda.catalogo.maestro.editar',
+    subItems: [
+      { slug: 'items',         label: 'Items',           href: '/menu/maestro/items' },
+      { slug: 'grupos',        label: 'Grupos',          href: '/menu/maestro/grupos' },
+      { slug: 'lista-precios', label: 'Lista de precios', href: '/menu/maestro/lista-precios' },
     ],
   },
   {

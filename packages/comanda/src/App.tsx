@@ -43,6 +43,10 @@ const CanalesRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then
 const ListaPreciosRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ListaPreciosRoute })));
 const ModificadoresRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ModificadoresRoute })));
 const EmpleadosListaRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.EmpleadosListaRoute })));
+// Menú Marca — wrappers con forceScope='maestro' para las rutas dueño-only.
+const ItemsRouteMaestro = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ItemsRouteMaestro })));
+const GruposRouteMaestro = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.GruposRouteMaestro })));
+const ListaPreciosRouteMaestro = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ListaPreciosRouteMaestro })));
 
 // ─── LAZY: regla C8 (auditoría 2026-05-15). Todas las páginas son
 // named exports, así que usamos el patrón `.then(m => ({ default: m.X }))`
@@ -281,6 +285,11 @@ export default function App() {
                   <Route path="/menu/modificadores" element={<ModificadoresRoute />} />
                   <Route path="/menu/combos" element={<StubRoute />} />
                   <Route path="/menu/disponibilidad" element={<DisponibilidadLista />} />
+                  {/* ── Menú Marca (maestro — dueño-only) ─────────────── */}
+                  <Route path="/menu/maestro" element={<Navigate to="/menu/maestro/items" replace />} />
+                  <Route path="/menu/maestro/items" element={<ItemsRouteMaestro />} />
+                  <Route path="/menu/maestro/grupos" element={<GruposRouteMaestro />} />
+                  <Route path="/menu/maestro/lista-precios" element={<ListaPreciosRouteMaestro />} />
                   {/* F1.1b CMV — insumos + recetas + materias primas + alertas margen */}
                   <Route path="/menu/insumos" element={<InsumosLista />} />
 
