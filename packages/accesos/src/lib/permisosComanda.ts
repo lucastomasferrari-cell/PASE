@@ -18,6 +18,10 @@ function navSec(titulo: string, cat: string, seccionSlug: string, items: [string
   };
 }
 
+// Auditoría 17-jul (Lucas): reorganización de categorías para eliminar
+// nombres duplicados y agrupar por dominio real. Slugs NO cambian —
+// solo se renombran los labels/títulos y se reagrupa la sección Acciones
+// (que antes mezclaba 20 permisos POS+admin).
 export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
   navSec('Reportes', 'reportes', 'comanda.reportes.ver', [
     ['dashboard', 'Dashboard'],
@@ -25,7 +29,8 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['cmv', 'CMV (costo mercadería)'],
     ['ventas', 'Ventas (detalle)'],
     ['productos', 'Productos'],
-    ['canales', 'Canales'],
+    // Renombrado 17-jul: "Canales" pisaba el sub-item homónimo de Menú.
+    ['canales', 'Reporte por canal'],
     ['empleados', 'Performance de empleados'],
     ['tiempos', 'Tiempos'],
     ['auditoria', 'Auditoría'],
@@ -35,7 +40,7 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['grupos', 'Grupos'],
     ['modificadores', 'Modificadores'],
     ['combos', 'Combos'],
-    ['canales', 'Canales'],
+    ['canales', 'Canales de venta'],
     ['lista-precios', 'Lista de precios'],
     ['disponibilidad', 'Disponibilidad'],
     ['alertas-margen', 'Alertas de margen'],
@@ -51,7 +56,9 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['mesas', 'Mesas'],
     ['reservas', 'Reservas'],
   ]),
-  navSec('Turno', 'empleados', 'comanda.empleados.ver', [
+  // Renombrado 17-jul: "Turno" no describía el contenido (mi cierre,
+  // propinas, quién trabaja).
+  navSec('Personal', 'empleados', 'comanda.empleados.ver', [
     ['mi-cierre', 'Mi cierre del día'],
     ['propinas', 'Reparto de propinas'],
     ['horarios', 'Trabajando ahora'],
@@ -60,12 +67,16 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['metodos', 'Métodos de cobro'],
     ['logbook', 'Logbook'],
   ]),
-  navSec('Tienda online', 'tienda-online', 'comanda.online.gestionar', [
+  // Renombrado 17-jul: "Tienda online" y "Online" (abajo) eran casi
+  // idénticos. Esta es la tienda propia con marketplace/difusión; la
+  // otra sección es canales digitales (QR, KDS, delivery).
+  navSec('Tienda propia', 'tienda-online', 'comanda.online.gestionar', [
     ['resumen', 'Resumen'],
-    ['configuracion', 'Configuración'],
+    // Renombrado: "Configuración" pisaba el nombre de la sección top-level.
+    ['configuracion', 'Ajustes de tienda'],
     ['difusion', 'Difusión'],
   ]),
-  navSec('Online', 'online', 'comanda.online.gestionar', [
+  navSec('Canales digitales', 'online', 'comanda.online.gestionar', [
     ['menu-qr', 'Menú QR'],
     ['kds', 'KDS (pantalla de cocina)'],
     ['dispatch', 'Despacho de delivery'],
@@ -76,7 +87,10 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['agentes', 'Print Agents (PCs)'],
     ['riders', 'Repartidores'],
   ]),
-  navSec('Integraciones', 'integraciones', 'comanda.integraciones.gestionar', [
+  // "Integraciones" ambigua se resolvió: acá es solo plataformas de
+  // delivery. Las notificaciones (WhatsApp/Email) están en Configuración
+  // como "Notificaciones".
+  navSec('Integraciones (delivery)', 'integraciones', 'comanda.integraciones.gestionar', [
     ['rappi', 'Rappi'],
     ['pedidosya', 'PedidosYa'],
     ['deliverect', 'Deliverect'],
@@ -84,12 +98,16 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
   navSec('Configuración', 'configuracion', 'comanda.configuracion.editar', [
     ['local', 'Local'],
     ['cubiertos', 'Cubierto por sector'],
-    ['integraciones', 'Integraciones (WhatsApp, Email…)'],
+    // Renombrado 17-jul: "Integraciones" chocaba con la sección top-level.
+    ['integraciones', 'Notificaciones (WhatsApp, Email…)'],
     ['afip', 'Factura electrónica AFIP'],
     ['afip-pendientes', 'AFIP pendientes'],
   ]),
+  // Auditoría 17-jul: la sección monolítica "Acciones (POS y catálogo)"
+  // (20 permisos) se dividió en dos por dominio de uso — POS diario vs
+  // administración de catálogo/config. Los slugs NO cambian.
   {
-    titulo: 'Acciones (POS y catálogo)', emoji: '',
+    titulo: 'Acciones POS (operación diaria)', emoji: '',
     permisos: [
       { slug: 'comanda.ventas.cobrar', label: 'Tomar pedidos y cobrar' },
       { slug: 'comanda.ventas.anular', label: 'Anular item / venta', descripcion: 'Con override de manager.' },
@@ -100,6 +118,12 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
       { slug: 'comanda.caja.abrir', label: 'Abrir turno' },
       { slug: 'comanda.caja.cerrar', label: 'Cerrar turno' },
       { slug: 'comanda.caja.movimientos', label: 'Retiros / depósitos / ajustes' },
+      { slug: 'comanda.tienda.aprobar', label: 'Aprobar pedidos online' },
+    ],
+  },
+  {
+    titulo: 'Acciones Admin (catálogo, config)', emoji: '',
+    permisos: [
       { slug: 'comanda.catalogo.editar', label: 'Editar items y grupos' },
       { slug: 'comanda.catalogo.eliminar', label: 'Eliminar items' },
       { slug: 'comanda.canales.editar', label: 'Editar canales' },
@@ -107,7 +131,6 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
       { slug: 'comanda.precios.aumento_masivo', label: 'Aumento masivo de precios' },
       { slug: 'comanda.modifiers.editar', label: 'Editar modificadores' },
       { slug: 'comanda.tax.editar', label: 'Editar impuestos' },
-      { slug: 'comanda.tienda.aprobar', label: 'Aprobar pedidos online' },
       { slug: 'comanda.empleados.editar_pos', label: 'Setear PIN / rol POS de empleados' },
       { slug: 'comanda.config.editar', label: 'Editar config del local' },
       { slug: 'comanda.audit.ver', label: 'Ver auditoría de overrides' },
