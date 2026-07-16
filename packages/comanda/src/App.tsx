@@ -26,6 +26,9 @@ import { useAuth } from './lib/auth';
 
 // LoginPage queda eager — entry point sin sesión, no queremos latencia (regla C8).
 import { LoginPage } from './pages/Login/LoginPage';
+// WelcomePage — selector Admin/POS, es la puerta de entrada cuando no hay
+// sesión. También eager por la misma razón que LoginPage.
+import { WelcomePage } from './pages/Welcome/WelcomePage';
 
 // ─── Componentes core compartidos (no son páginas, no van a lazy) ──────────
 import { DefaultModeRedirect } from './components/DefaultModeRedirect';
@@ -166,7 +169,7 @@ function AuthGate() {
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/welcome" replace />;
   return <Outlet />;
 }
 
@@ -227,6 +230,7 @@ export default function App() {
               <Routes>
                 {import.meta.env.DEV && <Route path="/pos/_spike-offline" element={<SpikeOfflinePage />} />}
                 <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
+                <Route path="/welcome" element={<WelcomePage />} />
 
                 {/* Rutas PÚBLICAS (sin auth, sin PIN) */}
                 <Route path="/marketplace" element={<MarketplaceHome />} />
