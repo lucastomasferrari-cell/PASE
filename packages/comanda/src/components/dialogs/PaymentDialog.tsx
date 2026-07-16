@@ -57,6 +57,14 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const [montoEntregado, setMontoEntregado] = useState<number>(0);
   const [confirmando, setConfirmando] = useState(false);
   const confirmandoRef = useRef(false);
+  // Marca si el user tipeó en el input. Los useEffect de auto-populate
+  // (líneas ~101, ~109) solo reponen el valor cuando este flag es false —
+  // así al borrar dígitos manualmente NO se auto-repone (bug reportado por
+  // Camilo, 17-jul: "cuando llego al último número se vuelve a poner todo").
+  // Se resetea al abrir el dialog y al agregar un pago (única veces donde
+  // queremos el prefill automático).
+  const montoNuevoTouchedRef = useRef(false);
+  const montoEntregadoTouchedRef = useRef(false);
   const [ctxMenu, setCtxMenu] = useState<{ metodo: MetodoCobro; x: number; y: number } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
 
@@ -83,6 +91,8 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   useEffect(() => {
     if (!open) return;
     setPagos([]); setMontoNuevo(0); setMontoEntregado(0); setCuotasNuevo(1); setConfirmando(false);
+    montoNuevoTouchedRef.current = false;
+    montoEntregadoTouchedRef.current = false;
     listMetodosCobroActivos(venta.local_id).then((r) => {
       setAllMetodos(r.data);
       const visible = r.data.filter((m) =>
@@ -99,6 +109,7 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const cubrió = sumaPagos >= totalConPropina - 0.01;
 
   useEffect(() => {
+    if (montoNuevoTouchedRef.current) return;
     if (montoNuevo === 0 && restante > 0) setMontoNuevo(restante);
   }, [restante, montoNuevo]);
 
@@ -107,6 +118,7 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const vueltoCalc = pideVuelto && montoEntregado >= montoNuevo ? montoEntregado - montoNuevo : 0;
 
   useEffect(() => {
+    if (montoEntregadoTouchedRef.current) return;
     if (pideVuelto && montoEntregado === 0 && montoNuevo > 0) {
       setMontoEntregado(montoNuevo);
     }
@@ -128,6 +140,10 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
     setMontoNuevo(0);
     setMontoEntregado(0);
     setCuotasNuevo(1);
+    // Reset flags: queremos que el useEffect reactivo prefille el nuevo
+    // restante después de agregar el pago.
+    montoNuevoTouchedRef.current = false;
+    montoEntregadoTouchedRef.current = false;
   }
 
   function eliminarPago(id: string) {
@@ -448,12 +464,18 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Monto</Label>
-                        <MoneyInput value={montoNuevo} onChange={setMontoNuevo} />
+                        <MoneyInput
+                          value={montoNuevo}
+                          onChange={(n) => { montoNuevoTouchedRef.current = true; setMontoNuevo(n); }}
+                        />
                       </div>
                       {pideVuelto && (
                         <div className="space-y-1">
                           <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cliente entrega</Label>
-                          <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
+                          <MoneyInput
+                            value={montoEntregado}
+                            onChange={(n) => { montoEntregadoTouchedRef.current = true; setMontoEntregado(n); }}
+                          />
                         </div>
                       )}
                     </div>
