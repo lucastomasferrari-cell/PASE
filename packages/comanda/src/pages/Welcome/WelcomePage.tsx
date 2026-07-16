@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useInstallPrompt } from '../../lib/useInstallPrompt';
 
 // Página de bienvenida — selector Admin/POS. Estética terminal/CLI (paleta
 // oscura, monospace, badges técnicos, ámbar como acento). Reemplaza el
@@ -15,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 export function WelcomePage() {
   const navigate = useNavigate();
   const [now, setNow] = useState(() => new Date());
+  const { canInstall, install, isInstalled } = useInstallPrompt();
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -26,6 +28,9 @@ export function WelcomePage() {
   }
   function goAdmin() {
     navigate('/login?next=/reportes/dashboard');
+  }
+  async function onInstall() {
+    await install();
   }
 
   const t = now.toTimeString().slice(0, 8);
@@ -42,6 +47,21 @@ export function WelcomePage() {
           <span>REGION: <b>AR-BA</b></span>
         </div>
         <div className="wel-status-right">
+          {canInstall && (
+            <button type="button" className="wel-install-btn" onClick={onInstall} aria-label="Instalar app">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+                <path d="M12 3v12" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M4 20h16" />
+              </svg>
+              INSTALAR APP
+            </button>
+          )}
+          {isInstalled && (
+            <span className="wel-installed">
+              <span className="wel-dot" />&nbsp;INSTALADA
+            </span>
+          )}
           <span>SESSION: <b>--</b></span>
           <span className="wel-clock">{t}</span>
         </div>
@@ -200,6 +220,38 @@ const styles = `
   .wel-status .wel-clock {
     color: var(--wel-amber);
     font-variant-numeric: tabular-nums;
+  }
+  .wel-install-btn {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    color: var(--wel-amber);
+    border: 1px solid color-mix(in srgb, var(--wel-amber) 40%, transparent);
+    background: color-mix(in srgb, var(--wel-amber) 8%, transparent);
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .wel-install-btn:hover {
+    background: color-mix(in srgb, var(--wel-amber) 16%, transparent);
+    border-color: color-mix(in srgb, var(--wel-amber) 60%, transparent);
+  }
+  .wel-install-btn:focus-visible {
+    outline: 2px solid var(--wel-amber);
+    outline-offset: 2px;
+  }
+  .wel-installed {
+    display: inline-flex;
+    align-items: center;
+    color: var(--wel-green);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
   }
 
   .wel-body {
