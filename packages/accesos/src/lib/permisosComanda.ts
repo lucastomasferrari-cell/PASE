@@ -11,10 +11,15 @@
 
 import type { CategoriaPermisos } from './permisos';
 
-function navSec(titulo: string, cat: string, seccionSlug: string, items: [string, string][]): CategoriaPermisos {
+// Tercer elemento opcional en la tupla: true si la feature no está terminada.
+type NavItem = [slug: string, label: string, enDesarrollo?: boolean];
+function navSec(titulo: string, cat: string, seccionSlug: string, items: NavItem[]): CategoriaPermisos {
   return {
     titulo, emoji: '', seccionSlug,
-    permisos: items.map(([s, label]) => ({ slug: `comanda.nav.${cat}.${s}`, label })),
+    permisos: items.map(([s, label, enDesarrollo]) => ({
+      slug: `comanda.nav.${cat}.${s}`, label,
+      ...(enDesarrollo ? { enDesarrollo: true } : {}),
+    })),
   };
 }
 
@@ -39,7 +44,8 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['items', 'Items'],
     ['grupos', 'Grupos'],
     ['modificadores', 'Modificadores'],
-    ['combos', 'Combos'],
+    // App.tsx:286 apunta /menu/combos a StubRoute — pantalla no implementada.
+    ['combos', 'Combos', true],
     ['canales', 'Canales de venta'],
     ['lista-precios', 'Lista de precios'],
     ['disponibilidad', 'Disponibilidad'],

@@ -12,6 +12,13 @@ export interface PermisoDef {
   slug: string;
   label: string;
   descripcion?: string;
+  /**
+   * True cuando la feature todavía no está implementada (stub o placeholder).
+   * La UI marca el item con ícono de llave (Wrench) y color amarillo/warning
+   * para que el dueño sepa que activar ese permiso no tiene efecto real hoy.
+   * Referencia: auditoría 17-jul (permisos vs rutas/StubRoute en COMANDA).
+   */
+  enDesarrollo?: boolean;
 }
 
 export interface CategoriaPermisos {

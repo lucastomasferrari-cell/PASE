@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Search, Plus, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock,
-  ChevronDown, Copy, RotateCcw,
+  ChevronDown, Copy, RotateCcw, Wrench,
 } from 'lucide-react';
 import {
   listUsuarios, crearUsuario, actualizarUsuario, sincronizarUsuario,
@@ -558,10 +558,21 @@ function PermisosAccordion({ categorias, value, onToggle }: {
                 </div>
                 {cat.permisos.map((p, j) => {
                   const on = set.has(p.slug);
+                  const wip = p.enDesarrollo === true;
                   return (
-                    <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-ink/5' : ''}`}>
+                    <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-ink/5' : ''} ${wip ? 'bg-amber-50/30' : ''}`}>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-ink">{p.label}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm ${wip ? 'text-amber-900' : 'text-ink'}`}>{p.label}</span>
+                          {wip && (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800"
+                              title="Función en desarrollo — activar el permiso no tiene efecto todavía"
+                            >
+                              <Wrench className="h-2.5 w-2.5" /> EN DESARROLLO
+                            </span>
+                          )}
+                        </div>
                         {p.descripcion && <div className="text-[11px] text-ink-muted mt-0.5 leading-snug">{p.descripcion}</div>}
                       </div>
                       <Switch on={on} onClick={() => onToggle(p.slug)} label={p.label} />
