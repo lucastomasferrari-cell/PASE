@@ -16,13 +16,14 @@ import {
 } from 'lucide-react';
 import {
   listUsuarios, crearUsuario, actualizarUsuario, sincronizarUsuario,
-  resetPassword, listLocales, type Usuario,
+  sincronizarComandaAcceso, resetPassword, listLocales, type Usuario,
 } from '@/lib/usuariosService';
 import { listRoles, type Rol } from '@/lib/rolesService';
 import { logAudit } from '@/lib/auditService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, type AppKey } from '@/lib/apps';
-import { CATEGORIAS } from '@/lib/permisos';
+import { CATEGORIAS, type CategoriaPermisos } from '@/lib/permisos';
+import { CATEGORIAS_COMANDA } from '@/lib/permisosComanda';
 
 interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
 type LocalSimple = { id: number; nombre: string };
@@ -211,6 +212,14 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
   function toggleOpen(k: string) { setAbierto((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; }); }
   function toggleApp(k: string) { setApps((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k]); }
   function togglePermiso(slug: string) { setPermisos((p) => p.includes(slug) ? p.filter((x) => x !== slug) : [...p, slug]); }
+  // Permisos de COMANDA viven en accesos_por_app.comanda.permisos.
+  function togglePermisoComanda(slug: string) {
+    setAccesosApp((a) => {
+      const cur = a['comanda']?.permisos ?? [];
+      const next = cur.includes(slug) ? cur.filter((x) => x !== slug) : [...cur, slug];
+      return { ...a, comanda: { ...a['comanda'], permisos: next } };
+    });
+  }
   // Autocompletar con los permisos del rol elegido (base editable después).
   function elegirRol(id: string | null) {
     setRolId(id);
@@ -255,6 +264,8 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       : (selectedRole ? 'encargado' : (usuario?.rol ?? 'encargado'));
     setGuardando(true);
     try {
+      const comandaOn = apps.includes('comanda');
+      const cAcc = accesosApp['comanda'] ?? {};
       if (esEdicion && usuario) {
         const sync = await sincronizarUsuario({
           usuarioId: usuario.id, rol: rolSlug, rolId, modulos: permisos, locales: locsPase,
@@ -264,6 +275,11 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         if (sync.error) { toast.error(sync.error); return; }
         const upd = await actualizarUsuario(usuario.id, { apps_permitidas: apps, accesos_por_app: accesosApp });
         if (upd.error) { toast.error('Permisos guardados pero falló apps: ' + upd.error); return; }
+        // Enganche COMANDA: sincroniza el comanda_usuario (crea/actualiza o desactiva).
+        const cs = await sincronizarComandaAcceso({
+          usuarioId: usuario.id, activo: comandaOn, locales: cAcc.locales ?? null, permisos: cAcc.permisos ?? [],
+        });
+        if (cs.error) toast.error('Acceso a COMANDA no se sincronizó: ' + cs.error);
         void logAudit({ usuarioId: usuario.id, accion: 'editar', detalle: { rolId } });
       } else {
         const { id, error } = await crearUsuario({ email: email.trim(), nombre: nombreT.trim(), rol: rolSlug, password, apps_permitidas: apps, rol_id: rolId });
@@ -274,6 +290,12 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         });
         if (sync.error) { toast.error('Usuario creado pero falló permisos: ' + sync.error); return; }
         if (Object.keys(accesosApp).length) await actualizarUsuario(id, { accesos_por_app: accesosApp });
+        if (comandaOn) {
+          const cs = await sincronizarComandaAcceso({
+            usuarioId: id, activo: true, locales: cAcc.locales ?? null, permisos: cAcc.permisos ?? [],
+          });
+          if (cs.error) toast.error('Usuario creado pero COMANDA no se sincronizó: ' + cs.error);
+        }
         void logAudit({ usuarioId: id, accion: 'crear' });
       }
       toast.success(esEdicion ? 'Usuario actualizado' : 'Usuario creado');
@@ -380,7 +402,9 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
             sub={on ? (
               a.key === 'pase'
                 ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'} · ${permisos.length} permiso${permisos.length === 1 ? '' : 's'}`
-                : (usaLoc ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'}` : (op ? 'Entra sin PIN' : 'Acceso completo'))
+                : a.key === 'comanda'
+                  ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'} · ${(accesosApp['comanda']?.permisos ?? []).length} permiso${(accesosApp['comanda']?.permisos ?? []).length === 1 ? '' : 's'}`
+                  : (usaLoc ? `${nLoc === 0 ? 'Todos los' : nLoc} local${nLoc === 1 ? '' : 'es'}` : (op ? 'Entra sin PIN' : 'Acceso completo'))
             ) : undefined}
           >
             {!on ? (
@@ -402,6 +426,8 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                     personalizado={permisosPersonalizados}
                     onVolverAlRol={() => setPermisos(selectedRole ? [...selectedRole.permisos] : [])}
                   />
+                ) : a.key === 'comanda' ? (
+                  <PermisosComanda value={accesosApp['comanda']?.permisos ?? []} onToggle={togglePermisoComanda} />
                 ) : (
                   <p className="text-[11px] text-ink-muted inline-flex items-center gap-1.5">
                     <Lock className="h-3 w-3" />
@@ -461,9 +487,59 @@ function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; labe
   );
 }
 
-// Editor de permisos de PASE. Secciones desplegables (como el sidebar); adentro
-// cada permiso es una fila con descripción + interruptor. Se autocompleta con
-// los del rol y se ajusta acá mismo.
+// Acordeón de permisos reutilizable (PASE y COMANDA). Secciones desplegables
+// (como el sidebar); adentro cada permiso es una fila con descripción + switch.
+function PermisosAccordion({ categorias, value, onToggle }: {
+  categorias: CategoriaPermisos[];
+  value: string[];
+  onToggle: (slug: string) => void;
+}) {
+  const set = new Set(value);
+  const activos = (cat: CategoriaPermisos) => cat.permisos.filter((p) => set.has(p.slug)).length;
+  // Arrancan abiertas las secciones que ya tienen algún permiso activo.
+  const [abiertas, setAbiertas] = useState<Set<string>>(
+    () => new Set(categorias.filter((c) => c.permisos.some((p) => set.has(p.slug))).map((c) => c.titulo)),
+  );
+  function toggleSec(t: string) {
+    setAbiertas((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; });
+  }
+  return (
+    <div className="rounded-xl border border-ink/10 overflow-hidden">
+      {categorias.map((cat, i) => {
+        const open = abiertas.has(cat.titulo);
+        const n = activos(cat);
+        return (
+          <div key={cat.titulo} className={i > 0 ? 'border-t border-ink/5' : ''}>
+            <button type="button" onClick={() => toggleSec(cat.titulo)}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-ink/[0.02]">
+              <span className="text-sm font-medium text-ink flex-1">{cat.titulo}</span>
+              <span className={`text-[11px] tabular-nums ${n > 0 ? 'text-brand-700 font-medium' : 'text-ink-muted'}`}>{n} de {cat.permisos.length}</span>
+              <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+              <div className="border-t border-ink/5 bg-ink/[0.015]">
+                {cat.permisos.map((p, j) => {
+                  const on = set.has(p.slug);
+                  return (
+                    <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-ink/5' : ''}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-ink">{p.label}</div>
+                        {p.descripcion && <div className="text-[11px] text-ink-muted mt-0.5 leading-snug">{p.descripcion}</div>}
+                      </div>
+                      <Switch on={on} onClick={() => onToggle(p.slug)} label={p.label} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Permisos de PASE — autocompletados por el rol, ajustables acá.
 function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAlRol }: {
   value: string[];
   onToggle: (slug: string) => void;
@@ -471,15 +547,6 @@ function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAl
   personalizado: boolean;
   onVolverAlRol: () => void;
 }) {
-  const set = new Set(value);
-  const activos = (cat: (typeof CATEGORIAS)[number]) => cat.permisos.filter((p) => set.has(p.slug)).length;
-  // Arrancan abiertas las secciones que ya tienen algún permiso activo.
-  const [abiertas, setAbiertas] = useState<Set<string>>(
-    () => new Set(CATEGORIAS.filter((c) => c.permisos.some((p) => set.has(p.slug))).map((c) => c.titulo)),
-  );
-  function toggleSec(t: string) {
-    setAbiertas((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; });
-  }
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -499,38 +566,23 @@ function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAl
       {!selectedRole && (
         <p className="text-[11px] text-ink-muted">Elegí un rol arriba para autocompletar, o prendé los permisos a mano.</p>
       )}
-      <div className="rounded-xl border border-ink/10 overflow-hidden">
-        {CATEGORIAS.map((cat, i) => {
-          const open = abiertas.has(cat.titulo);
-          const n = activos(cat);
-          return (
-            <div key={cat.titulo} className={i > 0 ? 'border-t border-ink/5' : ''}>
-              <button type="button" onClick={() => toggleSec(cat.titulo)}
-                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-ink/[0.02]">
-                <span className="text-sm font-medium text-ink flex-1">{cat.titulo}</span>
-                <span className={`text-[11px] tabular-nums ${n > 0 ? 'text-brand-700 font-medium' : 'text-ink-muted'}`}>{n} de {cat.permisos.length}</span>
-                <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
-              </button>
-              {open && (
-                <div className="border-t border-ink/5 bg-ink/[0.015]">
-                  {cat.permisos.map((p, j) => {
-                    const on = set.has(p.slug);
-                    return (
-                      <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-ink/5' : ''}`}>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-ink">{p.label}</div>
-                          {p.descripcion && <div className="text-[11px] text-ink-muted mt-0.5 leading-snug">{p.descripcion}</div>}
-                        </div>
-                        <Switch on={on} onClick={() => onToggle(p.slug)} label={p.label} />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <PermisosAccordion categorias={CATEGORIAS} value={value} onToggle={onToggle} />
+    </div>
+  );
+}
+
+// Permisos de COMANDA — se guardan en accesos_por_app.comanda.permisos y se
+// sincronizan al comanda_usuario al guardar (enganche por email).
+function PermisosComanda({ value, onToggle }: {
+  value: string[];
+  onToggle: (slug: string) => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <p className="text-xs font-medium text-ink-soft">
+        Permisos en COMANDA <span className="font-normal text-ink-muted">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
+      </p>
+      <PermisosAccordion categorias={CATEGORIAS_COMANDA} value={value} onToggle={onToggle} />
     </div>
   );
 }

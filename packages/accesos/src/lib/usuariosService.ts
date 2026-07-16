@@ -153,6 +153,27 @@ export async function sincronizarUsuario(p: {
   return { error: error?.message ?? null };
 }
 
+// Enganche por email PASE → COMANDA. Al dar/quitar acceso a COMANDA, crea o
+// sincroniza el comanda_usuario de la persona (misma auth por email) + sus
+// permisos comanda.* + locales + rol POS, para que el login de COMANDA lo
+// respete. Backend: fn_sincronizar_comanda_acceso (migración 202607162000).
+export async function sincronizarComandaAcceso(p: {
+  usuarioId: number;
+  activo: boolean;
+  locales: number[] | null;
+  permisos: string[];
+  rolPos?: string;
+}): Promise<{ error: string | null }> {
+  const { error } = await db().rpc('fn_sincronizar_comanda_acceso', {
+    p_usuario_id: p.usuarioId,
+    p_activo: p.activo,
+    p_locales: p.locales && p.locales.length ? p.locales : null,
+    p_permisos: p.permisos,
+    p_rol_pos: p.rolPos ?? 'cajero',
+  });
+  return { error: error?.message ?? null };
+}
+
 export async function resetPassword(usuarioId: number): Promise<{ error: string | null; tempPassword?: string }> {
   // Genera password temporal en Supabase Auth y marca password_temporal=true.
   // Va por /api/auth-admin?action=reset_password (PASE).
