@@ -16,9 +16,13 @@ import { cn } from '@/lib/utils';
 // Mismos tamaños/caja/tipografía que PASE/MESA/Habitué; el POS por detrás
 // conserva su índigo/navy — sólo esta pantalla de entrada usa el celeste.
 const labelCls = 'block text-sm font-medium text-[#1A3A5E] dark:text-[#F0F4F8] mb-1.5';
+// Tap targets tablet-friendly: h-14 = 56px (por encima del mínimo Material
+// Design de 48px, muy por encima del mínimo iOS HIG de 44px). En tablet los
+// dedos son gruesos y el error de tap es alto — subir de 44 a 56 baja mucho
+// los mistap sin sacrificar layout.
 const keyCls =
-  'h-11 rounded-lg border border-[#D0DCEA] dark:border-[#3F4D6E] '
-  + 'text-lg font-medium text-[#1A3A5E] dark:text-[#F0F4F8] '
+  'h-14 rounded-lg border border-[#D0DCEA] dark:border-[#3F4D6E] '
+  + 'text-xl font-medium text-[#1A3A5E] dark:text-[#F0F4F8] '
   + 'hover:bg-[#EAF3FB] dark:hover:bg-[#1E3155] active:scale-[0.97] '
   + 'transition disabled:opacity-50 grid place-items-center select-none';
 

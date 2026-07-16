@@ -285,8 +285,8 @@ export function PedidosHub() {
               onSave={(v) => guardarQuote('delivery', v)}
               inputRef={editingQuote === 'delivery' ? editInputRef : undefined}
             />
-            <Button onClick={() => setNuevoPedidoOpen(true)} size="sm" className="gap-1.5 h-8">
-              <Plus className="h-3.5 w-3.5" />
+            <Button onClick={() => setNuevoPedidoOpen(true)} size="sm" className="gap-1.5 h-11 px-4">
+              <Plus className="h-4 w-4" />
               Nuevo
             </Button>
           </div>

@@ -214,11 +214,11 @@ export function MostradorView() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar #, cliente, teléfono…"
-                  className="pl-9 h-9"
+                  className="pl-9 h-11"
                 />
               </div>
               <Select value={estadoFiltro} onValueChange={setEstadoFiltro}>
-                <SelectTrigger className="h-9 w-[160px]">
+                <SelectTrigger className="h-11 w-[160px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,7 +239,7 @@ export function MostradorView() {
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                <SelectTrigger className="h-9 w-[170px]">
+                <SelectTrigger className="h-11 w-[170px]">
                   <ArrowDownUp className="h-3.5 w-3.5 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
