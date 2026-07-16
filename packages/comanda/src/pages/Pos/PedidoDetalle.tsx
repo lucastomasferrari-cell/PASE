@@ -183,7 +183,7 @@ export function PedidoDetalle() {
     setCobroLoading(true);
     const [itemsR, catR] = await Promise.all([
       listVentasItems(venta.id),
-      listItems({ tenantId: venta.tenant_id }),
+      listItems({ tenantId: venta.tenant_id, localId: venta.local_id }),
     ]);
     setVentaItems(itemsR.data);
     setCatalogo(catR.data);

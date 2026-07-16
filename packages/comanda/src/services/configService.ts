@@ -99,12 +99,13 @@ export async function updateLocalSettings(
 export interface LocalSimple {
   id: number;
   nombre: string;
+  marca_id?: number | null;
 }
 
 export async function listLocalesAccesibles(): Promise<{ data: LocalSimple[]; error: string | null }> {
   const { data, error } = await db
     .from('locales')
-    .select('id, nombre')
+    .select('id, nombre, marca_id')
     .order('id', { ascending: true });
   if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as LocalSimple[], error: null };

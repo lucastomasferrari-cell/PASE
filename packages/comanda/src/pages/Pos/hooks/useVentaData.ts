@@ -71,11 +71,13 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
         } catch { /* sin red → marcaId null → sin filtro */ }
       }
 
-      // 3) Resto en paralelo, con el catálogo ya filtrado por marca.
+      // 3) Resto en paralelo. Modelo maestro+import: el POS lee el menú de ESTA
+      //    sucursal (local_id = localId) — sus copias importadas/editadas. Si no
+      //    hay local (offline), cae al filtro por marca (fallback previo).
       const [iRes, cRes, gRes] = await Promise.all([
         listVentasItems(ventaId),
-        listItems({ tenantId: user?.tenant_id ?? null, marcaId }),
-        listGrupos(user?.tenant_id ?? null, marcaId),
+        listItems({ tenantId: user?.tenant_id ?? null, localId, marcaId }),
+        listGrupos(user?.tenant_id ?? null, marcaId, { localId }),
       ]);
       setItems(iRes.data);
       setCatalogo(cRes.data);

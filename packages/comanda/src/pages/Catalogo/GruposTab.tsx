@@ -45,7 +45,8 @@ export function GruposTab({ user }: Props) {
     setLoading(true);
     const marcaIdNum = marcaFilter === 'todas' ? null : Number(marcaFilter);
     const [gr, tr, ct] = await Promise.all([
-      listGrupos(user.tenant_id, marcaIdNum),
+      // Editor del menú maestro: grupos de la marca sin sucursal (local_id NULL).
+      listGrupos(user.tenant_id, marcaIdNum, { maestro: true }),
       listTaxRates(user.tenant_id),
       countItemsPorGrupo(user.tenant_id),
     ]);

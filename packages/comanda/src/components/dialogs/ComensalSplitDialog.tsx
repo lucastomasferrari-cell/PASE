@@ -48,7 +48,7 @@ export function ComensalSplitDialog({ open, onOpenChange, venta, empleadoId, onC
     keysRef.current = {};
     Promise.all([
       listVentasItems(venta.id),
-      listItems({ tenantId: venta.tenant_id }),
+      listItems({ tenantId: venta.tenant_id, localId: venta.local_id }),
       listMetodosCobroActivos(venta.local_id),
     ]).then(([itemsRes, catRes, metRes]) => {
       const vivos = itemsRes.data.filter((i) => i.estado !== 'anulado');

@@ -315,9 +315,11 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
         marcaId = (data?.marca_id as number | null) ?? null;
       } catch { /* sin red → sin filtro */ }
     }
+    // Modelo maestro+import: el POS lee el menú de ESTA sucursal (local_id=lid);
+    // si no hay local (offline) cae al filtro por marca.
     const [cRes, gRes, iRes] = await Promise.all([
-      listItems({ tenantId, marcaId }),
-      listGrupos(tenantId, marcaId),
+      listItems({ tenantId, localId: lid, marcaId }),
+      listGrupos(tenantId, marcaId, { localId: lid }),
       listVentasItems(ventaId),
     ]);
     setCatalogo(cRes.data);

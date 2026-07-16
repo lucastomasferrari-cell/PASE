@@ -12,7 +12,7 @@ const ITEMS_CACHE_TTL_MS = 60_000;
 interface CacheEntry { data: ItemConGrupo[]; cachedAt: number; key: string }
 
 function cacheKey(f: ItemsListFilter): string {
-  return JSON.stringify([f.tenantId, f.localId, f.marcaId ?? null, f.grupoId, f.estado, f.search]);
+  return JSON.stringify([f.tenantId, f.localId, f.marcaId ?? null, f.maestro ?? false, f.grupoId, f.estado, f.search]);
 }
 function readCache(key: string): ItemConGrupo[] | null {
   try {
@@ -45,7 +45,22 @@ export interface ItemsListFilter {
   /** Marca activa (del local). Trae items de esa marca + los compartidos
    * (marca_id NULL). Si es null/undefined no filtra por marca (compat). */
   marcaId?: number | null;
+  /** true = MENÚ MAESTRO de la marca (items sin sucursal, local_id NULL).
+   * Se usa en el editor de maestro. Ver fn_importar_menu_marca. */
+  maestro?: boolean;
   tenantId: string | null;
+}
+
+// Importa el MENÚ MAESTRO de la marca a una sucursal (copia con local_id=local).
+// modo 'reemplazar' (soft-delete lo actual + copia todo) o 'novedades' (agrega
+// lo que falta). Backend: fn_importar_menu_marca (migración 202607160100).
+export async function importarMenuMarca(
+  localId: number, modo: 'reemplazar' | 'novedades' = 'reemplazar',
+): Promise<{ data: { items: number; grupos: number } | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_importar_menu_marca', { p_local_id: localId, p_modo: modo });
+  if (error) return { data: null, error: translateError(error) };
+  clearItemsCache();
+  return { data: data as { items: number; grupos: number }, error: null };
 }
 
 export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemConGrupo[]; error: string | null }> {
@@ -77,9 +92,18 @@ export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemCo
     .limit(200);
 
   if (filter.tenantId) q = q.eq('tenant_id', filter.tenantId);
-  // Menú por marca: items de la marca activa + compartidos (marca_id NULL).
-  // Si marcaId viene null/undefined (ej. local sin marca) NO filtra → todos.
-  if (filter.marcaId != null) q = q.or(`marca_id.eq.${filter.marcaId},marca_id.is.null`);
+  if (filter.maestro) {
+    // Menú MAESTRO de la marca: items sin sucursal (local_id NULL).
+    q = q.is('local_id', null);
+    if (filter.marcaId != null) q = q.eq('marca_id', filter.marcaId);
+  } else if (filter.localId != null) {
+    // Menú de la SUCURSAL: sus propias copias (local_id = la sucursal). Es el
+    // modelo maestro+import: cada local ve solo lo que importó/creó.
+    q = q.eq('local_id', filter.localId);
+  } else if (filter.marcaId != null) {
+    // Compat (sin local): items de la marca + compartidos (marca_id NULL).
+    q = q.or(`marca_id.eq.${filter.marcaId},marca_id.is.null`);
+  }
   if (filter.grupoId) q = q.eq('grupo_id', filter.grupoId);
   if (filter.estado && filter.estado !== 'todos') q = q.eq('estado', filter.estado);
   if (filter.search && filter.search.trim()) {

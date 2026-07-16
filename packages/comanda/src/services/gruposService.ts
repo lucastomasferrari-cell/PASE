@@ -6,8 +6,9 @@ import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 export async function listGrupos(
   tenantId: string | null,
   marcaId?: number | null,
+  opts?: { localId?: number | null; maestro?: boolean },
 ): Promise<{ data: ItemGrupo[]; error: string | null }> {
-  const cacheKey = `grupos:${tenantId ?? 'all'}:${marcaId ?? 'all'}`;
+  const cacheKey = `grupos:${tenantId ?? 'all'}:${marcaId ?? 'all'}:${opts?.localId ?? ''}:${opts?.maestro ? 'm' : ''}`;
   let q = db
     .from('item_grupos')
     .select('*')
@@ -15,8 +16,16 @@ export async function listGrupos(
     .order('orden', { ascending: true })
     .order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
-  // Menú por marca: grupos de la marca activa + compartidos (marca_id NULL).
-  if (marcaId != null) q = q.or(`marca_id.eq.${marcaId},marca_id.is.null`);
+  // Modelo maestro+import: maestro = grupos sin sucursal (local_id NULL);
+  // sucursal = grupos de ese local; compat = por marca + compartidos.
+  if (opts?.maestro) {
+    q = q.is('local_id', null);
+    if (marcaId != null) q = q.eq('marca_id', marcaId);
+  } else if (opts?.localId != null) {
+    q = q.eq('local_id', opts.localId);
+  } else if (marcaId != null) {
+    q = q.or(`marca_id.eq.${marcaId},marca_id.is.null`);
+  }
   try {
     const { data, error } = await q;
     if (error) {

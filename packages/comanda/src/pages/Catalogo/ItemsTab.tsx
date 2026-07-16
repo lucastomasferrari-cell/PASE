@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Plus, Pencil, Ban, Trash2, Package } from 'lucide-react';
+import { Search, Plus, Pencil, Ban, Trash2, Package, Download } from 'lucide-react';
 import type { Usuario } from '@/types/auth';
 import type { ItemConGrupo } from '@/services/itemsService';
 import { listItems, softDeleteItem } from '@/services/itemsService';
@@ -18,6 +18,7 @@ import {
 import { formatARS } from '@/lib/utils';
 import { ItemForm } from './ItemForm';
 import { AgotarDialog } from './AgotarDialog';
+import { ImportarMenuDialog } from './ImportarMenuDialog';
 // useRealtimeTable sacado sprint optim egress 2026-05-16
 
 interface Props {
@@ -38,6 +39,7 @@ export function ItemsTab({ user }: Props) {
   const [editingItem, setEditingItem] = useState<ItemConGrupo | 'new' | null>(null);
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ItemConGrupo | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
@@ -49,9 +51,12 @@ export function ItemsTab({ user }: Props) {
     setLoading(true);
     const grupoIdNum = grupoFilter === 'todos' ? null : Number(grupoFilter);
     const marcaIdNum = marcaFilter === 'todas' ? null : Number(marcaFilter);
+    // Modelo maestro+import: este admin edita el MENÚ MAESTRO de la marca
+    // (items sin sucursal, local_id NULL). Cada sucursal lo importa y opera su
+    // copia. maestro:true → mostramos solo el maestro.
     const [itemsRes, gruposRes] = await Promise.all([
-      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, marcaId: marcaIdNum, tenantId: user.tenant_id }),
-      listGrupos(user.tenant_id, marcaIdNum),
+      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, marcaId: marcaIdNum, maestro: true, tenantId: user.tenant_id }),
+      listGrupos(user.tenant_id, marcaIdNum, { maestro: true }),
     ]);
     if (itemsRes.error) setError(itemsRes.error);
     setItems(itemsRes.data);
@@ -80,16 +85,22 @@ export function ItemsTab({ user }: Props) {
       {/* Header con título + CTA */}
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Items del menú</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Menú maestro de la marca</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {items.length} {items.length === 1 ? 'item' : 'items'} en el catálogo · POS, QR y tienda
+            {items.length} {items.length === 1 ? 'item' : 'items'} · plantilla que cada sucursal importa y edita
           </p>
         </div>
         {puedeEditar && (
-          <Button onClick={() => setEditingItem('new')}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nuevo item
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Download className="h-4 w-4 mr-1.5" />
+              Importar a sucursal
+            </Button>
+            <Button onClick={() => setEditingItem('new')}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nuevo item
+            </Button>
+          </div>
         )}
       </header>
 
@@ -272,6 +283,12 @@ export function ItemsTab({ user }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ImportarMenuDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        marcas={marcas}
+      />
     </div>
   );
 }
