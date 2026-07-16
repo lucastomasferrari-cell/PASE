@@ -6,7 +6,8 @@ import { ADMIN_NAVIGATION_FULL } from '../lib/adminNavigation';
 // generan del sidebar más abajo y se concatenan en SLUGS_COMANDA.
 const SLUGS_ACCIONES_COMANDA: ReadonlyArray<{ slug: string; label: string; modulo: string }> = [
   // Catálogo (Sprint 1)
-  { slug: 'comanda.catalogo.ver',         label: 'Ver catálogo',                       modulo: 'Catálogo' },
+  { slug: 'comanda.catalogo.ver',         label: 'Ver catálogo (Menú)',                modulo: 'Catálogo' },
+  { slug: 'comanda.inventario.ver',       label: 'Ver Inventario',                     modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.editar',      label: 'Editar items y grupos',              modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.eliminar',    label: 'Eliminar items',                     modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.maestro.editar', label: 'Editar Menú Marca (maestro)',    modulo: 'Catálogo' },
@@ -28,6 +29,8 @@ const SLUGS_ACCIONES_COMANDA: ReadonlyArray<{ slug: string; label: string; modul
   { slug: 'comanda.caja.cerrar',          label: 'Cerrar turno',                       modulo: 'Caja' },
   { slug: 'comanda.caja.movimientos',     label: 'Retiros / depósitos / ajustes',      modulo: 'Caja' },
   // Tienda online
+  { slug: 'comanda.tienda.gestionar',     label: 'Gestionar Tienda online (hub)',      modulo: 'Tienda' },
+  { slug: 'comanda.online.gestionar',     label: 'Gestionar Canales digitales',        modulo: 'Tienda' },
   { slug: 'comanda.tienda.aprobar',       label: 'Aprobar pedidos online',             modulo: 'Tienda' },
   // Settings
   { slug: 'comanda.empleados.editar_pos', label: 'Setear PIN / rol POS de empleados', modulo: 'Settings' },

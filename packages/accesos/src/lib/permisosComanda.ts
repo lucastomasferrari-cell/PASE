@@ -52,7 +52,10 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['alertas-margen', 'Alertas de margen'],
     ['revision', 'Items por revisar'],
   ]),
-  navSec('Inventario', 'inventario', 'comanda.catalogo.ver', [
+  // Slug propio 17-jul: antes compartía 'comanda.catalogo.ver' con Menú y
+  // dar uno abría también el otro. Migración 202607170300 hace backfill —
+  // quien tenía catalogo.ver ya tiene inventario.ver, no pierde acceso.
+  navSec('Inventario', 'inventario', 'comanda.inventario.ver', [
     ['alertas', 'Stock + alertas'],
     ['mermas', 'Cargar merma'],
     ['conteo', 'Conteo físico'],
@@ -60,7 +63,8 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
   ]),
   navSec('Salón', 'salon', 'comanda.salon.editar', [
     ['mesas', 'Mesas'],
-    ['reservas', 'Reservas'],
+    // Reservas eliminadas 17-jul: la feature vive en MESA (mesa-orpin).
+    ['servicios', 'Servicios y turnos', true],
   ]),
   // Renombrado 17-jul: "Turno" no describía el contenido (mi cierre,
   // propinas, quién trabaja).
@@ -68,15 +72,23 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['mi-cierre', 'Mi cierre del día'],
     ['propinas', 'Reparto de propinas'],
     ['horarios', 'Trabajando ahora'],
+    ['performance', 'Performance', true],
   ]),
   navSec('Pagos y caja', 'pagos', 'comanda.pagos.ver', [
     ['metodos', 'Métodos de cobro'],
     ['logbook', 'Logbook'],
+    ['caja-chica', 'Caja chica', true],
+    ['historico-turnos', 'Histórico de turnos', true],
+    ['conciliacion-mp', 'Conciliación MP', true],
+    ['settlements', 'Settlements', true],
   ]),
   // Renombrado 17-jul: "Tienda online" y "Online" (abajo) eran casi
   // idénticos. Esta es la tienda propia con marketplace/difusión; la
   // otra sección es canales digitales (QR, KDS, delivery).
-  navSec('Tienda propia', 'tienda-online', 'comanda.online.gestionar', [
+  // Slug propio 17-jul: antes compartía 'comanda.online.gestionar' con
+  // "Canales digitales" y dar uno abría también el otro. Migración
+  // 202607170300 hace backfill — no perdiste acceso si tenías el viejo.
+  navSec('Tienda propia', 'tienda-online', 'comanda.tienda.gestionar', [
     ['resumen', 'Resumen'],
     // Renombrado: "Configuración" pisaba el nombre de la sección top-level.
     ['configuracion', 'Ajustes de tienda'],
@@ -86,20 +98,28 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['menu-qr', 'Menú QR'],
     ['kds', 'KDS (pantalla de cocina)'],
     ['dispatch', 'Despacho de delivery'],
+    ['tracking', 'Tracking pedidos', true],
   ]),
   navSec('Hardware', 'hardware', 'comanda.hardware.gestionar', [
     ['estaciones', 'Estaciones'],
     ['impresoras', 'Impresoras'],
     ['agentes', 'Print Agents (PCs)'],
     ['riders', 'Repartidores'],
+    ['cajon', 'Cajón de dinero', true],
+    ['mp-point', 'MP Point', true],
+    ['tablets-kds', 'Tablets KDS', true],
   ]),
   // "Integraciones" ambigua se resolvió: acá es solo plataformas de
   // delivery. Las notificaciones (WhatsApp/Email) están en Configuración
   // como "Notificaciones".
   navSec('Integraciones (delivery)', 'integraciones', 'comanda.integraciones.gestionar', [
+    ['mercadopago', 'Mercado Pago', true],
     ['rappi', 'Rappi'],
     ['pedidosya', 'PedidosYa'],
-    ['deliverect', 'Deliverect'],
+    // Deliverect eliminado 17-jul.
+    ['whatsapp', 'WhatsApp Business', true],
+    ['contabilidad', 'Contabilidad', true],
+    ['api', 'Webhooks / API', true],
   ]),
   navSec('Configuración', 'configuracion', 'comanda.configuracion.editar', [
     ['local', 'Local'],
@@ -108,6 +128,19 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     ['integraciones', 'Notificaciones (WhatsApp, Email…)'],
     ['afip', 'Factura electrónica AFIP'],
     ['afip-pendientes', 'AFIP pendientes'],
+    ['branding', 'Branding y logos', true],
+    ['notificaciones', 'Notificaciones', true],
+    ['recibos', 'Recibos e impresión', true],
+    ['idioma', 'Idioma y zona horaria', true],
+    ['backup', 'Backup y exportación', true],
+  ]),
+  // Sección nueva 17-jul: Suscripción del dueño (plan, facturación,
+  // métodos de pago propios). Todos stubs — cuando SaaS se comercialice.
+  navSec('Suscripción', 'suscripcion', 'comanda.configuracion.editar', [
+    ['plan', 'Plan actual', true],
+    ['facturacion', 'Facturación', true],
+    ['metodos-pago', 'Métodos de pago', true],
+    ['historial', 'Historial de pagos', true],
   ]),
   // Auditoría 17-jul: la sección monolítica "Acciones (POS y catálogo)"
   // (20 permisos) se dividió en dos por dominio de uso — POS diario vs

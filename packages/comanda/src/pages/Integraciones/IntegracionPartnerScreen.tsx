@@ -80,25 +80,7 @@ const CONFIGS: Record<ExternalProvider, ProviderConfig> = {
       </>
     ),
   },
-  'deliverect': {
-    provider: 'deliverect',
-    nombre: 'Deliverect',
-    emoji: '🍽️',
-    credFields: [
-      { key: 'api_key', label: 'API Key', type: 'password' },
-      { key: 'account_id', label: 'Account ID', placeholder: 'acc_xxx' },
-      { key: 'channel_id', label: 'Channel ID (de tu canal POS)', placeholder: 'ch_xxx' },
-    ],
-    webhookPath: '/api/tienda-mp?action=deliverect-webhook',
-    onboardingHelp: (
-      <>
-        <strong>Deliverect</strong> es un aggregator: integrás 1 vez con ellos y te conectan con Rappi, PeYa, UberEats,
-        Glovo, etc. Dashboard en <a href="https://app.deliverect.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">app.deliverect.com</a>.
-        Costos: pagás por sucursal/mes — verificar pricing actual.
-        <p className="text-xs italic mt-1">⚠ Endpoint del webhook todavía NO está creado — se agrega en sprint cuando Lucas confirme si va a usar Deliverect.</p>
-      </>
-    ),
-  },
+  // Deliverect eliminado 17-jul (Lucas): "no sé ni qué es".
 };
 
 interface Props {
@@ -268,7 +250,7 @@ export function IntegracionPartnerScreen({ provider }: Props) {
         externalIdPlaceholder: 'restaurant_id de PeYa (ej: rest_xyz)',
       };
     }
-    return null; // deliverect u otros: aún sin operaciones
+    return null; // provider sin operaciones cableadas
   }
 
   async function handleTestConnection() {

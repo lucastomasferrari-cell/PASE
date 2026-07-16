@@ -39,7 +39,7 @@ async function notifyPartnerStatusChange(
       endpointAction = 'pedidosya-order-action';
       providerAction = action; // PeYa usa accept/dispatch/cancel directamente
     } else {
-      return; // Deliverect u otros — sin wire todavía
+      return; // provider sin wire
     }
 
     void fetch(`/api/tienda-mp?action=${endpointAction}`, {

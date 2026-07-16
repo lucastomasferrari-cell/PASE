@@ -92,11 +92,14 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
     ],
   },
   {
+    // Slug propio 17-jul: antes compartía 'comanda.catalogo.ver' con Menú, y
+    // dar Menú abría también Inventario (leak de sección). Ver migración
+    // 202607170300 — quien tenía catalogo.ver conserva acceso vía backfill.
     slug: 'inventario',
     label: 'Inventario',
     icon: Package,
     href: '/inventario/alertas',
-    requiredPermission: 'comanda.catalogo.ver',
+    requiredPermission: 'comanda.inventario.ver',
     subItems: [
       { slug: 'alertas', label: 'Stock + alertas',  href: '/inventario/alertas' },
       { slug: 'mermas',  label: 'Cargar merma (one-tap)', href: '/inventario/mermas' },
@@ -113,9 +116,9 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
     subItems: [
       { slug: 'mesas',           label: 'Mesas',              href: '/salon/mesas' },
       { slug: 'servicios',       label: 'Servicios y turnos', href: '/salon/servicios', badge: 'soon' },
-      // Reservas se gestionan en MESA. Este item es el cartel "se mudaron a MESA".
-      // Config. reservas SACADA (limpieza 15-jul) → vive en MESA (Config reservas).
-      { slug: 'reservas',        label: 'Reservas',           href: '/salon/reservas' },
+      // Reservas eliminadas del sidebar 17-jul (Lucas): la feature vive en MESA
+      // (mesa-orpin.vercel.app). Antes había un cartel "se mudaron a MESA"; ya
+      // no se justifica ocupar espacio.
     ],
   },
   {
@@ -156,11 +159,14 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
     // Hub del marketplace propio (15-jul): concentra estadísticas + configuración
     // + difusión de la tienda online. Rutas bajo /tienda-online (slug propio para
     // que el resaltado no choque con la categoría 'online').
+    // Slug propio 17-jul: antes compartía 'comanda.online.gestionar' con
+    // Canales digitales, y dar uno abría también el otro (leak). Ver migración
+    // 202607170300 — quien tenía online.gestionar conserva acceso vía backfill.
     slug: 'tienda-online',
     label: 'Tienda online',
     icon: Store,
     href: '/tienda-online',
-    requiredPermission: 'comanda.online.gestionar',
+    requiredPermission: 'comanda.tienda.gestionar',
     subItems: [
       { slug: 'resumen',       label: 'Resumen',       href: '/tienda-online' },
       { slug: 'configuracion', label: 'Configuración', href: '/tienda-online/configuracion' },
@@ -210,7 +216,7 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
       { slug: 'mercadopago',   label: 'Mercado Pago',     href: '/integraciones/mercadopago',   badge: 'soon' },
       { slug: 'rappi',         label: 'Rappi',            href: '/integraciones/rappi' },
       { slug: 'pedidosya',     label: 'PedidosYa',        href: '/integraciones/pedidosya' },
-      { slug: 'deliverect',    label: 'Deliverect',       href: '/integraciones/deliverect' },
+      // Deliverect eliminado 17-jul (Lucas): "no sé ni qué es".
       { slug: 'whatsapp',      label: 'WhatsApp Business', href: '/integraciones/whatsapp',     badge: 'soon' },
       { slug: 'contabilidad',  label: 'Contabilidad',     href: '/integraciones/contabilidad',  badge: 'soon' },
       { slug: 'api',           label: 'Webhooks / API',   href: '/integraciones/api',           badge: 'soon' },

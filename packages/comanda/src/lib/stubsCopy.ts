@@ -1,5 +1,5 @@
 import {
-  TrendingUp, UserCheck, Layers, Calendar, Clock, BookmarkCheck,
+  TrendingUp, UserCheck, Layers, Calendar, Clock,
   Banknote, History, Wallet, FileSpreadsheet, ShoppingBag, Truck,
   Printer, Box, CreditCard, Tablet, Tag, Ticket, Award, MailPlus,
   Users, BookOpen, Star, Briefcase, Truck as RappiIcon, Bike,
@@ -91,18 +91,7 @@ export const STUBS_COPY: Record<string, StubCopy> = {
       'Auto-cambio de servicio según hora del día',
     ],
   },
-  '/salon/reservas': {
-    titulo: 'Reservas',
-    descripcion: 'Sistema de reservas de mesas con calendario, confirmación y recordatorios.',
-    icono: BookmarkCheck,
-    features: [
-      'Calendario de reservas con vista día / semana',
-      'Reserva online vinculada a la tienda online',
-      'Confirmación automática por WhatsApp',
-      'Lista de espera cuando no hay mesa libre',
-      'Reportes de no-show y cancelaciones',
-    ],
-  },
+  // Reservas eliminadas 17-jul: la feature vive en MESA.
 
   // ─── Empleados ───────────────────────────────────────────────────────────
   '/empleados/horarios': {

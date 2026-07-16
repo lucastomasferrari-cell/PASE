@@ -5,7 +5,7 @@
 
 import { db } from '../lib/supabase';
 
-export type ExternalProvider = 'rappi' | 'pedidos-ya' | 'deliverect';
+export type ExternalProvider = 'rappi' | 'pedidos-ya';
 export type IntegracionEstado = 'configured' | 'active' | 'error';
 
 export interface IntegracionPublica {

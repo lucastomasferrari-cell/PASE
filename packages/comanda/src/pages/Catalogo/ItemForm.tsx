@@ -64,11 +64,10 @@ export function ItemForm({ user, grupos, marcas, defaultMarcaId, scopeLocalId, i
   const [visibleTienda, setVisibleTienda] = useState(item?.visible_tienda ?? true);
   const [esCombo, setEsCombo] = useState(item?.es_combo ?? false);
   const [tiempoPrepMin, setTiempoPrepMin] = useState<number | ''>(item?.tiempo_prep_min ?? '');
-  // SKU externos para partners (Rappi/PeYa/Deliverect). Opcionales — solo
-  // se popular cuando el dueño integra con un partner.
+  // SKU externos para partners (Rappi/PeYa). Opcionales — solo se popular
+  // cuando el dueño integra con un partner.
   const [skuRappi, setSkuRappi] = useState((item as { sku_rappi?: string | null })?.sku_rappi ?? '');
   const [skuPedidosya, setSkuPedidosya] = useState((item as { sku_pedidosya?: string | null })?.sku_pedidosya ?? '');
-  const [skuDeliverect, setSkuDeliverect] = useState((item as { sku_deliverect?: string | null })?.sku_deliverect ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -114,7 +113,6 @@ export function ItemForm({ user, grupos, marcas, defaultMarcaId, scopeLocalId, i
         // SKU externos para partners — null si vacío para no inflar la fila
         sku_rappi: skuRappi.trim() || null,
         sku_pedidosya: skuPedidosya.trim() || null,
-        sku_deliverect: skuDeliverect.trim() || null,
       };
 
       if (isEdit && item) {
@@ -311,7 +309,7 @@ export function ItemForm({ user, grupos, marcas, defaultMarcaId, scopeLocalId, i
             <summary className="cursor-pointer text-sm font-medium select-none">
               SKU en partners de delivery (opcional)
               <span className="text-xs font-normal text-muted-foreground ml-2 group-open:hidden">
-                — solo si vendés por Rappi/PedidosYa/Deliverect
+                — solo si vendés por Rappi/PedidosYa
               </span>
             </summary>
             <div className="mt-3 space-y-3">
@@ -320,7 +318,7 @@ export function ItemForm({ user, grupos, marcas, defaultMarcaId, scopeLocalId, i
                 propio ID. Cargalo acá para que los pedidos que lleguen por webhook
                 se mapeen al item correcto. Sino dejá vacío y se usa el ID interno.
               </p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">SKU Rappi</Label>
                   <input
@@ -336,15 +334,6 @@ export function ItemForm({ user, grupos, marcas, defaultMarcaId, scopeLocalId, i
                     value={skuPedidosya}
                     onChange={(e) => setSkuPedidosya(e.target.value)}
                     placeholder="ej: peya_xyz"
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-xs font-mono"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">SKU Deliverect</Label>
-                  <input
-                    value={skuDeliverect}
-                    onChange={(e) => setSkuDeliverect(e.target.value)}
-                    placeholder="ej: dlv_abc"
                     className="w-full h-10 px-3 rounded-md border border-input bg-background text-xs font-mono"
                   />
                 </div>
