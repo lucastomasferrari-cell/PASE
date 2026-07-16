@@ -23,7 +23,6 @@ import { logAudit } from '@/lib/auditService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, type AppKey } from '@/lib/apps';
 import { CATEGORIAS } from '@/lib/permisos';
-import { Accesos } from './Accesos';
 
 interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
 type LocalSimple = { id: number; nombre: string };
@@ -41,7 +40,6 @@ export function Personas() {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [search, setSearch] = useState('');
   const [cargando, setCargando] = useState(true);
-  const [modo, setModo] = useState<'lista' | 'matriz'>('lista');
   const [editando, setEditando] = useState<Usuario | 'nuevo' | null>(null);
 
   const reload = useCallback(async () => {
@@ -104,21 +102,13 @@ export function Personas() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o email…"
                  className="w-full rounded-lg border border-ink/15 bg-white pl-9 pr-3 py-2 text-sm" />
         </div>
-        <div className="inline-flex rounded-lg border border-ink/15 bg-white p-0.5">
-          <button onClick={() => setModo('lista')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${modo === 'lista' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Lista</button>
-          <button onClick={() => setModo('matriz')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${modo === 'matriz' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Matriz de apps</button>
-        </div>
         <button onClick={() => setEditando('nuevo')}
                 className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
           <Plus className="h-4 w-4" /> Nueva persona
         </button>
       </div>
 
-      {modo === 'matriz' ? (
-        <Accesos />
-      ) : cargando ? (
+      {cargando ? (
         <div className="py-16 text-center text-ink-muted">Cargando equipo…</div>
       ) : filtrados.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-16 text-center">
