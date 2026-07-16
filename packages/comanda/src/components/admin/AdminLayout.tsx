@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useAuth } from '@/lib/auth';
+import { useAuth, puedeAccederAdmin } from '@/lib/auth';
 import { usePermiso } from '@/lib/usePermiso';
 import { findActiveCategory, findActiveSubItem } from '@/lib/adminNavigation';
 import { AdminSidebar } from './AdminSidebar';
@@ -95,6 +95,18 @@ export function AdminLayout() {
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [drawerOpen]);
+
+  // Gate del admin: el user necesita AL MENOS un permiso comanda.* activo.
+  // Los usuarios POS del local (nekodevoto, cajeros funcionales) tienen 0 y
+  // NO deben entrar al panel Admin — su rol_pos='admin' solo bypassa POS.
+  // Reporte Lucas 17-jul.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (!puedeAccederAdmin(user)) {
+      toast.error('Sin acceso al panel de administración');
+      navigate('/pos', { replace: true });
+    }
+  }, [loading, user, navigate]);
 
   // Si la ruta tiene permiso requerido y el user no lo tiene → redirect.
   // Solo ejecuta si user ya cargó (evita redirects falsos durante loading).

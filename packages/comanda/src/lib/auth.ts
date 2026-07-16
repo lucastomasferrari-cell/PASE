@@ -14,6 +14,23 @@ export function tienePermiso(user: Usuario | null, slug: string): boolean {
   return user.permisos.includes(slug);
 }
 
+// Acceso al panel Admin (backoffice de COMANDA — /reportes, /menu, /empleados, etc.)
+//
+// IMPORTANTE: rol_pos='admin' NO da acceso al panel Admin. Ese rol_pos solo
+// bypassa las operaciones POS (crear mesas, cobrar, transferir). El panel
+// Admin requiere permisos EXPLÍCITOS asignados desde Accesos → Personas.
+//
+// Reporte Lucas 17-jul: el usuario "nekodevoto" (creado como acceso POS del
+// local Devoto) podía entrar al admin porque tenía rol_pos='admin' para
+// bypass POS. Separación correcta: rol_pos='admin' = admin del POS de ese
+// local; permiso explícito = admin del sistema.
+export function puedeAccederAdmin(user: Usuario | null): boolean {
+  if (!user) return false;
+  // Basta con tener al menos un permiso canónico comanda.* asignado.
+  // Los usuarios POS de local (nekodevoto, cajeros funcionales) tienen 0.
+  return user.permisos.some((p) => p.startsWith('comanda.'));
+}
+
 // ─── Sesión ────────────────────────────────────────────────────────────────
 // El user logueado proviene de `comanda_usuarios` (no de `usuarios` de PASE).
 // Si el email tiene cuenta PASE pero no tiene fila en comanda_usuarios, NO

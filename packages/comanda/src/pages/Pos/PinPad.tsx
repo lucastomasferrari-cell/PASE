@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Delete, LayoutGrid, LogOut } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { useAuth, puedeAccederAdmin } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { db } from '@/lib/supabase';
@@ -189,12 +189,19 @@ export function PinPad() {
           </button>
         </div>
 
-        {/* Salidas: no todos vienen a operar el POS. */}
-        <div className="mt-5 pt-4 border-t border-[#E0EAF4] dark:border-[#2A3550] flex items-center justify-between gap-2">
-          <button type="button" onClick={() => navigate('/reportes/dashboard')}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1A3A5E] dark:text-[#93A8C2] hover:text-[#75AADB] transition-colors">
-            <LayoutGrid className="h-3.5 w-3.5" /> Panel de administración
-          </button>
+        {/* Salidas: no todos vienen a operar el POS. El link al panel admin
+            solo aparece si el user logueado tiene acceso admin explícito
+            (no basta con rol_pos='admin' — ese es solo para operaciones POS). */}
+        <div className={cn(
+          'mt-5 pt-4 border-t border-[#E0EAF4] dark:border-[#2A3550] flex items-center gap-2',
+          puedeAccederAdmin(user) ? 'justify-between' : 'justify-end',
+        )}>
+          {puedeAccederAdmin(user) && (
+            <button type="button" onClick={() => navigate('/reportes/dashboard')}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1A3A5E] dark:text-[#93A8C2] hover:text-[#75AADB] transition-colors">
+              <LayoutGrid className="h-3.5 w-3.5" /> Panel de administración
+            </button>
+          )}
           <button type="button" onClick={() => void cerrarSesion()}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6E8CAB] dark:text-[#93A8C2] hover:text-[#C0392B] transition-colors">
             <LogOut className="h-3.5 w-3.5" /> Cerrar sesión
