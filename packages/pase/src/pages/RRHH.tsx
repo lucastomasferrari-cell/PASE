@@ -631,6 +631,14 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const empsFilt = allEmps.filter(e => {
     if (!empMostrarInactivos && e.activo === false) return false;
     if (empSearch && !(`${e.apellido} ${e.nombre}`).toLowerCase().includes(empSearch.toLowerCase())) return false;
+    // Excluir usuarios de acceso al POS (Superadmin, Cajero AM/PM, Lucas Owner).
+    // Son registros en rrhh_empleados solo para tener PIN de login — no son
+    // personas reales de nómina. Reporte Lucas 10-jul: no deberían aparecer en Equipo.
+    // Criterio: CUIL inválido (vacío, <10 dígitos, o ficticio 20-00000000-0) AND sueldo $0.
+    const cuilNum = (e.cuil || "").replace(/[^0-9]/g, "");
+    const cuilInvalido = cuilNum.length < 10 || cuilNum === "20000000000";
+    const sinSueldo = !e.sueldo_mensual || Number(e.sueldo_mensual) === 0;
+    if (cuilInvalido && sinSueldo) return false;
     return true;
   });
 
