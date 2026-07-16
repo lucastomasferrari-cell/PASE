@@ -207,7 +207,9 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
   const [guardando, setGuardando] = useState(false);
 
   const selectedRole = roles.find((r) => r.id === rolId) ?? null;
-  const rolePerms = new Set(selectedRole?.permisos ?? []);
+  // El rol puede traer permisos de PASE y de COMANDA (slugs comanda.*).
+  const rolePerms = new Set((selectedRole?.permisos ?? []).filter((s) => !s.startsWith('comanda.')));
+  const rolComandaCount = (selectedRole?.permisos ?? []).filter((s) => s.startsWith('comanda.')).length;
 
   function toggleOpen(k: string) { setAbierto((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; }); }
   function toggleApp(k: string) { setApps((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k]); }
@@ -220,11 +222,13 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       return { ...a, comanda: { ...a['comanda'], permisos: next } };
     });
   }
-  // Autocompletar con los permisos del rol elegido (base editable después).
+  // Autocompletar con los permisos del rol (PASE + COMANDA), editables después.
   function elegirRol(id: string | null) {
     setRolId(id);
-    const r = roles.find((x) => x.id === id) ?? null;
-    setPermisos(r ? [...r.permisos] : []);
+    const all = roles.find((x) => x.id === id)?.permisos ?? [];
+    setPermisos(all.filter((s) => !s.startsWith('comanda.')));
+    const comanda = all.filter((s) => s.startsWith('comanda.'));
+    setAccesosApp((a) => ({ ...a, comanda: { ...a['comanda'], permisos: comanda } }));
   }
   // ¿Los permisos actuales difieren de los del rol? (para mostrar "personalizado").
   const permisosPersonalizados = selectedRole
@@ -333,7 +337,11 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                 <option value="">— Sin rol —</option>
                 {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
-              {selectedRole && <p className="text-[11px] text-ink-muted">Autocompleta {rolePerms.size} permiso{rolePerms.size === 1 ? '' : 's'} de PASE. Ajustalos abajo, en la app PASE.</p>}
+              {selectedRole && (
+                <p className="text-[11px] text-ink-muted">
+                  Autocompleta {rolePerms.size} de PASE{rolComandaCount > 0 ? ` y ${rolComandaCount} de COMANDA` : ''}. Ajustalos abajo, en cada app.
+                </p>
+              )}
             </div>
           </div>
 

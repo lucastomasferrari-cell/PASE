@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, ShieldCheck, Trash2, X, Lock } from 'lucide-react';
 import { listRoles, crearRol, setPermisosRol, eliminarRol, type Rol } from '@/lib/rolesService';
-import { CATEGORIAS } from '@/lib/permisos';
+import { CATEGORIAS, type CategoriaPermisos } from '@/lib/permisos';
+import { CATEGORIAS_COMANDA } from '@/lib/permisosComanda';
 
 export function Roles() {
   const [roles, setRoles] = useState<Rol[]>([]);
@@ -95,19 +96,10 @@ export function Roles() {
                 )}
               </div>
 
-              {CATEGORIAS.map((cat) => (
-                <div key={cat.titulo} className="space-y-2">
-                  <p className="text-xs normal-case tracking-wide text-ink-muted">{cat.emoji} {cat.titulo}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {cat.permisos.map((p) => (
-                      <button key={p.slug} onClick={() => void toggle(p.slug)} title={p.descripcion}
-                              className={`text-xs px-2.5 py-1 rounded-full border ${sel.permisos.includes(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <AppPerms label="PASE" categorias={CATEGORIAS} sel={sel} toggle={toggle} />
+              <div className="border-t border-ink/5" />
+              <AppPerms label="COMANDA" categorias={CATEGORIAS_COMANDA} sel={sel} toggle={toggle} />
+              <p className="text-[11px] text-ink-muted">Al elegir este rol en una persona se autocompletan estos permisos (PASE y COMANDA); después se ajustan en su ficha.</p>
             </div>
           ) : (
             <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-14 text-center text-sm text-ink-muted">
@@ -120,6 +112,33 @@ export function Roles() {
       {creando && (
         <FormRol onClose={() => setCreando(false)} onSaved={() => { setCreando(false); void reload(); }} />
       )}
+    </div>
+  );
+}
+
+// Permisos de una app (PASE o COMANDA) para el rol seleccionado.
+function AppPerms({ label, categorias, sel, toggle }: {
+  label: string; categorias: CategoriaPermisos[]; sel: Rol; toggle: (slug: string) => void;
+}) {
+  const n = categorias.reduce((a, c) => a + c.permisos.filter((p) => sel.permisos.includes(p.slug)).length, 0);
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-ink">
+        {label} <span className="text-[11px] font-normal text-ink-muted">· {n} permiso{n === 1 ? '' : 's'}</span>
+      </p>
+      {categorias.map((cat) => (
+        <div key={cat.titulo} className="space-y-1.5 pl-1">
+          <p className="text-xs text-ink-muted">{cat.titulo}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {cat.permisos.map((p) => (
+              <button key={p.slug} onClick={() => void toggle(p.slug)} title={p.descripcion}
+                      className={`text-xs px-2.5 py-1 rounded-full border ${sel.permisos.includes(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
