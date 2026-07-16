@@ -35,7 +35,7 @@ export interface NavCategory {
 // sidebar hasta implementarse. Limpia visual y evita confusión.
 // La fuente completa (incluidos soon) queda en ADMIN_NAVIGATION_FULL por
 // si en el futuro queremos una pantalla "Roadmap" o un toggle "ver stubs".
-const ADMIN_NAVIGATION_FULL: NavCategory[] = [
+const ADMIN_NAVIGATION_RAW: NavCategory[] = [
   {
     slug: 'reportes',
     label: 'Reportes',
@@ -233,6 +233,23 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     ],
   },
 ];
+
+// Sub-items sin permiso propio → se les estampa `comanda.nav.<cat>.<sub>`
+// (namespace de NAVEGACIÓN, separado de los permisos de acción comanda.*).
+// El sidebar (AdminCategoryItem) y el guard de ruta (AdminLayout) ocultan/
+// bloquean el sub-item si el user no lo tiene. Así "dar Reportes pero no
+// Dashboard" es real. Ver catálogo espejo en accesos/src/lib/permisosComanda.ts.
+function stampNavPerms(nav: NavCategory[]): NavCategory[] {
+  return nav.map((cat) => ({
+    ...cat,
+    subItems: cat.subItems.map((s) => ({
+      ...s,
+      requiredPermission: s.requiredPermission ?? `comanda.nav.${cat.slug}.${s.slug}`,
+    })),
+  }));
+}
+
+const ADMIN_NAVIGATION_FULL: NavCategory[] = stampNavPerms(ADMIN_NAVIGATION_RAW);
 
 // Filtra items con badge='soon'. Si una categoría queda sin sub-items
 // después del filtro, también se oculta (no tiene sentido un acordeón

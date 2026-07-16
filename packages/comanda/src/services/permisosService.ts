@@ -1,9 +1,10 @@
 import { db } from '../lib/supabase';
 import { translateError } from '../lib/errors';
+import { ADMIN_NAVIGATION_FULL } from '../lib/adminNavigation';
 
-// Listado canónico de slugs de permisos COMANDA documentados en migrations.
-// Mantener sincronizado con los slugs en RLS policies.
-export const SLUGS_COMANDA: ReadonlyArray<{ slug: string; label: string; modulo: string }> = [
+// Permisos de ACCIÓN (POS/catálogo). Los de NAVEGACIÓN (comanda.nav.*) se
+// generan del sidebar más abajo y se concatenan en SLUGS_COMANDA.
+const SLUGS_ACCIONES_COMANDA: ReadonlyArray<{ slug: string; label: string; modulo: string }> = [
   // Catálogo (Sprint 1)
   { slug: 'comanda.catalogo.ver',         label: 'Ver catálogo',                       modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.editar',      label: 'Editar items y grupos',              modulo: 'Catálogo' },
@@ -31,6 +32,21 @@ export const SLUGS_COMANDA: ReadonlyArray<{ slug: string; label: string; modulo:
   { slug: 'comanda.empleados.editar_pos', label: 'Setear PIN / rol POS de empleados', modulo: 'Settings' },
   { slug: 'comanda.config.editar',        label: 'Editar config del local',            modulo: 'Settings' },
   { slug: 'comanda.audit.ver',            label: 'Ver auditoría de overrides',         modulo: 'Settings' },
+];
+
+// Permisos de NAVEGACIÓN (acceso a cada sub-pantalla del sidebar). Se derivan
+// del sidebar (adminNavigation) — un slug comanda.nav.<cat>.<sub> por sub-item
+// visible. Fuente única: el propio sidebar.
+const SLUGS_NAV_COMANDA: ReadonlyArray<{ slug: string; label: string; modulo: string }> =
+  ADMIN_NAVIGATION_FULL.flatMap((cat) =>
+    cat.subItems
+      .filter((s) => s.badge !== 'soon' && s.requiredPermission)
+      .map((s) => ({ slug: s.requiredPermission as string, label: s.label, modulo: cat.label })),
+  );
+
+export const SLUGS_COMANDA: ReadonlyArray<{ slug: string; label: string; modulo: string }> = [
+  ...SLUGS_ACCIONES_COMANDA,
+  ...SLUGS_NAV_COMANDA,
 ];
 
 // Lee permisos asignados a un usuario PASE desde usuario_permisos

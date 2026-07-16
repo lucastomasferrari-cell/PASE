@@ -23,7 +23,7 @@ import { logAudit } from '@/lib/auditService';
 import { listMarcas, listLocalesConMarca } from '@/lib/marcasService';
 import { APPS, type AppKey } from '@/lib/apps';
 import { CATEGORIAS, type CategoriaPermisos } from '@/lib/permisos';
-import { CATEGORIAS_COMANDA } from '@/lib/permisosComanda';
+import { CATEGORIAS_COMANDA, normalizarPermisosComanda } from '@/lib/permisosComanda';
 
 interface MarcaConLocales { id: number; nombre: string; localIds: number[] }
 type LocalSimple = { id: number; nombre: string };
@@ -281,7 +281,8 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         if (upd.error) { toast.error('Permisos guardados pero falló apps: ' + upd.error); return; }
         // Enganche COMANDA: sincroniza el comanda_usuario (crea/actualiza o desactiva).
         const cs = await sincronizarComandaAcceso({
-          usuarioId: usuario.id, activo: comandaOn, locales: cAcc.locales ?? null, permisos: cAcc.permisos ?? [],
+          usuarioId: usuario.id, activo: comandaOn, locales: cAcc.locales ?? null,
+          permisos: normalizarPermisosComanda(cAcc.permisos ?? []),
         });
         if (cs.error) toast.error('Acceso a COMANDA no se sincronizó: ' + cs.error);
         void logAudit({ usuarioId: usuario.id, accion: 'editar', detalle: { rolId } });
@@ -296,7 +297,8 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         if (Object.keys(accesosApp).length) await actualizarUsuario(id, { accesos_por_app: accesosApp });
         if (comandaOn) {
           const cs = await sincronizarComandaAcceso({
-            usuarioId: id, activo: true, locales: cAcc.locales ?? null, permisos: cAcc.permisos ?? [],
+            usuarioId: id, activo: true, locales: cAcc.locales ?? null,
+            permisos: normalizarPermisosComanda(cAcc.permisos ?? []),
           });
           if (cs.error) toast.error('Usuario creado pero COMANDA no se sincronizó: ' + cs.error);
         }

@@ -18,6 +18,10 @@ export interface CategoriaPermisos {
   titulo: string;
   emoji: string;
   permisos: PermisoDef[];
+  /** COMANDA: permiso de acceso a la sección (categoría del sidebar). Si el
+   * grupo tiene ≥1 sub-item activo, se agrega automáticamente al guardar para
+   * que la sección sea visible. Las secciones de PASE no lo usan. */
+  seccionSlug?: string;
 }
 
 export const CATEGORIAS: CategoriaPermisos[] = [
