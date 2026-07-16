@@ -16,19 +16,40 @@ export function tienePermiso(user: Usuario | null, slug: string): boolean {
 
 // Acceso al panel Admin (backoffice de COMANDA — /reportes, /menu, /empleados, etc.)
 //
-// IMPORTANTE: rol_pos='admin' NO da acceso al panel Admin. Ese rol_pos solo
-// bypassa las operaciones POS (crear mesas, cobrar, transferir). El panel
-// Admin requiere permisos EXPLÍCITOS asignados desde Accesos → Personas.
+// Slugs de operación POS (los usa el day-to-day: cobrar, mesas, caja) —
+// NO cuentan como "acceso admin". Un usuario POS del local (rol=pos_local)
+// los tiene todos por herencia de rol pero eso no le da entrada al panel Admin.
+const POS_OPERATION_SLUGS = new Set<string>([
+  'comanda.ventas.cobrar',
+  'comanda.ventas.anular',
+  'comanda.ventas.descuento',
+  'comanda.ventas.refund',
+  'comanda.ventas.reopen',
+  'comanda.mesas.gestionar',
+  'comanda.caja.abrir',
+  'comanda.caja.cerrar',
+  'comanda.caja.movimientos',
+  'comanda.caja.ver_esperado_cierre',
+  'comanda.catalogo.ver',
+  'comanda.tienda.aprobar',
+  'comanda.reportes.ver',
+  'comanda.pagos.ver',
+  'comanda.clientes.ver',
+  'comanda.empleados.ver',
+  'comanda.salon.editar',
+]);
+
+// Acceso al panel Admin: requiere AL MENOS 1 slug que NO sea de operación
+// POS pura. Ejemplos: comanda.catalogo.editar, comanda.precios.editar,
+// comanda.empleados.editar_pos, comanda.audit.ver, etc.
 //
-// Reporte Lucas 17-jul: el usuario "nekodevoto" (creado como acceso POS del
-// local Devoto) podía entrar al admin porque tenía rol_pos='admin' para
-// bypass POS. Separación correcta: rol_pos='admin' = admin del POS de ese
-// local; permiso explícito = admin del sistema.
+// Reporte Lucas 17-jul: nekodevoto (rol_pos='admin') podía entrar al panel
+// Admin porque el bypass POS le daba todo. Fix: separar operación POS de
+// acceso Admin. El bypass rol_pos='admin' sigue funcionando en backend para
+// operaciones POS (crear mesa, cobrar). Este gate está en el frontend.
 export function puedeAccederAdmin(user: Usuario | null): boolean {
   if (!user) return false;
-  // Basta con tener al menos un permiso canónico comanda.* asignado.
-  // Los usuarios POS de local (nekodevoto, cajeros funcionales) tienen 0.
-  return user.permisos.some((p) => p.startsWith('comanda.'));
+  return user.permisos.some((p) => p.startsWith('comanda.') && !POS_OPERATION_SLUGS.has(p));
 }
 
 // ─── Sesión ────────────────────────────────────────────────────────────────
@@ -90,14 +111,27 @@ export function useAuthInternal(): AuthState {
       }
 
       // ─── Cargar permisos comanda.* del user ───────────────────────────
-      const { data: permsRes } = await db
-        .from('comanda_usuario_permisos')
-        .select('modulo_slug')
-        .eq('comanda_usuario_id', row.id as string);
-
-      const permisos = (permsRes ?? []).map((p) => p.modulo_slug as string);
-
+      // Dos fuentes:
+      //   a) comanda_usuario_permisos — slugs asignados individualmente al user
+      //   b) rol_pos_permisos — slugs del rol_pos (herencia por rol; nueva
+      //      fuente 17-jul para pos_local + para roles cajero/manager/etc).
+      // Union sin duplicados. Alinea con la lógica del backend
+      // comanda_auth_tiene_permiso (que ahora también hace el union).
       const rolPos = row.rol_pos as RolPos;
+      const [permsIndv, permsRol] = await Promise.all([
+        db.from('comanda_usuario_permisos')
+          .select('modulo_slug')
+          .eq('comanda_usuario_id', row.id as string),
+        db.from('rol_pos_permisos')
+          .select('slug')
+          .eq('rol_pos', rolPos)
+          .eq('activo', true),
+      ]);
+      const permisosSet = new Set<string>();
+      for (const p of permsIndv.data ?? []) permisosSet.add((p as { modulo_slug: string }).modulo_slug);
+      for (const p of permsRol.data ?? []) permisosSet.add((p as { slug: string }).slug);
+      const permisos = Array.from(permisosSet);
+
       const user: Usuario = {
         id: row.id as string,
         auth_id: row.auth_id as string,
