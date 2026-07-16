@@ -11,8 +11,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  Search, Plus, Check, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock,
-  ChevronDown, Copy, User as UserIcon, RotateCcw,
+  Search, Plus, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock,
+  ChevronDown, Copy, RotateCcw,
 } from 'lucide-react';
 import {
   listUsuarios, crearUsuario, actualizarUsuario, sincronizarUsuario,
@@ -289,72 +289,75 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         <ArrowLeft className="h-4 w-4" /> Personas
       </button>
 
-      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 flex items-center gap-4 flex-wrap">
-        <div className="w-14 h-14 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-xl shrink-0">{inicial}</div>
-        <div className="flex-1 min-w-[160px]">
-          <h2 className="text-xl font-medium">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
-          {esEdicion && <div className="text-sm text-ink-muted mt-0.5">{usuario?.email}</div>}
+      {/* Perfil — header + datos + credenciales, todo junto. */}
+      <section className="rounded-2xl bg-white border border-ink/5 shadow-card overflow-hidden">
+        <div className="p-5 flex items-center gap-4 flex-wrap border-b border-ink/5">
+          <div className="w-14 h-14 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-xl shrink-0">{inicial}</div>
+          <div className="flex-1 min-w-[160px]">
+            <h2 className="text-xl font-medium">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
+            <div className="text-sm text-ink-muted mt-0.5">{esEdicion ? usuario?.email : 'Perfil de la persona'}</div>
+          </div>
         </div>
-      </div>
 
-      {/* Credenciales — email + contraseña. Siempre visible. */}
-      <section className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-3">
-        <p className="text-sm font-medium">Credenciales <span className="text-xs font-normal text-ink-muted">· un solo usuario y contraseña para todas las apps</span></p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-ink-soft">Usuario (email)</label>
-            {esEdicion ? (
-              <div className="flex gap-2">
-                <input value={email} disabled className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm bg-ink/5" />
-                <button type="button" onClick={() => { void navigator.clipboard.writeText(email); toast.success('Email copiado'); }}
-                        className="px-2.5 rounded-lg border border-ink/15 hover:bg-ink/5" title="Copiar"><Copy className="h-4 w-4" /></button>
-              </div>
-            ) : (
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="persona@ejemplo.com"
-                     className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
-            )}
+        <div className="p-5 space-y-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-ink-soft">Nombre *</label>
+              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-ink-soft">Rol</label>
+              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+                <option value="">— Sin rol —</option>
+                {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+              </select>
+              {selectedRole && <p className="text-[11px] text-ink-muted">Autocompleta {rolePerms.size} permiso{rolePerms.size === 1 ? '' : 's'} de PASE. Ajustalos abajo, en la app PASE.</p>}
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-ink-soft">Contraseña</label>
-            {!esEdicion ? (
-              <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" placeholder="Contraseña inicial (mín. 6)"
-                     className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
-            ) : tempPass ? (
-              <div className="flex gap-2">
-                <input value={tempPass} readOnly className="flex-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-mono" />
-                <button type="button" onClick={() => { void navigator.clipboard.writeText(tempPass); toast.success('Contraseña copiada'); }}
-                        className="px-2.5 rounded-lg border border-ink/15 hover:bg-ink/5" title="Copiar"><Copy className="h-4 w-4" /></button>
+
+          <div className="pt-1 border-t border-ink/5">
+            <p className="text-[11px] font-medium text-ink-soft mt-3 mb-2 inline-flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5" /> Credenciales <span className="font-normal text-ink-muted">· un solo usuario y contraseña para todas las apps</span>
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-ink-soft">Usuario (email)</label>
+                {esEdicion ? (
+                  <div className="flex gap-2">
+                    <input value={email} disabled className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm bg-ink/5" />
+                    <button type="button" onClick={() => { void navigator.clipboard.writeText(email); toast.success('Email copiado'); }}
+                            className="px-2.5 rounded-lg border border-ink/15 hover:bg-ink/5" title="Copiar"><Copy className="h-4 w-4" /></button>
+                  </div>
+                ) : (
+                  <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="persona@ejemplo.com"
+                         className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                )}
               </div>
-            ) : (
-              <button type="button" onClick={() => void resetear()}
-                      className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm font-medium hover:bg-ink/5 inline-flex items-center justify-center gap-1.5">
-                <KeyRound className="h-4 w-4" /> Generar contraseña nueva
-              </button>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-ink-soft">Contraseña</label>
+                {!esEdicion ? (
+                  <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" placeholder="Contraseña inicial (mín. 6)"
+                         className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                ) : tempPass ? (
+                  <div className="flex gap-2">
+                    <input value={tempPass} readOnly className="flex-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-mono" />
+                    <button type="button" onClick={() => { void navigator.clipboard.writeText(tempPass); toast.success('Contraseña copiada'); }}
+                            className="px-2.5 rounded-lg border border-ink/15 hover:bg-ink/5" title="Copiar"><Copy className="h-4 w-4" /></button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => void resetear()}
+                          className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm font-medium hover:bg-ink/5 inline-flex items-center justify-center gap-1.5">
+                    <KeyRound className="h-4 w-4" /> Generar contraseña nueva
+                  </button>
+                )}
+              </div>
+            </div>
+            {esEdicion && (
+              <p className="text-[11px] text-ink-muted mt-2">Por seguridad la contraseña actual no se puede ver (está encriptada). Si no la sabés, generá una nueva y pasásela — la persona la cambia al entrar.</p>
             )}
           </div>
         </div>
-        {esEdicion && (
-          <p className="text-[11px] text-ink-muted">Por seguridad la contraseña actual no se puede ver (está encriptada). Si no la sabés, generá una nueva y pasásela — la persona la cambia al entrar.</p>
-        )}
       </section>
-
-      {/* Datos básicos */}
-      <Seccion titulo="Datos básicos" icon={<UserIcon className="h-4 w-4" />} abierto={abierto.has('datos')} onToggle={() => toggleOpen('datos')}>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-ink-soft">Nombre *</label>
-            <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-ink-soft">Rol</label>
-            <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
-              <option value="">— Sin rol —</option>
-              {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-            </select>
-            {selectedRole && <p className="text-[11px] text-ink-muted">Autocompleta {rolePerms.size} permiso{rolePerms.size === 1 ? '' : 's'} de PASE. Ajustalos abajo, en la app PASE.</p>}
-          </div>
-        </div>
-      </Seccion>
 
       {/* Una barra por app */}
       <p className="text-xs text-ink-muted px-1 pt-1">Accesos por app — tocá una para darle acceso y elegir sus locales</p>
@@ -532,35 +535,58 @@ function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAl
   );
 }
 
-// Selector de locales con atajo por marca.
+// Selector de locales — desplegable compacto. Cerrado muestra un resumen
+// ("Todos los locales" / "3 de 5 locales"); se abre a una lista agrupada por
+// marca (con interruptor "toda la marca") + interruptor por local.
 function LocalesPicker({ marcas, locales, value, onToggle, onToggleMarca }: {
   marcas: MarcaConLocales[]; locales: LocalSimple[]; value: number[];
   onToggle: (id: number) => void; onToggleMarca: (ids: number[]) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const total = locales.length;
+  const n = value.length;
+  const resumen = n === 0 || n === total ? 'Todos los locales' : `${n} de ${total} locales`;
+  const cubiertos = new Set(marcas.flatMap((m) => m.localIds));
+  const sinMarca = locales.filter((l) => !cubiertos.has(l.id));
+  const grupos = [
+    ...marcas.map((m) => ({ nombre: m.nombre, ids: m.localIds })),
+    ...(sinMarca.length ? [{ nombre: 'Sin marca', ids: sinMarca.map((l) => l.id) }] : []),
+  ];
   return (
-    <div className="space-y-2">
-      {marcas.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <span className="text-[11px] text-ink-muted self-center">Por marca:</span>
-          {marcas.map((m) => {
-            const todos = m.localIds.every((id) => value.includes(id));
+    <div className="rounded-lg border border-ink/15 overflow-hidden">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-ink/[0.02]">
+        <MapPin className="h-4 w-4 text-ink-muted shrink-0" />
+        <span className="text-sm text-ink flex-1">{resumen}</span>
+        <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="border-t border-ink/10 max-h-72 overflow-y-auto">
+          {grupos.map((g, gi) => {
+            const nMk = g.ids.filter((id) => value.includes(id)).length;
+            const todos = nMk === g.ids.length;
             return (
-              <button key={m.id} type="button" onClick={() => onToggleMarca(m.localIds)}
-                      className={`text-xs px-3 py-1.5 rounded-full border font-medium ${todos ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white border-ink/15 text-ink-soft hover:bg-ink/5'}`}>
-                {m.nombre}
-              </button>
+              <div key={g.nombre} className={gi > 0 ? 'border-t border-ink/5' : ''}>
+                <div className="flex items-center gap-3 px-3 py-2 bg-ink/[0.03]">
+                  <span className="text-[13px] font-medium text-ink-soft flex-1">{g.nombre}</span>
+                  <span className="text-[11px] tabular-nums text-ink-muted">{nMk}/{g.ids.length}</span>
+                  <Switch on={todos} onClick={() => onToggleMarca(g.ids)} label={`Toda ${g.nombre}`} />
+                </div>
+                {g.ids.map((id) => {
+                  const l = locales.find((x) => x.id === id);
+                  if (!l) return null;
+                  return (
+                    <div key={id} className="flex items-center gap-3 px-3 py-2 pl-7 border-t border-ink/5">
+                      <span className="text-sm text-ink flex-1">{l.nombre}</span>
+                      <Switch on={value.includes(id)} onClick={() => onToggle(id)} label={l.nombre} />
+                    </div>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
       )}
-      <div className="flex flex-wrap gap-1.5">
-        {locales.map((l) => (
-          <button key={l.id} type="button" onClick={() => onToggle(l.id)}
-                  className={`text-xs px-3 py-1.5 rounded-full border ${value.includes(l.id) ? 'bg-brand-500 text-white border-brand-500' : 'bg-white border-ink/15 text-ink-soft'}`}>
-            {value.includes(l.id) && <Check className="h-3 w-3 inline mr-1" />}{l.nombre}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
