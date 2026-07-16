@@ -395,7 +395,6 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                   <PermisosPase
                     value={permisos}
                     onToggle={togglePermiso}
-                    rolePerms={rolePerms}
                     selectedRole={selectedRole}
                     personalizado={permisosPersonalizados}
                     onVolverAlRol={() => setPermisos(selectedRole ? [...selectedRole.permisos] : [])}
@@ -449,20 +448,37 @@ function Seccion({ titulo, sub, icon, right, abierto, onToggle, children }: {
   );
 }
 
-// Editor de permisos de PASE. Agrupa el catálogo (CATEGORIAS) como el sidebar;
-// se autocompleta con los del rol y se tilda/destilda inline. Un puntito marca
-// los permisos que trae el rol pero fueron destildados.
-function PermisosPase({ value, onToggle, rolePerms, selectedRole, personalizado, onVolverAlRol }: {
+// Interruptor (switch) estilo pantalla de ajustes.
+function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onClick}
+            className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${on ? 'bg-brand-500' : 'bg-ink/20'}`}>
+      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+    </button>
+  );
+}
+
+// Editor de permisos de PASE. Secciones desplegables (como el sidebar); adentro
+// cada permiso es una fila con descripción + interruptor. Se autocompleta con
+// los del rol y se ajusta acá mismo.
+function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAlRol }: {
   value: string[];
   onToggle: (slug: string) => void;
-  rolePerms: Set<string>;
   selectedRole: Rol | null;
   personalizado: boolean;
   onVolverAlRol: () => void;
 }) {
   const set = new Set(value);
+  const activos = (cat: (typeof CATEGORIAS)[number]) => cat.permisos.filter((p) => set.has(p.slug)).length;
+  // Arrancan abiertas las secciones que ya tienen algún permiso activo.
+  const [abiertas, setAbiertas] = useState<Set<string>>(
+    () => new Set(CATEGORIAS.filter((c) => c.permisos.some((p) => set.has(p.slug))).map((c) => c.titulo)),
+  );
+  function toggleSec(t: string) {
+    setAbiertas((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; });
+  }
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs font-medium text-ink-soft">
           Permisos en PASE <span className="font-normal text-ink-muted">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
@@ -478,28 +494,39 @@ function PermisosPase({ value, onToggle, rolePerms, selectedRole, personalizado,
         )}
       </div>
       {!selectedRole && (
-        <p className="text-[11px] text-ink-muted">Elegí un rol arriba para autocompletar, o tildá los permisos a mano.</p>
+        <p className="text-[11px] text-ink-muted">Elegí un rol arriba para autocompletar, o prendé los permisos a mano.</p>
       )}
-      <div className="space-y-3">
-        {CATEGORIAS.map((cat) => (
-          <div key={cat.titulo} className="space-y-1.5">
-            <p className="text-[11px] font-medium text-ink-muted uppercase tracking-wide">{cat.titulo}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {cat.permisos.map((p) => {
-                const on = set.has(p.slug);
-                const delRol = rolePerms.has(p.slug);
-                return (
-                  <button key={p.slug} type="button" onClick={() => onToggle(p.slug)} title={p.descripcion ?? p.label}
-                          className={`text-xs px-3 py-1.5 rounded-full border inline-flex items-center gap-1.5 ${on ? 'bg-brand-500 text-white border-brand-500' : 'bg-white border-ink/15 text-ink-soft hover:bg-ink/5'}`}>
-                    {on && <Check className="h-3 w-3" />}
-                    {p.label}
-                    {delRol && !on && <span className="w-1.5 h-1.5 rounded-full bg-brand-300" title="Lo trae el rol (destildado)" />}
-                  </button>
-                );
-              })}
+      <div className="rounded-xl border border-ink/10 overflow-hidden">
+        {CATEGORIAS.map((cat, i) => {
+          const open = abiertas.has(cat.titulo);
+          const n = activos(cat);
+          return (
+            <div key={cat.titulo} className={i > 0 ? 'border-t border-ink/5' : ''}>
+              <button type="button" onClick={() => toggleSec(cat.titulo)}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-ink/[0.02]">
+                <span className="text-sm font-medium text-ink flex-1">{cat.titulo}</span>
+                <span className={`text-[11px] tabular-nums ${n > 0 ? 'text-brand-700 font-medium' : 'text-ink-muted'}`}>{n} de {cat.permisos.length}</span>
+                <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+              </button>
+              {open && (
+                <div className="border-t border-ink/5 bg-ink/[0.015]">
+                  {cat.permisos.map((p, j) => {
+                    const on = set.has(p.slug);
+                    return (
+                      <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-ink/5' : ''}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-ink">{p.label}</div>
+                          {p.descripcion && <div className="text-[11px] text-ink-muted mt-0.5 leading-snug">{p.descripcion}</div>}
+                        </div>
+                        <Switch on={on} onClick={() => onToggle(p.slug)} label={p.label} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
