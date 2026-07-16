@@ -231,6 +231,10 @@ export default function App() {
                 {import.meta.env.DEV && <Route path="/pos/_spike-offline" element={<SpikeOfflinePage />} />}
                 <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
                 <Route path="/welcome" element={<WelcomePage />} />
+                {/* Raíz: siempre la Welcome (selector Admin/POS) aunque haya
+                    sesión. Cada botón manda a /login?next= — RedirectIfAuth
+                    respeta el next y te lleva al destino sin re-loguear. */}
+                <Route path="/" element={<WelcomePage />} />
 
                 {/* Rutas PÚBLICAS (sin auth, sin PIN) */}
                 <Route path="/marketplace" element={<MarketplaceHome />} />
@@ -397,7 +401,6 @@ export default function App() {
                     <Route element={featureFlags.offlineFirstVentas
                       ? <OfflineProvider><PosLayout /></OfflineProvider>
                       : <PosLayout />}>
-                      <Route path="/" element={<DefaultModeRedirect />} />
                       <Route path="/pos" element={<DefaultModeRedirect />} />
                       <Route path="/pos/salon" element={<SalonView />} />
                       <Route path="/pos/mostrador" element={<MostradorView />} />
