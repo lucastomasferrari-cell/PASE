@@ -8,12 +8,15 @@ import { Plus, ShieldCheck, Trash2, X, Lock } from 'lucide-react';
 import { listRoles, crearRol, setPermisosRol, eliminarRol, type Rol } from '@/lib/rolesService';
 import { CATEGORIAS, type CategoriaPermisos } from '@/lib/permisos';
 import { CATEGORIAS_COMANDA } from '@/lib/permisosComanda';
+import { listRolPosPermisos, setRolPosPermisos } from '@/lib/rolPosService';
+import { CATEGORIAS_ROL_POS, TODOS_SLUGS_ROL_POS, ROLES_POS, ROL_POS_LABEL, type RolPos } from '@/lib/permisosRolPos';
 
 export function Roles() {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [sel, setSel] = useState<Rol | null>(null);
   const [cargando, setCargando] = useState(true);
   const [creando, setCreando] = useState(false);
+  const [familia, setFamilia] = useState<'gestion' | 'pos'>('gestion');
 
   const reload = useCallback(async () => {
     setCargando(true);
@@ -52,14 +55,29 @@ export function Roles() {
   return (
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm text-ink-muted">Editá los permisos del rol y se aplica al instante a todos los usuarios con ese rol.</p>
-        <button onClick={() => setCreando(true)}
-                className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
-          <Plus className="h-4 w-4" /> Nuevo rol
-        </button>
+        <div className="inline-flex rounded-lg border border-ink/15 bg-white p-0.5">
+          <button onClick={() => setFamilia('gestion')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${familia === 'gestion' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Roles de gestión (mail)</button>
+          <button onClick={() => setFamilia('pos')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${familia === 'pos' ? 'bg-brand-500 text-white' : 'text-ink-soft hover:bg-ink/5'}`}>Roles del POS (PIN)</button>
+        </div>
+        {familia === 'gestion' && (
+          <button onClick={() => setCreando(true)}
+                  className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
+            <Plus className="h-4 w-4" /> Nuevo rol
+          </button>
+        )}
       </div>
 
-      {cargando ? (
+      <p className="text-xs text-ink-muted">
+        {familia === 'gestion'
+          ? 'Roles de las personas que entran con mail + contraseña (PASE, COMANDA admin). Se aplican al instante a todos los usuarios con ese rol.'
+          : 'Roles de los empleados que entran con PIN en el terminal del POS. Definen qué puede hacer cada uno en el POS.'}
+      </p>
+
+      {familia === 'pos' ? (
+        <RolesPos />
+      ) : cargando ? (
         <div className="py-16 text-center text-ink-muted">Cargando…</div>
       ) : (
         <div className="grid md:grid-cols-[260px_1fr] gap-4">
@@ -96,9 +114,9 @@ export function Roles() {
                 )}
               </div>
 
-              <AppPerms label="PASE" categorias={CATEGORIAS} sel={sel} toggle={toggle} />
+              <AppPerms label="PASE" categorias={CATEGORIAS} activos={sel.permisos} toggle={toggle} />
               <div className="border-t border-ink/5" />
-              <AppPerms label="COMANDA" categorias={CATEGORIAS_COMANDA} sel={sel} toggle={toggle} />
+              <AppPerms label="COMANDA" categorias={CATEGORIAS_COMANDA} activos={sel.permisos} toggle={toggle} />
               <p className="text-[11px] text-ink-muted">Al elegir este rol en una persona se autocompletan estos permisos (PASE y COMANDA); después se ajustan en su ficha.</p>
             </div>
           ) : (
@@ -116,11 +134,12 @@ export function Roles() {
   );
 }
 
-// Permisos de una app (PASE o COMANDA) para el rol seleccionado.
-function AppPerms({ label, categorias, sel, toggle }: {
-  label: string; categorias: CategoriaPermisos[]; sel: Rol; toggle: (slug: string) => void;
+// Permisos de una app para el rol (chips). `activos` = slugs que tiene el rol.
+function AppPerms({ label, categorias, activos, toggle }: {
+  label: string; categorias: CategoriaPermisos[]; activos: string[]; toggle: (slug: string) => void;
 }) {
-  const n = categorias.reduce((a, c) => a + c.permisos.filter((p) => sel.permisos.includes(p.slug)).length, 0);
+  const set = new Set(activos);
+  const n = categorias.reduce((a, c) => a + c.permisos.filter((p) => set.has(p.slug)).length, 0);
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-ink">
@@ -132,13 +151,90 @@ function AppPerms({ label, categorias, sel, toggle }: {
           <div className="flex flex-wrap gap-1.5">
             {cat.permisos.map((p) => (
               <button key={p.slug} onClick={() => void toggle(p.slug)} title={p.descripcion}
-                      className={`text-xs px-2.5 py-1 rounded-full border ${sel.permisos.includes(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
+                      className={`text-xs px-2.5 py-1 rounded-full border ${set.has(p.slug) ? 'bg-brand-100 text-brand-800 border-brand-300' : 'bg-white text-ink-soft border-ink/15'}`}>
                 {p.label}
               </button>
             ))}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Roles del POS (PIN): 5 roles fijos, permisos en rol_pos_permisos (global).
+function RolesPos() {
+  const [perms, setPerms] = useState<Record<RolPos, string[]>>({} as Record<RolPos, string[]>);
+  const [sel, setSel] = useState<RolPos>('cajero');
+  const [cargando, setCargando] = useState(true);
+
+  const reload = useCallback(async () => {
+    setCargando(true);
+    const { data, error } = await listRolPosPermisos();
+    if (error) toast.error(error); else setPerms(data);
+    setCargando(false);
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  const slugs = perms[sel] ?? [];
+  const esTotal = slugs.includes('*');
+
+  async function toggle(slug: string) {
+    if (esTotal) return;
+    const nuevos = slugs.includes(slug) ? slugs.filter((s) => s !== slug) : [...slugs, slug];
+    setPerms((p) => ({ ...p, [sel]: nuevos }));
+    const { error } = await setRolPosPermisos(sel, nuevos);
+    if (error) { toast.error(error); void reload(); }
+  }
+
+  if (cargando) return <div className="py-16 text-center text-ink-muted">Cargando…</div>;
+
+  return (
+    <div className="grid md:grid-cols-[260px_1fr] gap-4">
+      <aside className="space-y-1">
+        {ROLES_POS.map((r) => {
+          const n = (perms[r] ?? []).includes('*') ? '∞' : (perms[r] ?? []).length;
+          return (
+            <button key={r} onClick={() => setSel(r)}
+                    className={`w-full text-left rounded-xl border p-3 transition-colors ${sel === r ? 'border-brand-500 bg-brand-50' : 'border-ink/10 bg-white hover:bg-ink/5'}`}>
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{ROL_POS_LABEL[r]}</span>
+                <span className="text-xs text-ink-muted">{n}</span>
+              </div>
+            </button>
+          );
+        })}
+      </aside>
+
+      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
+        <div className="text-xl font-medium inline-flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-brand-500" />{ROL_POS_LABEL[sel]}
+          <span className="text-[11px] font-normal text-ink-muted">· rol del PIN en el POS</span>
+        </div>
+        {esTotal ? (
+          <p className="text-sm text-ink-muted inline-flex items-center gap-1.5">
+            <Lock className="h-4 w-4" /> Acceso total al POS (no editable).
+          </p>
+        ) : (
+          <>
+            <AppPerms label="Permisos del POS" categorias={CATEGORIAS_ROL_POS} activos={slugs} toggle={toggle} />
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={async () => {
+                  const nuevos = slugs.length >= TODOS_SLUGS_ROL_POS.length ? [] : [...TODOS_SLUGS_ROL_POS];
+                  setPerms((p) => ({ ...p, [sel]: nuevos }));
+                  const { error } = await setRolPosPermisos(sel, nuevos);
+                  if (error) { toast.error(error); void reload(); }
+                }}
+                className="text-[11px] px-2.5 py-1 rounded-lg border border-ink/15 hover:bg-ink/5 text-ink-soft"
+              >
+                {slugs.length >= TODOS_SLUGS_ROL_POS.length ? 'Sacar todos' : 'Dar todos'}
+              </button>
+              <p className="text-[11px] text-ink-muted">Este rol aplica a los empleados que entran con PIN en el POS.</p>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
