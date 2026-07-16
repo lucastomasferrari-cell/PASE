@@ -885,6 +885,7 @@ export function VentaScreen() {
           grupos={gruposDisponibles}
           marcas={marcas}
           defaultMarcaId={null}
+          scopeLocalId={editCatalogoItem.local_id}
           item={editCatalogoItem}
           onClose={() => setEditCatalogoItem(null)}
           onSaved={() => {

@@ -16,6 +16,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { formatARS } from '@/lib/utils';
+import { useCatalogoScope, scopeToItemsFilter, scopeLocalId } from '@/lib/catalogoScope';
+import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 import { ItemForm } from './ItemForm';
 import { AgotarDialog } from './AgotarDialog';
 import { ImportarMenuDialog } from './ImportarMenuDialog';
@@ -41,6 +43,7 @@ export function ItemsTab({ user }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<ItemConGrupo | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scope] = useCatalogoScope();
 
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
   const puedeEliminar = tienePermiso(user, 'comanda.catalogo.eliminar');
@@ -51,18 +54,18 @@ export function ItemsTab({ user }: Props) {
     setLoading(true);
     const grupoIdNum = grupoFilter === 'todos' ? null : Number(grupoFilter);
     const marcaIdNum = marcaFilter === 'todas' ? null : Number(marcaFilter);
-    // Modelo maestro+import: este admin edita el MENÚ MAESTRO de la marca
-    // (items sin sucursal, local_id NULL). Cada sucursal lo importa y opera su
-    // copia. maestro:true → mostramos solo el maestro.
+    // Modelo maestro+import: el alcance (scope) decide qué menú editás — el
+    // MAESTRO de la marca (local_id NULL) o la copia de una SUCURSAL puntual.
+    const scopeFilter = scopeToItemsFilter(scope);
     const [itemsRes, gruposRes] = await Promise.all([
-      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, marcaId: marcaIdNum, maestro: true, tenantId: user.tenant_id }),
-      listGrupos(user.tenant_id, marcaIdNum, { maestro: true }),
+      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, marcaId: marcaIdNum, ...scopeFilter, tenantId: user.tenant_id }),
+      listGrupos(user.tenant_id, marcaIdNum, scopeFilter),
     ]);
     if (itemsRes.error) setError(itemsRes.error);
     setItems(itemsRes.data);
     setGrupos(gruposRes.data);
     setLoading(false);
-  }, [search, grupoFilter, estadoFilter, marcaFilter, user.tenant_id]);
+  }, [search, grupoFilter, estadoFilter, marcaFilter, scope, user.tenant_id]);
 
   useEffect(() => {
     reload();
@@ -85,17 +88,24 @@ export function ItemsTab({ user }: Props) {
       {/* Header con título + CTA */}
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Menú maestro de la marca</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {scope === 'maestro' ? 'Menú maestro de la marca' : 'Menú de la sucursal'}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {items.length} {items.length === 1 ? 'item' : 'items'} · plantilla que cada sucursal importa y edita
+            {scope === 'maestro'
+              ? `${items.length} ${items.length === 1 ? 'item' : 'items'} · plantilla que cada sucursal importa y edita`
+              : `${items.length} ${items.length === 1 ? 'item' : 'items'} · copia editable de esta sucursal`}
           </p>
         </div>
         {puedeEditar && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Download className="h-4 w-4 mr-1.5" />
-              Importar a sucursal
-            </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <CatalogoScopeSelector />
+            {scope === 'maestro' && (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Download className="h-4 w-4 mr-1.5" />
+                Importar a sucursal
+              </Button>
+            )}
             <Button onClick={() => setEditingItem('new')}>
               <Plus className="h-4 w-4 mr-1.5" />
               Nuevo item
@@ -245,6 +255,7 @@ export function ItemsTab({ user }: Props) {
           grupos={grupos}
           marcas={marcas}
           defaultMarcaId={marcaIdFiltro}
+          scopeLocalId={scopeLocalId(scope)}
           item={editingItem === 'new' ? null : editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={() => { setEditingItem(null); reload(); }}

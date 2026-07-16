@@ -27,6 +27,9 @@ interface Props {
   marcas: MarcaLite[];
   /** Marca por defecto para items nuevos (la del filtro de la lista). */
   defaultMarcaId: number | null;
+  /** Sucursal del alcance activo: null = menú maestro (local_id NULL);
+   * un id = la copia de esa sucursal. Se graba al CREAR un item nuevo. */
+  scopeLocalId: number | null;
   item: Item | null;
   onClose: () => void;
   onSaved: () => void;
@@ -40,7 +43,7 @@ const ESTACIONES: { value: Estacion | '_none'; label: string }[] = [
   { value: 'postres',         label: 'Postres' },
 ];
 
-export function ItemForm({ user, grupos, marcas, defaultMarcaId, item, onClose, onSaved }: Props) {
+export function ItemForm({ user, grupos, marcas, defaultMarcaId, scopeLocalId, item, onClose, onSaved }: Props) {
   const isEdit = item !== null;
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [marcaId, setMarcaId] = useState<number | null>(
@@ -104,7 +107,9 @@ export function ItemForm({ user, grupos, marcas, defaultMarcaId, item, onClose, 
         es_combo: esCombo,
         tiempo_prep_min: typeof tiempoPrepMin === 'number' && tiempoPrepMin > 0 ? tiempoPrepMin : null,
         tenant_id: user.tenant_id,
-        local_id: null,
+        // Nuevo → local_id del alcance (maestro=null | sucursal=id).
+        // Edición → preservar el local_id del item (no moverlo de alcance).
+        local_id: isEdit && item ? item.local_id : scopeLocalId,
         marca_id: marcaId,
         // SKU externos para partners — null si vacío para no inflar la fila
         sku_rappi: skuRappi.trim() || null,

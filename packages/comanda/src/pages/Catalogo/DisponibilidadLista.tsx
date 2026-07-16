@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Search, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useLocalActivo } from '@/lib/localActivo';
 import { listItems, marcarDisponible, type ItemConGrupo } from '@/services/itemsService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,9 @@ function relativoCorto(iso: string | null | undefined): string {
 export function DisponibilidadLista() {
   const { user } = useAuth();
   const tenantId = user?.tenant_id ?? null;
+  // La lista de "86" es OPERATIVA por sucursal: mostrás/marcás agotado el menú
+  // del local en el que estás trabajando (local activo del POS).
+  const [localId] = useLocalActivo(user);
 
   const [items, setItems] = useState<ItemConGrupo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,11 +49,11 @@ export function DisponibilidadLista() {
   const reload = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
-    const r = await listItems({ tenantId, search: debouncedSearch.trim() || undefined });
+    const r = await listItems({ tenantId, localId, search: debouncedSearch.trim() || undefined });
     if (r.error) toast.error(r.error);
     else setItems(r.data);
     setLoading(false);
-  }, [tenantId, debouncedSearch]);
+  }, [tenantId, localId, debouncedSearch]);
 
   useEffect(() => { reload(); }, [reload]);
 

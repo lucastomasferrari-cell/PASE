@@ -103,14 +103,15 @@ export function CuponesAdmin() {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  // F5 Chunk B: cargar items del tenant para multiselect (solo cuando se necesita).
+  // F5 Chunk B: items para el multiselect. Modelo maestro+import: el cupón es
+  // por sucursal, así que mostramos el menú del local activo (sus copias).
   useEffect(() => {
-    if (items.length > 0 || !user?.tenant_id) return;
+    if (!user?.tenant_id) return;
     void (async () => {
-      const { data } = await listItems({ tenantId: user.tenant_id });
+      const { data } = await listItems({ tenantId: user.tenant_id, localId: localActivo });
       setItems(data);
     })();
-  }, [user?.tenant_id, items.length]);
+  }, [user?.tenant_id, localActivo]);
 
   function abrirCrear() {
     setForm(FORM_VACIO);

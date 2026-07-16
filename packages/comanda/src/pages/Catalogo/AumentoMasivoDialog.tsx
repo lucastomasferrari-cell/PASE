@@ -23,6 +23,8 @@ interface Props {
   canales?: Canal[];
   canalIdPreseleccionado?: number | null;
   totalItems: number;
+  /** Alcance activo: null = maestro (precios sin sucursal) | id = esa sucursal. */
+  localId?: number | null;
   onClose: () => void;
   onDone: (result: { itemsAfectados: number; preciosRecalculados: number }) => void;
 }
@@ -34,7 +36,7 @@ type Modo = 'madre' | 'canal';
 
 export function AumentoMasivoDialog({
   user, grupos, canales = [], canalIdPreseleccionado = null,
-  totalItems, onClose, onDone,
+  totalItems, localId = null, onClose, onDone,
 }: Props) {
   const [modo, setModo] = useState<Modo>(canalIdPreseleccionado !== null ? 'canal' : 'madre');
   const [canalId, setCanalId] = useState<number | null>(canalIdPreseleccionado);
@@ -60,7 +62,7 @@ export function AumentoMasivoDialog({
       if (modo === 'madre') {
         const { data, error: err } = await aumentoMasivo({
           tenantId: user.tenant_id,
-          localId: null,
+          localId,
           grupoId,
           porcentaje,
           redondeoA,
@@ -72,7 +74,7 @@ export function AumentoMasivoDialog({
         const { data, error: err } = await aumentoMasivoPorCanal({
           tenantId: user.tenant_id,
           canalId: canalId as number,
-          localId: null,
+          localId,
           grupoId,
           porcentaje,
           redondeoA,

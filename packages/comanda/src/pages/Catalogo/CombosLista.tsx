@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { formatARS } from '@/lib/format';
 // useRealtimeTable sacado sprint optim egress 2026-05-16
 import { ComboEditorDialog } from '@/components/dialogs/ComboEditorDialog';
+import { useCatalogoScope, scopeToItemsFilter } from '@/lib/catalogoScope';
+import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 
 // Lista de combos. Un "combo" es un item del catálogo con es_combo=true.
 // Su composición se define en combo_componentes (slots con items elegibles).
@@ -27,19 +29,23 @@ export function CombosLista() {
   const [todosItems, setTodosItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Item | null>(null);
+  const [scope] = useCatalogoScope();
 
   const reload = useCallback(async () => {
     if (!user?.tenant_id) return;
     setLoading(true);
+    // Alcance: combos + items elegibles del maestro o de la sucursal (deben ser
+    // del mismo alcance para que los slots referencien items existentes).
+    const scopeFilter = scopeToItemsFilter(scope);
     const [combosRes, itemsRes] = await Promise.all([
-      listCombos(user.tenant_id),
-      listItems({ tenantId: user.tenant_id }),
+      listCombos(user.tenant_id, scopeFilter),
+      listItems({ tenantId: user.tenant_id, ...scopeFilter }),
     ]);
     setCombos(combosRes.data);
     // Items disponibles para slots (los NO-combo)
     setTodosItems(itemsRes.data.filter((i) => !i.es_combo));
     setLoading(false);
-  }, [user?.tenant_id]);
+  }, [user?.tenant_id, scope]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -48,15 +54,18 @@ export function CombosLista() {
 
   return (
     <div className="container py-6">
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Layers className="h-6 w-6" />
-          Combos
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {combos.length} combo{combos.length === 1 ? '' : 's'} configurado{combos.length === 1 ? '' : 's'} ·
-          Un combo agrupa items en "slots" (Bebida, Acompañamiento, etc.) — el cliente arma su pedido eligiendo dentro de cada slot.
-        </p>
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Layers className="h-6 w-6" />
+            Combos {scope === 'maestro' ? '· maestro' : '· sucursal'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {combos.length} combo{combos.length === 1 ? '' : 's'} configurado{combos.length === 1 ? '' : 's'} ·
+            Un combo agrupa items en "slots" (Bebida, Acompañamiento, etc.) — el cliente arma su pedido eligiendo dentro de cada slot.
+          </p>
+        </div>
+        <CatalogoScopeSelector />
       </header>
 
       {/* Banner explicativo */}

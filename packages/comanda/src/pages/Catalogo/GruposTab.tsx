@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/select';
 import { DEFAULT_PICKER_COLOR } from '@/lib/utils';
 import { ColorRampPicker, type ColorRamp, COLOR_RAMPS } from '@/components/ColorRampPicker';
+import { useCatalogoScope, scopeToItemsFilter, scopeLocalId } from '@/lib/catalogoScope';
+import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 
 interface Props {
   user: Usuario;
@@ -37,6 +39,7 @@ export function GruposTab({ user }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<ItemGrupo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scope] = useCatalogoScope();
 
   const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
   const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
@@ -45,8 +48,8 @@ export function GruposTab({ user }: Props) {
     setLoading(true);
     const marcaIdNum = marcaFilter === 'todas' ? null : Number(marcaFilter);
     const [gr, tr, ct] = await Promise.all([
-      // Editor del menú maestro: grupos de la marca sin sucursal (local_id NULL).
-      listGrupos(user.tenant_id, marcaIdNum, { maestro: true }),
+      // Alcance: grupos del maestro (local_id NULL) o de la sucursal elegida.
+      listGrupos(user.tenant_id, marcaIdNum, scopeToItemsFilter(scope)),
       listTaxRates(user.tenant_id),
       countItemsPorGrupo(user.tenant_id),
     ]);
@@ -54,7 +57,7 @@ export function GruposTab({ user }: Props) {
     setTaxRates(tr.data);
     setCounts(ct);
     setLoading(false);
-  }, [user.tenant_id, marcaFilter]);
+  }, [user.tenant_id, marcaFilter, scope]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -69,12 +72,15 @@ export function GruposTab({ user }: Props) {
     <div className="container py-6">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Grupos del menú</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {scope === 'maestro' ? 'Grupos del menú maestro' : 'Grupos de la sucursal'}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'} · agrupan los items del catálogo por categoría (Rolls, Bebidas, etc.)
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CatalogoScopeSelector />
           {marcas.length > 0 && (
             <Select value={marcaFilter} onValueChange={setMarcaFilter}>
               <SelectTrigger className="w-[180px] h-11"><SelectValue /></SelectTrigger>
@@ -187,6 +193,7 @@ export function GruposTab({ user }: Props) {
           taxRates={taxRates}
           marcas={marcas}
           defaultMarcaId={marcaIdFiltro}
+          scopeLocalId={scopeLocalId(scope)}
           grupo={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); reload(); }}
@@ -216,12 +223,14 @@ interface GrupoFormProps {
   taxRates: TaxRate[];
   marcas: MarcaLite[];
   defaultMarcaId: number | null;
+  /** Sucursal del alcance (null = maestro). Se graba al crear un grupo. */
+  scopeLocalId: number | null;
   grupo: ItemGrupo | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function GrupoFormDialog({ user, taxRates, marcas, defaultMarcaId, grupo, onClose, onSaved }: GrupoFormProps) {
+function GrupoFormDialog({ user, taxRates, marcas, defaultMarcaId, scopeLocalId, grupo, onClose, onSaved }: GrupoFormProps) {
   const [marcaId, setMarcaId] = useState<number | null>(
     grupo ? ((grupo as { marca_id?: number | null }).marca_id ?? null) : (defaultMarcaId ?? marcas[0]?.id ?? null),
   );
@@ -253,7 +262,8 @@ function GrupoFormDialog({ user, taxRates, marcas, defaultMarcaId, grupo, onClos
       const draft = {
         nombre: nombre.trim(), emoji, color, orden,
         tax_rate_id: taxRateId, estacion_default: estacion || null,
-        tenant_id: user.tenant_id, local_id: null,
+        tenant_id: user.tenant_id,
+        local_id: grupo ? grupo.local_id : scopeLocalId,
         marca_id: marcaId,
         color_ramp: colorRamp,
       };

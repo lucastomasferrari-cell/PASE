@@ -42,14 +42,21 @@ export async function softDeleteComponente(id: number): Promise<{ error: string 
 
 // Lista todos los items con es_combo=true del tenant. Sirve para la pantalla
 // CombosLista (admin).
-export async function listCombos(tenantId: string): Promise<{ data: Item[]; error: string | null }> {
-  const { data, error } = await db
+export async function listCombos(
+  tenantId: string,
+  opts?: { maestro?: boolean; localId?: number | null },
+): Promise<{ data: Item[]; error: string | null }> {
+  let q = db
     .from('items')
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('es_combo', true)
     .is('deleted_at', null)
     .order('nombre', { ascending: true });
+  // Alcance maestro+import: combos del maestro (local_id NULL) o de la sucursal.
+  if (opts?.maestro) q = q.is('local_id', null);
+  else if (opts?.localId != null) q = q.eq('local_id', opts.localId);
+  const { data, error } = await q;
   if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as Item[], error: null };
 }

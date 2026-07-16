@@ -10,6 +10,8 @@ import { tienePermiso } from '../../lib/auth';
 import { formatARS, parseARS, relativoCorto } from '../../lib/format';
 import { SearchInput } from '../../components/SearchInput';
 import { AumentoMasivoDialog } from './AumentoMasivoDialog';
+import { useCatalogoScope, scopeToItemsFilter, scopeLocalId } from '@/lib/catalogoScope';
+import { CatalogoScopeSelector } from '@/components/CatalogoScopeSelector';
 // useRealtimeTable sacado sprint optim egress 2026-05-16
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,14 +40,17 @@ export function ListaPreciosTab({ user }: Props) {
   const [canalIdPreseleccionado, setCanalIdPreseleccionado] = useState<number | null>(null);
   const [lastChange, setLastChange] = useState<string | null>(null);
 
+  const [scope] = useCatalogoScope();
   const puedeEditar = tienePermiso(user, 'comanda.precios.editar');
   const puedeAumento = tienePermiso(user, 'comanda.precios.aumento_masivo');
 
   const reload = useCallback(async () => {
     setLoading(true);
+    // Alcance: precios del maestro (local_id NULL) o de una sucursal.
+    const scopeFilter = scopeToItemsFilter(scope);
     const [itRes, grRes, caRes, prRes] = await Promise.all([
-      listItems({ tenantId: user.tenant_id }),
-      listGrupos(user.tenant_id),
+      listItems({ tenantId: user.tenant_id, ...scopeFilter }),
+      listGrupos(user.tenant_id, null, scopeFilter),
       listCanales(user.tenant_id, true),
       listPreciosPorTenant(user.tenant_id),
     ]);
@@ -55,7 +60,7 @@ export function ListaPreciosTab({ user }: Props) {
     setCanales(caRes.data);
     setPrecios(prRes.data);
     setLoading(false);
-  }, [user.tenant_id]);
+  }, [user.tenant_id, scope]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -101,12 +106,16 @@ export function ListaPreciosTab({ user }: Props) {
     <div className="container py-6">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Lista de precios</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {scope === 'maestro' ? 'Lista de precios · maestro' : 'Lista de precios · sucursal'}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {itemsFiltrados.length} {itemsFiltrados.length === 1 ? 'item' : 'items'} × {canales.length} {canales.length === 1 ? 'canal' : 'canales'}
             {lastChange && <> · última modificación {relativoCorto(lastChange)}</>}
           </p>
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CatalogoScopeSelector />
         {puedeAumento && (
           <div className="flex items-center gap-2">
             {canalFilter !== 'todos' && (
@@ -132,6 +141,7 @@ export function ListaPreciosTab({ user }: Props) {
             </Button>
           </div>
         )}
+        </div>
       </header>
 
       <div className="flex gap-3 items-center flex-wrap mb-4">
@@ -261,6 +271,7 @@ export function ListaPreciosTab({ user }: Props) {
           canales={canales}
           canalIdPreseleccionado={canalIdPreseleccionado}
           totalItems={items.length}
+          localId={scopeLocalId(scope)}
           onClose={() => { setShowAumento(false); setCanalIdPreseleccionado(null); }}
           onDone={(r) => {
             setShowAumento(false);
