@@ -74,3 +74,4 @@ packages/pase/.dbg_*.cjs
 packages/pase/check_*.cjs
 packages/pase/apply_*.cjs
 packages/pase/mint-superadmin-session.mjs
+menu_backup_neko.json
