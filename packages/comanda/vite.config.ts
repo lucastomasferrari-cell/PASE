@@ -30,11 +30,20 @@ export default defineConfig({
         name: 'COMANDA',
         short_name: 'COMANDA',
         description: 'POS para mozos y cajeros — comandar, cobrar, KDS',
-        theme_color: '#5A8FA8',
-        background_color: '#5A8FA8',
+        // theme_color: color de la barra de status del navegador cuando la
+        // PWA está corriendo standalone. Navy oscuro alineado con la Welcome
+        // (fondo terminal-style de la app instalada).
+        theme_color: '#0A0E17',
+        // background_color: se muestra en el splash screen al abrir la app
+        // instalada, antes de que React monte. Mismo navy que la Welcome →
+        // el splash se ve continuo con la primera pantalla que carga.
+        background_color: '#0A0E17',
         display: 'standalone',
         orientation: 'any',
-        start_url: '/pos',
+        // start_url raíz: al abrir el ícono instalado, arranca en la
+        // Welcome (selector Admin/POS). Si ya hay sesión, un click va
+        // directo (RedirectIfAuth respeta ?next=).
+        start_url: '/',
         scope: '/',
         lang: 'es-AR',
         icons: [
