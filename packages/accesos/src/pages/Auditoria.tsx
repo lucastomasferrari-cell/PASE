@@ -10,7 +10,7 @@ import { listUsuarios, type Usuario } from '@/lib/usuariosService';
 const ICONO: Record<AuditAccion, React.ReactNode> = {
   crear: <UserPlus className="h-4 w-4" />,
   editar: <ShieldCheck className="h-4 w-4" />,
-  activar: <Power className="h-4 w-4 text-emerald-600" />,
+  activar: <Power className="h-4 w-4 text-live" />,
   desactivar: <UserMinus className="h-4 w-4 text-amber-600" />,
   reset_password: <KeyRound className="h-4 w-4" />,
   cambio_rol: <ShieldCheck className="h-4 w-4" />,
@@ -59,7 +59,7 @@ export function Auditoria() {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <p className="text-sm text-ink-muted">Quién hizo qué, cuándo. Los cambios sensibles del equipo quedan registrados acá.</p>
+      <p className="text-sm text-dim-300">Quién hizo qué, cuándo. Los cambios sensibles del equipo quedan registrados acá.</p>
 
       {sinTabla && (
         <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
@@ -68,28 +68,28 @@ export function Auditoria() {
       )}
 
       {cargando ? (
-        <div className="py-16 text-center text-ink-muted">Cargando…</div>
+        <div className="py-16 text-center text-dim-300">Cargando…</div>
       ) : entries.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-14 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 text-brand-500 mb-3"><ScrollText className="h-7 w-7" /></div>
+        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card py-14 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-400/10 text-brand-400 mb-3"><ScrollText className="h-7 w-7" /></div>
           <p className="font-medium">Sin movimientos por ahora</p>
-          <p className="text-sm text-ink-muted mt-1">Cuando hagas cambios al equipo, aparecen acá.</p>
+          <p className="text-sm text-dim-300 mt-1">Cuando hagas cambios al equipo, aparecen acá.</p>
         </div>
       ) : (
-        <div className="rounded-2xl bg-white border border-ink/5 shadow-card divide-y divide-ink/5">
+        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card divide-y divide-ink/5">
           {entries.map((e) => (
             <div key={e.id} className="px-4 py-3 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 grid place-items-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-brand-400/10 text-brand-400 grid place-items-center shrink-0">
                 {ICONO[e.accion]}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm">
                   <span className="font-medium">{nombre(e.actor_id)}</span>
-                  <span className="text-ink-soft"> {LABEL[e.accion].toLowerCase()} </span>
+                  <span className="text-dim-200"> {LABEL[e.accion].toLowerCase()} </span>
                   <span className="font-medium">{nombre(e.usuario_id)}</span>
                 </div>
               </div>
-              <div className="text-[11px] text-ink-muted shrink-0">{fechaCorta(e.created_at)}</div>
+              <div className="text-[11px] text-dim-300 shrink-0">{fechaCorta(e.created_at)}</div>
             </div>
           ))}
         </div>

@@ -15,8 +15,8 @@ interface Props {
 function SeccionTitulo({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <span className="text-brand-500">{icon}</span>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{children}</h2>
+      <span className="text-brand-400">{icon}</span>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-dim-300">{children}</h2>
       <div className="flex-1 h-px bg-ink/10" />
     </div>
   );

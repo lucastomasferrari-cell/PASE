@@ -101,26 +101,26 @@ export function Tablet({ localId, locales }: Props) {
     );
   }
 
-  if (cargando) return <div className="py-16 text-center text-ink-muted">Cargando…</div>;
+  if (cargando) return <div className="py-16 text-center text-dim-300">Cargando…</div>;
   if (!local) return null;
 
   const yaExiste = !!local.login_email;
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-ink-muted">
+      <div className="flex items-start gap-2 rounded-lg bg-carbon-700 border border-slate-200 px-3 py-2 text-xs text-dim-300">
         <Info className="h-3.5 w-3.5 text-slate-500 shrink-0 mt-0.5" />
         <p>La tablet entra una vez con esta cuenta y queda logueada; después cada empleado usa su <strong>PIN</strong>. Si se pierde, rotá la contraseña y la vieja se desconecta.</p>
       </div>
 
-      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 space-y-4">
+      <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card p-4 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700">
+          <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-400">
             <TabletIcon className="h-5 w-5" />
           </div>
           <div>
             <h3 className="font-semibold">{local.nombre}</h3>
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-dim-300">
               {yaExiste
                 ? `Credenciales activas · rotadas ${local.login_password_rotated_at
                     ? new Date(local.login_password_rotated_at).toLocaleString('es-AR')
@@ -131,8 +131,8 @@ export function Tablet({ localId, locales }: Props) {
         </div>
 
         {yaExiste && (
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-            <p className="text-xs uppercase tracking-wider text-ink-muted font-semibold mb-1">Mail de la tablet</p>
+          <div className="rounded-xl bg-carbon-700 border border-slate-200 p-3">
+            <p className="text-xs uppercase tracking-wider text-dim-300 font-semibold mb-1">Mail de la tablet</p>
             <div className="flex items-center gap-2">
               <code className="text-sm font-mono flex-1 truncate">{local.login_email}@pase.local</code>
               <button
@@ -148,12 +148,12 @@ export function Tablet({ localId, locales }: Props) {
         )}
 
         {creds && (
-          <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+          <div className="rounded-xl bg-live/10 border border-live/40 p-3 space-y-2">
             <p className="text-xs font-semibold text-emerald-800">
               ⚠️ Anotá la contraseña ahora — no se puede recuperar. Después solo se puede rotar (crea una nueva).
             </p>
             <div>
-              <p className="text-xs uppercase tracking-wider text-emerald-700 font-semibold mb-1">Contraseña</p>
+              <p className="text-xs uppercase tracking-wider text-live font-semibold mb-1">Contraseña</p>
               <div className="flex items-center gap-2">
                 <code className="text-sm font-mono flex-1 truncate">
                   {passwordVisible ? creds.password : '•'.repeat(creds.password.length)}
@@ -180,7 +180,7 @@ export function Tablet({ localId, locales }: Props) {
         )}
 
         <div>
-          <p className="text-xs text-ink-muted mb-2">
+          <p className="text-xs text-dim-300 mb-2">
             {yaExiste
               ? <>La contraseña actual <strong>no se puede ver</strong> (se guarda encriptada). Poné una nueva:</>
               : 'Poné una contraseña para la tablet:'}
@@ -190,13 +190,13 @@ export function Tablet({ localId, locales }: Props) {
               value={passElegida}
               onChange={(e) => setPassElegida(e.target.value)}
               placeholder="Contraseña de la tablet (mín. 8)"
-              className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm"
+              className="flex-1 rounded-lg border border-carbon-500 px-3 py-2 text-sm"
             />
             <button
               type="button"
               onClick={() => void usarElegida()}
               disabled={rotando || passElegida.length < 8}
-              className="px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 text-sm font-medium disabled:opacity-50 shrink-0"
+              className="px-4 py-2 rounded-lg bg-brand-400 text-white hover:bg-brand-500 text-sm font-medium disabled:opacity-50 shrink-0"
             >
               {rotando ? 'Guardando…' : yaExiste ? 'Cambiar' : 'Generar'}
             </button>

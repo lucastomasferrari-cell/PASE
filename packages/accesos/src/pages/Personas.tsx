@@ -99,22 +99,22 @@ export function Personas() {
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-dim-300" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o email…"
-                 className="w-full rounded-lg border border-ink/15 bg-white pl-9 pr-3 py-2 text-sm" />
+                 className="w-full rounded-lg border border-carbon-500 bg-carbon-800 pl-9 pr-3 py-2 text-sm" />
         </div>
         <button onClick={() => setEditando('nuevo')}
-                className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
+                className="rounded-lg bg-brand-400 hover:bg-brand-500 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
           <Plus className="h-4 w-4" /> Nueva persona
         </button>
       </div>
 
       {cargando ? (
-        <div className="py-16 text-center text-ink-muted">Cargando equipo…</div>
+        <div className="py-16 text-center text-dim-300">Cargando equipo…</div>
       ) : filtrados.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-16 text-center">
+        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card py-16 text-center">
           <p className="font-medium">Sin resultados</p>
-          <p className="text-sm text-ink-muted mt-1">Probá otra búsqueda o cargá una persona nueva.</p>
+          <p className="text-sm text-dim-300 mt-1">Probá otra búsqueda o cargá una persona nueva.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -135,15 +135,15 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   const locsAsignados = (u.locales ?? []).map((id) => locales.find((l) => l.id === id)?.nombre).filter(Boolean);
 
   return (
-    <div className={`rounded-xl bg-white border shadow-card px-4 py-3 ${u.activo ? 'border-ink/5' : 'border-ink/5 opacity-60'}`}>
+    <div className={`rounded-xl bg-carbon-800 border shadow-card px-4 py-3 ${u.activo ? 'border-carbon-600' : 'border-carbon-600 opacity-60'}`}>
       <div className="flex items-start gap-3 flex-wrap">
-        <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-sm shrink-0">
+        <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium text-sm shrink-0">
           {(nombre(u)[0] ?? '?').toUpperCase()}
         </div>
         <div className="flex-1 min-w-[160px]">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-medium">{nombre(u)}</span>
-            <span className="text-[10px] normal-case tracking-wide px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{u.rol}</span>
+            <span className="text-[10px] normal-case tracking-wide px-2 py-0.5 rounded-full bg-brand-400/10 text-brand-400 border border-brand-200">{u.rol}</span>
             {apps.map((k) => {
               const app = APPS.find((a) => a.key === (k as AppKey));
               const op = app?.tier === 'operativa';
@@ -156,7 +156,7 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
             {u.password_temporal && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Password temporal</span>}
             {!u.activo && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Inactivo</span>}
           </div>
-          <div className="text-xs text-ink-muted mt-1 flex items-center gap-1.5 flex-wrap">
+          <div className="text-xs text-dim-300 mt-1 flex items-center gap-1.5 flex-wrap">
             <span>{u.email}</span>
             {locsAsignados.length > 0 && (
               <span className="inline-flex items-center gap-1 min-w-0"><span className="opacity-40">·</span><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{locsAsignados.join(' · ')}</span></span>
@@ -164,14 +164,14 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={onEditar} className="text-xs px-2.5 py-1.5 rounded-lg border border-brand-200 bg-white hover:bg-brand-50 text-brand-700 font-medium inline-flex items-center gap-1">
+          <button onClick={onEditar} className="text-xs px-2.5 py-1.5 rounded-lg border border-brand-200 bg-carbon-800 hover:bg-brand-400/10 text-brand-400 font-medium inline-flex items-center gap-1">
             <ShieldCheck className="h-3.5 w-3.5" /> Editar
           </button>
-          <button onClick={onReset} className="text-xs px-2.5 py-1.5 rounded-lg border border-ink/15 bg-white hover:bg-ink/5 text-ink-soft font-medium inline-flex items-center gap-1" title="Resetear contraseña">
+          <button onClick={onReset} className="text-xs px-2.5 py-1.5 rounded-lg border border-carbon-500 bg-carbon-800 hover:bg-carbon-700 text-dim-200 font-medium inline-flex items-center gap-1" title="Resetear contraseña">
             <KeyRound className="h-3.5 w-3.5" />
           </button>
           <button onClick={onToggleActivo} title={u.activo ? 'Desactivar' : 'Activar'}
-                  className={`p-2 rounded-lg border ${u.activo ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}>
+                  className={`p-2 rounded-lg border ${u.activo ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-live/40 text-live hover:bg-live/10'}`}>
             <Power className="h-4 w-4" />
           </button>
         </div>
@@ -313,86 +313,86 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
 
   return (
     <div className="space-y-3 max-w-3xl">
-      <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-brand-700">
+      <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm font-medium text-dim-200 hover:text-brand-400-400">
         <ArrowLeft className="h-4 w-4" /> Personas
       </button>
 
       {/* Perfil — header + datos + credenciales, todo junto. */}
-      <section className="rounded-2xl bg-white border border-ink/5 shadow-card overflow-hidden">
-        <div className="p-5 flex items-center gap-4 flex-wrap border-b border-ink/5">
-          <div className="w-14 h-14 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-xl shrink-0">{inicial}</div>
+      <section className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card overflow-hidden">
+        <div className="p-5 flex items-center gap-4 flex-wrap border-b border-carbon-600">
+          <div className="w-14 h-14 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium text-xl shrink-0">{inicial}</div>
           <div className="flex-1 min-w-[160px]">
             <h2 className="text-xl font-medium">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
-            <div className="text-sm text-ink-muted mt-0.5">{esEdicion ? usuario?.email : 'Perfil de la persona'}</div>
+            <div className="text-sm text-dim-300 mt-0.5">{esEdicion ? usuario?.email : 'Perfil de la persona'}</div>
           </div>
         </div>
 
         <div className="p-5 space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-ink-soft">Nombre *</label>
-              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+              <label className="text-xs font-medium text-dim-200">Nombre *</label>
+              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-ink-soft">Rol</label>
-              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+              <label className="text-xs font-medium text-dim-200">Rol</label>
+              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm bg-carbon-800">
                 <option value="">— Sin rol —</option>
                 {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
               {selectedRole && (
-                <p className="text-[11px] text-ink-muted">
+                <p className="text-[11px] text-dim-300">
                   Autocompleta {rolePerms.size} de PASE{rolComandaCount > 0 ? ` y ${rolComandaCount} de COMANDA` : ''}. Ajustalos abajo, en cada app.
                 </p>
               )}
             </div>
           </div>
 
-          <div className="pt-1 border-t border-ink/5">
-            <p className="text-[11px] font-medium text-ink-soft mt-3 mb-2 inline-flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" /> Credenciales <span className="font-normal text-ink-muted">· un solo usuario y contraseña para todas las apps</span>
+          <div className="pt-1 border-t border-carbon-600">
+            <p className="text-[11px] font-medium text-dim-200 mt-3 mb-2 inline-flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5" /> Credenciales <span className="font-normal text-dim-300">· un solo usuario y contraseña para todas las apps</span>
             </p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-ink-soft">Usuario (email)</label>
+                <label className="text-xs font-medium text-dim-200">Usuario (email)</label>
                 {esEdicion ? (
                   <div className="flex gap-2">
-                    <input value={email} disabled className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm bg-ink/5" />
+                    <input value={email} disabled className="flex-1 rounded-lg border border-carbon-500 px-3 py-2 text-sm bg-carbon-700" />
                     <button type="button" onClick={() => { void navigator.clipboard.writeText(email); toast.success('Email copiado'); }}
-                            className="px-2.5 rounded-lg border border-ink/15 hover:bg-ink/5" title="Copiar"><Copy className="h-4 w-4" /></button>
+                            className="px-2.5 rounded-lg border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
                   </div>
                 ) : (
                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="persona@ejemplo.com"
-                         className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                         className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
                 )}
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-ink-soft">Contraseña</label>
+                <label className="text-xs font-medium text-dim-200">Contraseña</label>
                 {!esEdicion ? (
                   <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" placeholder="Contraseña inicial (mín. 6)"
-                         className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+                         className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
                 ) : tempPass ? (
                   <div className="flex gap-2">
-                    <input value={tempPass} readOnly className="flex-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-mono" />
+                    <input value={tempPass} readOnly className="flex-1 rounded-lg border border-emerald-300 bg-live/10 px-3 py-2 text-sm font-mono" />
                     <button type="button" onClick={() => { void navigator.clipboard.writeText(tempPass); toast.success('Contraseña copiada'); }}
-                            className="px-2.5 rounded-lg border border-ink/15 hover:bg-ink/5" title="Copiar"><Copy className="h-4 w-4" /></button>
+                            className="px-2.5 rounded-lg border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
                   </div>
                 ) : (
                   <button type="button" onClick={() => void resetear()}
-                          className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm font-medium hover:bg-ink/5 inline-flex items-center justify-center gap-1.5">
+                          className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm font-medium hover:bg-carbon-700 inline-flex items-center justify-center gap-1.5">
                     <KeyRound className="h-4 w-4" /> Generar contraseña nueva
                   </button>
                 )}
               </div>
             </div>
             {esEdicion && (
-              <p className="text-[11px] text-ink-muted mt-2">Por seguridad la contraseña actual no se puede ver (está encriptada). Si no la sabés, generá una nueva y pasásela — la persona la cambia al entrar.</p>
+              <p className="text-[11px] text-dim-300 mt-2">Por seguridad la contraseña actual no se puede ver (está encriptada). Si no la sabés, generá una nueva y pasásela — la persona la cambia al entrar.</p>
             )}
           </div>
         </div>
       </section>
 
       {/* Una barra por app */}
-      <p className="text-xs text-ink-muted px-1 pt-1">Accesos por app — tocá una para darle acceso y elegir sus locales</p>
+      <p className="text-xs text-dim-300 px-1 pt-1">Accesos por app — tocá una para darle acceso y elegir sus locales</p>
       {APPS.map((a) => {
         const on = apps.includes(a.key);
         const usaLoc = APPS_CON_LOCALES.has(a.key);
@@ -401,11 +401,11 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         return (
           <Seccion key={a.key}
             titulo={a.nombre}
-            icon={<span className={`w-2 h-2 rounded-full ${op ? 'bg-amber-500' : 'bg-brand-500'}`} />}
+            icon={<span className={`w-2 h-2 rounded-full ${op ? 'bg-amber-500' : 'bg-brand-400'}`} />}
             abierto={abierto.has(a.key)} onToggle={() => toggleOpen(a.key)}
             right={
               <span onClick={(e) => { e.stopPropagation(); toggleApp(a.key); }}
-                    className={`text-[11px] px-2.5 py-1 rounded-full border font-medium cursor-pointer ${on ? 'bg-brand-500 text-white border-brand-500' : 'bg-white border-ink/15 text-ink-soft'}`}>
+                    className={`text-[11px] px-2.5 py-1 rounded-full border font-medium cursor-pointer ${on ? 'bg-brand-400 text-white border-brand-400' : 'bg-carbon-800 border-carbon-500 text-dim-200'}`}>
                 {on ? 'Con acceso' : 'Sin acceso'}
               </span>
             }
@@ -418,12 +418,12 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
             ) : undefined}
           >
             {!on ? (
-              <div className="text-sm text-ink-muted">Sin acceso a {a.nombre}. Tocá "Sin acceso" arriba para dárselo.</div>
+              <div className="text-sm text-dim-300">Sin acceso a {a.nombre}. Tocá "Sin acceso" arriba para dárselo.</div>
             ) : (
               <div className="space-y-4">
                 {usaLoc && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-ink-soft">Locales <span className="font-normal text-ink-muted">(vacío = todos)</span></p>
+                    <p className="text-xs font-medium text-dim-200">Locales <span className="font-normal text-dim-300">(vacío = todos)</span></p>
                     <LocalesPicker marcas={marcas} locales={locales} value={localesDeApp(a.key)}
                                    onToggle={(id) => toggleLocalApp(a.key, id)} onToggleMarca={(ids) => toggleMarcaApp(a.key, ids)} />
                   </div>
@@ -439,7 +439,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                 ) : a.key === 'comanda' ? (
                   <PermisosComanda value={accesosApp['comanda']?.permisos ?? []} onToggle={togglePermisoComanda} />
                 ) : (
-                  <p className="text-[11px] text-ink-muted inline-flex items-center gap-1.5">
+                  <p className="text-[11px] text-dim-300 inline-flex items-center gap-1.5">
                     <Lock className="h-3 w-3" />
                     {op ? `Entra a ${a.nombre} sin PIN, con acceso completo.` : `Acceso completo a ${a.nombre}.`}
                     {' '}Lo que puede hacer lo define su <strong className="font-medium">rol{selectedRole ? ` (${selectedRole.nombre})` : ''}</strong>.
@@ -452,9 +452,9 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       })}
 
       <div className="flex gap-2 pt-1 pb-2">
-        <button onClick={onClose} className="flex-1 rounded-lg border border-ink/15 py-2.5 text-sm font-medium hover:bg-ink/5">Cancelar</button>
+        <button onClick={onClose} className="flex-1 rounded-lg border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
         <button onClick={() => void guardar()} disabled={guardando}
-                className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                className="flex-1 rounded-lg bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
           {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear persona'}
         </button>
       </div>
@@ -468,21 +468,21 @@ function Seccion({ titulo, sub, icon, right, abierto, onToggle, children }: {
   abierto: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl bg-white border border-ink/5 shadow-card overflow-hidden">
+    <section className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card overflow-hidden">
       <button type="button" onClick={onToggle} className="w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-ink/[0.02]">
         <div className="flex items-center gap-2.5 min-w-0">
           {icon}
           <div className="min-w-0">
             <div className="font-medium text-sm">{titulo}</div>
-            {sub && <div className="text-xs text-ink-muted mt-0.5 truncate">{sub}</div>}
+            {sub && <div className="text-xs text-dim-300 mt-0.5 truncate">{sub}</div>}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {right}
-          <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${abierto ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-4 w-4 text-dim-300 transition-transform ${abierto ? 'rotate-180' : ''}`} />
         </div>
       </button>
-      {abierto && <div className="px-5 pb-5 pt-1 border-t border-ink/5">{children}</div>}
+      {abierto && <div className="px-5 pb-5 pt-1 border-t border-carbon-600">{children}</div>}
     </section>
   );
 }
@@ -491,8 +491,8 @@ function Seccion({ titulo, sub, icon, right, abierto, onToggle, children }: {
 function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
   return (
     <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onClick}
-            className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${on ? 'bg-brand-500' : 'bg-ink/20'}`}>
-      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+            className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${on ? 'bg-brand-400' : 'bg-ink/20'}`}>
+      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-carbon-800 shadow-sm transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
   );
 }
@@ -527,30 +527,30 @@ function PermisosAccordion({ categorias, value, onToggle }: {
     }
   }
   return (
-    <div className="rounded-xl border border-ink/10 overflow-hidden">
+    <div className="rounded-xl border border-carbon-600 overflow-hidden">
       {categorias.map((cat, i) => {
         const open = abiertas.has(cat.titulo);
         const n = activos(cat);
         const todosActivos = n === cat.permisos.length;
         return (
-          <div key={cat.titulo} className={i > 0 ? 'border-t border-ink/5' : ''}>
+          <div key={cat.titulo} className={i > 0 ? 'border-t border-carbon-600' : ''}>
             <button type="button" onClick={() => toggleSec(cat.titulo)}
                     className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-ink/[0.02]">
-              <span className="text-sm font-medium text-ink flex-1">{cat.titulo}</span>
-              <span className={`text-[11px] tabular-nums ${n > 0 ? 'text-brand-700 font-medium' : 'text-ink-muted'}`}>{n} de {cat.permisos.length}</span>
-              <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+              <span className="text-sm font-medium text-dim-50 flex-1">{cat.titulo}</span>
+              <span className={`text-[11px] tabular-nums ${n > 0 ? 'text-brand-400 font-medium' : 'text-dim-300'}`}>{n} de {cat.permisos.length}</span>
+              <ChevronDown className={`h-4 w-4 text-dim-300 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
-              <div className="border-t border-ink/5 bg-ink/[0.015]">
+              <div className="border-t border-carbon-600 bg-ink/[0.015]">
                 {/* Barra de acción con bulk toggle de la sección. */}
-                <div className="flex items-center justify-end px-3.5 py-2 border-b border-ink/5 bg-white/40">
+                <div className="flex items-center justify-end px-3.5 py-2 border-b border-carbon-600 bg-carbon-800/40">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); bulkToggle(cat); }}
                     className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
                       todosActivos
-                        ? 'border-ink/15 text-ink-soft hover:bg-ink/5'
-                        : 'border-brand-600/30 text-brand-700 hover:bg-brand-50 bg-brand-50/40'
+                        ? 'border-carbon-500 text-dim-200 hover:bg-carbon-700'
+                        : 'border-brand-600/30 text-brand-400 hover:bg-brand-400/10 bg-brand-400/10/40'
                     }`}
                   >
                     {todosActivos ? 'Quitar todos' : `Activar todos (${cat.permisos.length - n})`}
@@ -560,10 +560,10 @@ function PermisosAccordion({ categorias, value, onToggle }: {
                   const on = set.has(p.slug);
                   const wip = p.enDesarrollo === true;
                   return (
-                    <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-ink/5' : ''} ${wip ? 'bg-amber-50/30' : ''}`}>
+                    <div key={p.slug} className={`flex items-center gap-3 px-3.5 py-2.5 ${j > 0 ? 'border-t border-carbon-600' : ''} ${wip ? 'bg-amber-50/30' : ''}`}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm ${wip ? 'text-amber-900' : 'text-ink'}`}>{p.label}</span>
+                          <span className={`text-sm ${wip ? 'text-amber-900' : 'text-dim-50'}`}>{p.label}</span>
                           {wip && (
                             <span
                               className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800"
@@ -573,7 +573,7 @@ function PermisosAccordion({ categorias, value, onToggle }: {
                             </span>
                           )}
                         </div>
-                        {p.descripcion && <div className="text-[11px] text-ink-muted mt-0.5 leading-snug">{p.descripcion}</div>}
+                        {p.descripcion && <div className="text-[11px] text-dim-300 mt-0.5 leading-snug">{p.descripcion}</div>}
                       </div>
                       <Switch on={on} onClick={() => onToggle(p.slug)} label={p.label} />
                     </div>
@@ -599,21 +599,21 @@ function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAl
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-xs font-medium text-ink-soft">
-          Permisos en PASE <span className="font-normal text-ink-muted">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
+        <p className="text-xs font-medium text-dim-200">
+          Permisos en PASE <span className="font-normal text-dim-300">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
         </p>
         {selectedRole && personalizado && (
           <div className="flex items-center gap-2">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">Personalizado</span>
             <button type="button" onClick={onVolverAlRol}
-                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-ink/15 hover:bg-ink/5 text-ink-soft">
+                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-carbon-500 hover:bg-carbon-700 text-dim-200">
               <RotateCcw className="h-3 w-3" /> Volver a los del rol
             </button>
           </div>
         )}
       </div>
       {!selectedRole && (
-        <p className="text-[11px] text-ink-muted">Elegí un rol arriba para autocompletar, o prendé los permisos a mano.</p>
+        <p className="text-[11px] text-dim-300">Elegí un rol arriba para autocompletar, o prendé los permisos a mano.</p>
       )}
       <PermisosAccordion categorias={CATEGORIAS} value={value} onToggle={onToggle} />
     </div>
@@ -628,8 +628,8 @@ function PermisosComanda({ value, onToggle }: {
 }) {
   return (
     <div className="space-y-2.5">
-      <p className="text-xs font-medium text-ink-soft">
-        Permisos en COMANDA <span className="font-normal text-ink-muted">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
+      <p className="text-xs font-medium text-dim-200">
+        Permisos en COMANDA <span className="font-normal text-dim-300">· {value.length} activo{value.length === 1 ? '' : 's'}</span>
       </p>
       <PermisosAccordion categorias={CATEGORIAS_COMANDA} value={value} onToggle={onToggle} />
     </div>
@@ -654,31 +654,31 @@ function LocalesPicker({ marcas, locales, value, onToggle, onToggleMarca }: {
     ...(sinMarca.length ? [{ nombre: 'Sin marca', ids: sinMarca.map((l) => l.id) }] : []),
   ];
   return (
-    <div className="rounded-lg border border-ink/15 overflow-hidden">
+    <div className="rounded-lg border border-carbon-500 overflow-hidden">
       <button type="button" onClick={() => setOpen((o) => !o)}
               className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-ink/[0.02]">
-        <MapPin className="h-4 w-4 text-ink-muted shrink-0" />
-        <span className="text-sm text-ink flex-1">{resumen}</span>
-        <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+        <MapPin className="h-4 w-4 text-dim-300 shrink-0" />
+        <span className="text-sm text-dim-50 flex-1">{resumen}</span>
+        <ChevronDown className={`h-4 w-4 text-dim-300 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="border-t border-ink/10 max-h-72 overflow-y-auto">
+        <div className="border-t border-carbon-600 max-h-72 overflow-y-auto">
           {grupos.map((g, gi) => {
             const nMk = g.ids.filter((id) => value.includes(id)).length;
             const todos = nMk === g.ids.length;
             return (
-              <div key={g.nombre} className={gi > 0 ? 'border-t border-ink/5' : ''}>
+              <div key={g.nombre} className={gi > 0 ? 'border-t border-carbon-600' : ''}>
                 <div className="flex items-center gap-3 px-3 py-2 bg-ink/[0.03]">
-                  <span className="text-[13px] font-medium text-ink-soft flex-1">{g.nombre}</span>
-                  <span className="text-[11px] tabular-nums text-ink-muted">{nMk}/{g.ids.length}</span>
+                  <span className="text-[13px] font-medium text-dim-200 flex-1">{g.nombre}</span>
+                  <span className="text-[11px] tabular-nums text-dim-300">{nMk}/{g.ids.length}</span>
                   <Switch on={todos} onClick={() => onToggleMarca(g.ids)} label={`Toda ${g.nombre}`} />
                 </div>
                 {g.ids.map((id) => {
                   const l = locales.find((x) => x.id === id);
                   if (!l) return null;
                   return (
-                    <div key={id} className="flex items-center gap-3 px-3 py-2 pl-7 border-t border-ink/5">
-                      <span className="text-sm text-ink flex-1">{l.nombre}</span>
+                    <div key={id} className="flex items-center gap-3 px-3 py-2 pl-7 border-t border-carbon-600">
+                      <span className="text-sm text-dim-50 flex-1">{l.nombre}</span>
                       <Switch on={value.includes(id)} onClick={() => onToggle(id)} label={l.nombre} />
                     </div>
                   );
