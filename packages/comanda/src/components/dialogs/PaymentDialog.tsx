@@ -153,9 +153,18 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   async function confirmar() {
     if (confirmandoRef.current) return;
     let pagosAEnviar = pagos;
-    if (pagos.length === 0 && montoNuevo > 0 && Math.abs(montoNuevo - totalConPropina) < 0.01) {
+    // Si el input tiene un monto pendiente que — solo o sumado a los pagos ya
+    // agregados — cierra el total exacto, lo agregamos al lote automáticamente.
+    // Cubre dos flujos:
+    //   (a) UN solo pago que iguala el total: el user tipea y va directo a Confirmar.
+    //   (b) Pago DIVIDIDO: user click "Dividir en otro pago" para el primero,
+    //       elige método+monto del segundo, y va a Confirmar. Antes de este fix
+    //       el segundo pago quedaba en el input sin sumar y Confirmar seguía
+    //       deshabilitado (reporte Camilo, 17-jul).
+    const sumaConInput = sumaPagos + montoNuevo;
+    if (montoNuevo > 0 && Math.abs(sumaConInput - totalConPropina) < 0.01) {
       const aceptaCuotas = metodoAceptaCuotas(metodoNuevo);
-      pagosAEnviar = [{
+      pagosAEnviar = [...pagos, {
         id: crypto.randomUUID?.() ?? `local-${Date.now()}-${Math.random()}`,
         idempotencyKey: newIdempotencyKey(),
         metodo: metodoNuevo,
@@ -568,7 +577,7 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
                 size="default"
                 className="flex-1"
                 onClick={confirmar}
-                disabled={confirmando || (pagos.length === 0 && (montoNuevo <= 0 || Math.abs(montoNuevo - totalConPropina) > 0.01)) || (pagos.length > 0 && !cubrió)}
+                disabled={confirmando || (!cubrió && Math.abs(sumaPagos + montoNuevo - totalConPropina) > 0.01)}
               >
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 {confirmando ? 'Procesando…' : `Cobrar ${formatARS(totalConPropina)}`}
