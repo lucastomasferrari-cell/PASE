@@ -192,9 +192,10 @@ export function Divider({ label, className }: { label?: string; className?: stri
   );
 }
 
-// ─── SectionHeader ──────────────────────────────────────────────────────────
-// Título de página / sección grande. Sigue el patrón "01 // SECCIÓN".
-export function SectionHeader({
+// ─── PageTitle ──────────────────────────────────────────────────────────────
+// Título de página con "NN // Sección". Va DENTRO de la página (Cocina lo
+// pone en el content, no en el header).
+export function PageTitle({
   number,
   title,
   subtitle,
@@ -215,6 +216,63 @@ export function SectionHeader({
         {subtitle && <p className="text-sm text-dim-200 mt-1">{subtitle}</p>}
       </div>
       {right && <div className="flex items-center gap-2">{right}</div>}
+    </div>
+  );
+}
+
+// ─── SectionHeader ──────────────────────────────────────────────────────────
+// Header de sección terminal-style: icono + código mono + label + count derecho
+// + hairline horizontal completa. Se usa para separar bloques dentro de una
+// página sin envolverlos en cajas. Ver mockup 17-jul.
+export function SectionHeader({
+  icon,
+  code,
+  label,
+  count,
+  right,
+}: {
+  icon?: ReactNode;
+  code?: string;
+  label: string;
+  count?: string | number;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3.5 pb-3 border-b border-carbon-600 mb-1">
+      {icon && <span className="text-brand-400 opacity-80 inline-flex items-center justify-center w-3.5 h-3.5">{icon}</span>}
+      {code && <span className="font-mono text-[11px] text-dim-400 tracking-[0.25em]">{code}</span>}
+      <span className="font-mono text-xs uppercase tracking-widest2 text-dim-100 font-medium">{label}</span>
+      <span className="flex-1" />
+      {right}
+      {count != null && <span className="font-mono text-[10px] text-dim-400 tracking-widest2">{String(count).padStart(2, '0')}</span>}
+    </div>
+  );
+}
+
+// ─── MiniNote ───────────────────────────────────────────────────────────────
+// Nota informativa con rail izquierdo celeste (o tono elegido), sin caja.
+// Sustituye al patrón "info banner con fondo relleno" que se ve tipo bento.
+export function MiniNote({
+  tone = 'brand',
+  children,
+  className,
+}: {
+  tone?: 'brand' | 'warn' | 'live' | 'crit';
+  children: ReactNode;
+  className?: string;
+}) {
+  const rail =
+    tone === 'brand' ? 'border-l-brand-400 bg-brand-400/[0.04]' :
+    tone === 'warn'  ? 'border-l-warn bg-warn/[0.04]' :
+    tone === 'live'  ? 'border-l-live bg-live/[0.04]' :
+                       'border-l-crit bg-crit/[0.04]';
+  return (
+    <div className={cn(
+      'flex items-start gap-3 px-3.5 py-2.5 border-l-2 text-[12.5px] text-dim-100 my-2',
+      rail,
+      className,
+    )}>
+      {children}
     </div>
   );
 }

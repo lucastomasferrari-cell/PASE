@@ -1,11 +1,16 @@
 // PIN del POS — empleados de COMANDA. Activar/desactivar el acceso al POS,
 // asignar rol_pos (cajero/mozo/admin) y resetear PIN. Lee rrhh_empleados +
 // fn_set_pin_pos. Usa el selector de local del shell.
+//
+// Look Command Center (17-jul): filas terminal listing, sin cajas
+// envolviendo cada empleado. Chips outline mono para "SIN ROL", botones
+// outline mono para "SETEAR PIN" / power. Ver mockup.
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Power, KeyRound, X } from 'lucide-react';
+import { Power, KeyRound, X, Info } from 'lucide-react';
 import { listEmpleadosPos, setPosActivo, setRolPos, setPin, type EmpleadoPos, type RolPos } from '@/lib/posService';
+import { MiniNote } from '@/components/primitives';
 
 interface Props { localId: number | null; locales: { id: number; nombre: string }[]; }
 
@@ -43,50 +48,89 @@ export function PinPos({ localId, locales }: Props) {
   }
 
   return (
-    <div className="space-y-4 max-w-3xl">
-      <p className="text-xs text-dim-300">Cada uno entra con su <strong>PIN de 4 dígitos</strong>; el rol define qué puede hacer.</p>
+    <div>
+      <MiniNote tone="brand">
+        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <div>
+          Cada uno entra con su{' '}
+          <strong className="font-mono text-[11px] text-brand-300 tracking-widest2">PIN DE 4 DÍGITOS</strong>.
+          El rol define qué puede hacer.
+        </div>
+      </MiniNote>
 
       {!localId && locales.length > 1 && (
-        <div className="rounded-sm bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
-          Elegí un local en la barra superior para ver sus empleados POS.
-        </div>
+        <MiniNote tone="warn">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>Elegí un local en la barra superior para ver sus empleados POS.</span>
+        </MiniNote>
       )}
 
       {cargando ? (
-        <div className="py-16 text-center text-dim-300">Cargando…</div>
+        <div className="py-8 text-center text-dim-300 font-mono text-xs uppercase tracking-widest2">Cargando…</div>
       ) : empleados.length === 0 ? (
-        <div className="border-t border-b border-carbon-600 bg-transparent py-14 text-center">
-          <p className="font-medium">Sin empleados en este local</p>
+        <div className="border-t border-b border-carbon-600 py-12 text-center">
+          <p className="font-medium text-dim-100">Sin empleados en este local</p>
           <p className="text-sm text-dim-300 mt-1">Cargá los empleados desde PASE → RRHH.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {empleados.map((e) => (
-            <div key={e.id} className={`rounded-sm bg-carbon-800 border shadow-card px-4 py-3 flex items-center gap-3 flex-wrap ${e.pos_activo ? 'border-carbon-600' : 'border-carbon-600 opacity-60'}`}>
-              <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium text-sm shrink-0">
-                {(nombreEmpleado(e)[0] ?? '?').toUpperCase()}
+        <div>
+          {empleados.map((e) => {
+            const nombre = nombreEmpleado(e);
+            const yaTienePin = !!e.pin_actualizado_at;
+            return (
+              <div
+                key={e.id}
+                className={`border-b border-carbon-600 py-4 px-1 flex items-center gap-4 flex-wrap transition-colors hover:bg-brand-400/[0.03] ${e.pos_activo ? '' : 'opacity-60'}`}
+              >
+                <div className="w-10 h-10 rounded-sm border border-carbon-500 bg-carbon-800/40 text-brand-300 flex items-center justify-center font-mono text-sm shrink-0">
+                  {(nombre[0] ?? '?').toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[15px] font-medium text-dim-50">{nombre}</span>
+                    {!e.rol_pos && (
+                      <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-carbon-600 text-dim-400">
+                        SIN ROL
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] font-mono uppercase tracking-widest2 text-dim-300 mt-1">
+                    {e.puesto ?? '—'}
+                    {yaTienePin && (
+                      <> · PIN {new Date(e.pin_actualizado_at as string).toLocaleDateString('es-AR')}</>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={e.rol_pos ?? ''}
+                    onChange={(ev) => void cambiarRol(e, (ev.target.value || null) as RolPos | null)}
+                    className="h-8 rounded-sm border border-carbon-500 bg-transparent text-dim-100 font-mono text-[11px] uppercase tracking-widest px-2 capitalize hover:border-brand-400 focus:outline-none focus:border-brand-400"
+                  >
+                    <option value="">Sin rol</option>
+                    {ROLES_POS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <button
+                    onClick={() => setPinDe(e)}
+                    className="h-8 px-2.5 rounded-sm border border-brand-400/50 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-[11px] inline-flex items-center gap-1.5"
+                  >
+                    <KeyRound className="h-3 w-3" /> {yaTienePin ? 'Cambiar PIN' : 'Setear PIN'}
+                  </button>
+                  <button
+                    onClick={() => void toggle(e)}
+                    title={e.pos_activo ? 'Desactivar' : 'Activar'}
+                    className={`h-8 w-8 rounded-sm border inline-flex items-center justify-center transition-colors ${
+                      e.pos_activo
+                        ? 'border-warn/50 text-warn hover:border-warn hover:bg-warn/10'
+                        : 'border-live/50 text-live hover:border-live hover:bg-live/10'
+                    }`}
+                  >
+                    <Power className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 min-w-[160px]">
-                <div className="font-medium">{nombreEmpleado(e)}</div>
-                {e.puesto && <div className="text-xs text-dim-300">{e.puesto}</div>}
-                {e.pin_actualizado_at && <div className="text-[11px] text-dim-300 mt-0.5">PIN seteado el {new Date(e.pin_actualizado_at).toLocaleDateString('es-AR')}</div>}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <select value={e.rol_pos ?? ''} onChange={(ev) => void cambiarRol(e, (ev.target.value || null) as RolPos | null)}
-                        className="text-xs rounded-sm border border-carbon-500 bg-carbon-800 px-2 py-1.5 capitalize">
-                  <option value="">Sin rol</option>
-                  {ROLES_POS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <button onClick={() => setPinDe(e)} className="text-xs px-2.5 py-1.5 rounded-sm border border-brand-200 bg-carbon-800 hover:bg-brand-400/10 text-brand-400 font-medium inline-flex items-center gap-1">
-                  <KeyRound className="h-3.5 w-3.5" /> {e.pin_actualizado_at ? 'Cambiar' : 'Setear'} PIN
-                </button>
-                <button onClick={() => void toggle(e)} title={e.pos_activo ? 'Desactivar' : 'Activar'}
-                        className={`p-2 rounded-sm border ${e.pos_activo ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-live/40 text-live hover:bg-live/10'}`}>
-                  <Power className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -113,20 +157,35 @@ function PinDialog({ empleado, onClose, onSaved }: { empleado: EmpleadoPos; onCl
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="w-full sm:max-w-xs bg-carbon-800 rounded-t-2xl sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-carbon-900/80 backdrop-blur flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="w-full sm:max-w-xs bg-carbon-800 border border-carbon-500 rounded-t-sm sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-medium">PIN del POS</h3>
-          <button onClick={onClose} className="p-1.5 rounded-sm hover:bg-carbon-700 text-dim-200"><X className="h-5 w-5" /></button>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-[11px] text-brand-400 tracking-widest2">SET //</span>
+            <h3 className="text-lg font-semibold text-dim-50">PIN del POS</h3>
+          </div>
+          <button onClick={onClose} className="h-7 w-7 rounded-sm hover:bg-carbon-700 text-dim-300 inline-flex items-center justify-center"><X className="h-4 w-4" /></button>
         </div>
-        <p className="text-xs text-dim-300 -mt-2">Pasale los 4 dígitos a {empleado.nombre}.</p>
-        <input value={pin} onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
-               inputMode="numeric" autoFocus maxLength={4}
-               className="w-full rounded-sm border border-carbon-500 px-3 py-3 text-center font-mono text-2xl tracking-[0.4em]" placeholder="••••" />
+        <p className="text-xs text-dim-300">Pasale los 4 dígitos a {empleado.nombre}.</p>
+        <input
+          value={pin}
+          onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          inputMode="numeric" autoFocus maxLength={4}
+          className="w-full rounded-sm border border-carbon-500 bg-carbon-900 px-3 py-3 text-center font-mono text-2xl tracking-[0.4em] text-dim-50 focus:outline-none focus:border-brand-400"
+          placeholder="••••"
+        />
         <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 rounded-sm border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
-          <button onClick={() => void submit()} disabled={guardando || pin.length !== 4}
-                  className="flex-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+          <button
+            onClick={onClose}
+            className="flex-1 h-9 rounded-sm border border-carbon-500 bg-transparent text-dim-200 font-mono uppercase tracking-widest2 text-xs hover:bg-carbon-700"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => void submit()}
+            disabled={guardando || pin.length !== 4}
+            className="flex-1 h-9 rounded-sm border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40"
+          >
             {guardando ? 'Guardando…' : 'Guardar PIN'}
           </button>
         </div>
