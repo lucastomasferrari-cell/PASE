@@ -78,6 +78,10 @@ export function Marcas() {
 
   return (
     <div className="space-y-8 max-w-3xl">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs text-brand-400 tracking-widest2">04 //</span>
+        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Marcas y locales</h1>
+      </div>
       {/* ── Marcas ───────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -87,30 +91,30 @@ export function Marcas() {
           </div>
           {!creando && (
             <button onClick={() => setCreando(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-400 hover:bg-brand-500 text-white px-3 py-2 text-sm font-medium">
+              className="inline-flex items-center gap-1.5 rounded-sm bg-brand-400 hover:bg-brand-500 text-white px-3 py-2 text-sm font-medium">
               <Plus className="h-4 w-4" /> Nueva marca
             </button>
           )}
         </div>
 
         {creando && (
-          <div className="rounded-xl border border-carbon-600 bg-carbon-800 p-4 mb-3 flex flex-wrap items-end gap-3">
+          <div className="border-t border-b border-carbon-600 bg-transparent p-4 mb-3 flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium text-dim-300">Nombre</label>
               <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} autoFocus
                 placeholder="Ej: Neko Sushi"
-                className="block w-56 rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
+                className="block w-56 rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-dim-300">Color</label>
               <input type="color" value={nuevoColor} onChange={(e) => setNuevoColor(e.target.value)}
-                className="block h-9 w-14 rounded-lg border border-carbon-500 cursor-pointer" />
+                className="block h-9 w-14 rounded-sm border border-carbon-500 cursor-pointer" />
             </div>
             <div className="flex items-center gap-2 ml-auto">
               <button onClick={() => { setCreando(false); setNuevoNombre(''); }}
-                className="rounded-lg border border-carbon-500 px-3 py-2 text-sm hover:bg-carbon-700">Cancelar</button>
+                className="rounded-sm border border-carbon-500 px-3 py-2 text-sm hover:bg-carbon-700">Cancelar</button>
               <button onClick={() => void onCrear()}
-                className="rounded-lg bg-brand-400 hover:bg-brand-500 text-white px-3 py-2 text-sm font-medium">Crear</button>
+                className="rounded-sm bg-brand-400 hover:bg-brand-500 text-white px-3 py-2 text-sm font-medium">Crear</button>
             </div>
           </div>
         )}
@@ -120,24 +124,24 @@ export function Marcas() {
             const ls = localesDeMarca(m.id);
             const editando = editId === m.id;
             return (
-              <div key={m.id} className="rounded-xl border border-carbon-600 bg-carbon-800 p-4">
+              <div key={m.id} className="border-t border-b border-carbon-600 bg-transparent p-4">
                 {editando ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)}
                         className="h-8 w-10 rounded border border-carbon-500 cursor-pointer shrink-0" />
                       <input value={editNombre} onChange={(e) => setEditNombre(e.target.value)} autoFocus
-                        className="flex-1 rounded-lg border border-carbon-500 px-3 py-1.5 text-sm" />
+                        className="flex-1 rounded-sm border border-carbon-500 px-3 py-1.5 text-sm" />
                     </div>
                     <div className="flex items-center gap-2 justify-end">
-                      <button onClick={() => setEditId(null)} className="inline-flex items-center gap-1 rounded-lg border border-carbon-500 px-2.5 py-1.5 text-xs hover:bg-carbon-700"><X className="h-3.5 w-3.5" /> Cancelar</button>
-                      <button onClick={() => void onGuardarEdicion()} className="inline-flex items-center gap-1 rounded-lg bg-brand-400 hover:bg-brand-500 text-white px-2.5 py-1.5 text-xs font-medium"><Check className="h-3.5 w-3.5" /> Guardar</button>
+                      <button onClick={() => setEditId(null)} className="inline-flex items-center gap-1 rounded-sm border border-carbon-500 px-2.5 py-1.5 text-xs hover:bg-carbon-700"><X className="h-3.5 w-3.5" /> Cancelar</button>
+                      <button onClick={() => void onGuardarEdicion()} className="inline-flex items-center gap-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white px-2.5 py-1.5 text-xs font-medium"><Check className="h-3.5 w-3.5" /> Guardar</button>
                     </div>
                   </div>
                 ) : (
                   <>
                     <div className="flex items-center gap-2.5">
-                      <span className="h-7 w-7 rounded-lg shrink-0 border border-carbon-600" style={{ background: m.color_primary ?? COLOR_DEFAULT }} />
+                      <span className="h-7 w-7 rounded-sm shrink-0 border border-carbon-600" style={{ background: m.color_primary ?? COLOR_DEFAULT }} />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{m.nombre}</div>
                         <div className="text-[11px] text-dim-300">{ls.length} {ls.length === 1 ? 'local' : 'locales'}</div>
@@ -166,7 +170,7 @@ export function Marcas() {
       <section>
         <h2 className="text-base font-medium mb-1">Locales → marca</h2>
         <p className="text-xs text-dim-300 mb-3">A qué marca pertenece cada sucursal.</p>
-        <div className="rounded-xl border border-carbon-600 bg-carbon-800 divide-y divide-ink/10">
+        <div className="border-t border-b border-carbon-600 bg-transparent divide-y divide-carbon-600">
           {locales.map((l) => (
             <div key={l.id} className="flex items-center gap-3 px-4 py-2.5">
               <Store className="h-4 w-4 text-dim-300 shrink-0" />
@@ -174,7 +178,7 @@ export function Marcas() {
               <select
                 value={l.marca_id ?? ''}
                 onChange={(e) => void onAsignarLocal(l.id, e.target.value === '' ? null : Number(e.target.value))}
-                className="rounded-lg border border-carbon-500 px-2.5 py-1.5 text-sm bg-carbon-800 max-w-[200px]"
+                className="rounded-sm border border-carbon-500 px-2.5 py-1.5 text-sm bg-carbon-800 max-w-[200px]"
               >
                 <option value="">— Sin marca —</option>
                 {marcas.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}

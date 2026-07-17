@@ -23,7 +23,11 @@ export function MiCuenta({ email }: { email: string }) {
 
   return (
     <div className="space-y-5 max-w-md">
-      <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card p-5">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs text-brand-400 tracking-widest2">· //</span>
+        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Mi cuenta</h1>
+      </div>
+      <div className="border-t border-b border-carbon-600 bg-transparent p-5">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium">{(email[0] ?? '?').toUpperCase()}</div>
           <div>
@@ -36,14 +40,14 @@ export function MiCuenta({ email }: { email: string }) {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-dim-200">Nueva contraseña</label>
-            <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
+            <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-dim-200">Repetir</label>
-            <input type="password" value={confirma} onChange={(e) => setConfirma(e.target.value)} className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
+            <input type="password" value={confirma} onChange={(e) => setConfirma(e.target.value)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
           </div>
           <button onClick={() => void submit()} disabled={guardando || !nueva || !confirma}
-                  className="w-full rounded-lg bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                  className="w-full rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
             {guardando ? 'Guardando…' : 'Actualizar contraseña'}
           </button>
         </div>

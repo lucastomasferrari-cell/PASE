@@ -59,10 +59,14 @@ export function Auditoria() {
 
   return (
     <div className="space-y-4 max-w-3xl">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs text-brand-400 tracking-widest2">05 //</span>
+        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Actividad</h1>
+      </div>
       <p className="text-sm text-dim-300">Quién hizo qué, cuándo. Los cambios sensibles del equipo quedan registrados acá.</p>
 
       {sinTabla && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
+        <div className="rounded-sm bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
           La auditoría necesita aplicar la migración <span className="font-mono text-xs">202606250700_accesos_app_access.sql</span> (en tus pendientes).
         </div>
       )}
@@ -70,16 +74,16 @@ export function Auditoria() {
       {cargando ? (
         <div className="py-16 text-center text-dim-300">Cargando…</div>
       ) : entries.length === 0 ? (
-        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card py-14 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-400/10 text-brand-400 mb-3"><ScrollText className="h-7 w-7" /></div>
+        <div className="border-t border-b border-carbon-600 bg-transparent py-14 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-sm bg-brand-400/10 text-brand-400 mb-3"><ScrollText className="h-7 w-7" /></div>
           <p className="font-medium">Sin movimientos por ahora</p>
           <p className="text-sm text-dim-300 mt-1">Cuando hagas cambios al equipo, aparecen acá.</p>
         </div>
       ) : (
-        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card divide-y divide-ink/5">
+        <div className="border-t border-b border-carbon-600 bg-transparent divide-y divide-carbon-600">
           {entries.map((e) => (
             <div key={e.id} className="px-4 py-3 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-brand-400/10 text-brand-400 grid place-items-center shrink-0">
+              <div className="w-8 h-8 rounded-sm bg-brand-400/10 text-brand-400 grid place-items-center shrink-0">
                 {ICONO[e.accion]}
               </div>
               <div className="flex-1 min-w-0">

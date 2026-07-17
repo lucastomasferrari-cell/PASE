@@ -33,8 +33,13 @@ export function StatusDot({ tone = 'live', pulse = false, className }: { tone?: 
   );
 }
 
-// ─── Card ───────────────────────────────────────────────────────────────────
-// Tarjeta base carbon con borde tenue. `interactive` agrega hover celeste.
+// ─── Card / Row ─────────────────────────────────────────────────────────────
+// Refactor 17-jul: Cocina NO usa bento cards con bordes redondeados —
+// usa hairlines horizontales como separador (patrón terminal listing).
+// - Card contenedor: sin fondo ni border, solo un `border-t` opcional para
+//   marcar el arranque de una sección.
+// - Row: fila con `border-b` para el separador entre items de una lista.
+// `interactive` agrega hover con tinte celeste sutil, sin cambiar el borde.
 export function Card({
   as: Tag = 'div',
   interactive,
@@ -46,8 +51,8 @@ export function Card({
   return (
     <Component
       className={cn(
-        'bg-carbon-800 border border-carbon-600 rounded-lg shadow-card',
-        interactive && 'transition-colors hover:border-brand-400/50 hover:bg-carbon-700 cursor-pointer',
+        'border-t border-carbon-600',
+        interactive && 'transition-colors hover:bg-brand-400/[0.03] cursor-pointer',
         className,
       )}
       {...rest}
@@ -57,21 +62,49 @@ export function Card({
   );
 }
 
+export function Row({
+  interactive,
+  className,
+  children,
+  ...rest
+}: HTMLAttributes<HTMLDivElement> & { interactive?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'border-b border-carbon-600 py-3.5 px-1',
+        interactive && 'transition-colors hover:bg-brand-400/[0.04] cursor-pointer',
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Button ─────────────────────────────────────────────────────────────────
 type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'terminal';
 type BtnSize = 'sm' | 'md' | 'lg';
 
+// Refactor 17-jul: Cocina usa botones outline (no sólidos). El fondo relleno
+// sólo se justifica en el CTA supercrítico (variant `solid`, uso restringido).
+// Bordes rectos con radios chicos (rounded-sm = 2px).
 const BTN_VARIANT: Record<BtnVariant, string> = {
-  primary: 'bg-brand-400 text-carbon-900 font-medium hover:bg-brand-300 shadow-glow',
-  secondary: 'bg-carbon-700 text-dim-50 border border-carbon-500 hover:border-brand-400 hover:text-brand-300',
-  ghost: 'bg-transparent text-dim-100 hover:text-dim-50 hover:bg-carbon-700',
-  danger: 'bg-crit/20 text-crit border border-crit/40 hover:bg-crit/30',
-  terminal: 'bg-carbon-800 text-brand-300 font-mono uppercase tracking-widest2 border border-brand-400/40 hover:border-brand-400 hover:bg-carbon-700',
+  // Outline celeste — es el CTA principal en Cocina.
+  primary: 'bg-transparent text-brand-300 border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 hover:text-brand-200',
+  // Neutro con border sutil.
+  secondary: 'bg-transparent text-dim-100 border border-carbon-500 hover:border-carbon-500 hover:bg-carbon-700 hover:text-dim-50',
+  // Sin borde ni fondo — solo texto.
+  ghost: 'bg-transparent text-dim-200 hover:text-dim-50 hover:bg-carbon-700/60',
+  // Crítica (borrar, revocar).
+  danger: 'bg-transparent text-crit border border-crit/50 hover:bg-crit/10 hover:border-crit',
+  // Estilo consola con label uppercase mono (para "Ejecutar ingreso"/"Ejecutar acción").
+  terminal: 'bg-transparent text-brand-300 font-mono uppercase tracking-widest2 text-xs border border-brand-400/50 hover:border-brand-400 hover:bg-brand-400/10',
 };
 const BTN_SIZE: Record<BtnSize, string> = {
-  sm: 'h-8 px-3 text-xs',
-  md: 'h-9 px-4 text-sm',
-  lg: 'h-11 px-5 text-sm',
+  sm: 'h-7 px-2.5 text-xs',
+  md: 'h-8 px-3 text-xs',
+  lg: 'h-10 px-4 text-sm',
 };
 
 export const Button = forwardRef<
@@ -82,7 +115,7 @@ export const Button = forwardRef<
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-2 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed',
         BTN_VARIANT[variant],
         BTN_SIZE[size],
         className,
@@ -123,20 +156,22 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 );
 
 // ─── Chip / Pill ────────────────────────────────────────────────────────────
+// Refactor 17-jul: outline sin fondo, esquinas rectas (rounded-sm) — mucho más
+// cerca del patrón Cocina "CORE_OPS · ACTIVE · MOD+1" que del pill relleno.
 type ChipTone = 'default' | 'brand' | 'live' | 'warn' | 'gold' | 'off';
 const CHIP_TONE: Record<ChipTone, string> = {
-  default: 'bg-carbon-700 text-dim-100 border border-carbon-500',
-  brand:   'bg-brand-400/15 text-brand-300 border border-brand-400/40',
-  live:    'bg-live/15 text-live border border-live/40',
-  warn:    'bg-warn/15 text-warn border border-warn/40',
-  gold:    'bg-gold/15 text-gold border border-gold/40',
-  off:     'bg-carbon-700 text-dim-400 border border-carbon-600',
+  default: 'text-dim-200 border-carbon-500',
+  brand:   'text-brand-300 border-brand-400/50',
+  live:    'text-live border-live/50',
+  warn:    'text-warn border-warn/50',
+  gold:    'text-gold border-gold/50',
+  off:     'text-dim-400 border-carbon-600',
 };
 export function Chip({ tone = 'default', className, children }: { tone?: ChipTone; className?: string; children: ReactNode }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 h-6 px-2 rounded-full font-mono text-[10px] uppercase tracking-widest2',
+        'inline-flex items-center gap-1.5 h-[22px] px-2 rounded-sm font-mono text-[10px] uppercase tracking-widest2 border bg-transparent',
         CHIP_TONE[tone],
         className,
       )}

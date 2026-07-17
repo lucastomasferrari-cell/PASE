@@ -54,17 +54,21 @@ export function Roles() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="inline-flex rounded-lg border border-carbon-500 bg-carbon-800 p-0.5">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs text-brand-400 tracking-widest2">03 //</span>
+        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Roles</h1>
+      </div>
+      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-carbon-600">
+        <div className="inline-flex gap-6">
           <button onClick={() => setFamilia('gestion')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${familia === 'gestion' ? 'bg-brand-400 text-white' : 'text-dim-200 hover:bg-carbon-700'}`}>Roles de gestión (mail)</button>
+                  className={`pb-2.5 -mb-px font-mono text-xs uppercase tracking-widest2 border-b-2 transition-colors ${familia === 'gestion' ? 'border-brand-400 text-brand-300' : 'border-transparent text-dim-300 hover:text-dim-100'}`}>Gestión · MAIL</button>
           <button onClick={() => setFamilia('pos')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${familia === 'pos' ? 'bg-brand-400 text-white' : 'text-dim-200 hover:bg-carbon-700'}`}>Roles del POS (PIN)</button>
+                  className={`pb-2.5 -mb-px font-mono text-xs uppercase tracking-widest2 border-b-2 transition-colors ${familia === 'pos' ? 'border-brand-400 text-brand-300' : 'border-transparent text-dim-300 hover:text-dim-100'}`}>POS · PIN</button>
         </div>
         {familia === 'gestion' && (
           <button onClick={() => setCreando(true)}
-                  className="rounded-lg bg-brand-400 hover:bg-brand-500 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
-            <Plus className="h-4 w-4" /> Nuevo rol
+                  className="mb-2 rounded-sm bg-transparent border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 px-3 h-8 text-xs inline-flex items-center gap-1.5">
+            <Plus className="h-3.5 w-3.5" /> Nuevo rol
           </button>
         )}
       </div>
@@ -85,7 +89,7 @@ export function Roles() {
           <aside className="space-y-1">
             {roles.map((r) => (
               <button key={r.id} onClick={() => setSel(r)}
-                      className={`w-full text-left rounded-xl border p-3 transition-colors ${sel?.id === r.id ? 'border-brand-400 bg-brand-400/10' : 'border-carbon-600 bg-carbon-800 hover:bg-carbon-700'}`}>
+                      className={`w-full text-left rounded-sm border p-3 transition-colors ${sel?.id === r.id ? 'border-brand-400 bg-brand-400/10' : 'border-carbon-600 bg-carbon-800 hover:bg-carbon-700'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-medium inline-flex items-center gap-1.5">
                     {r.sistema && <Lock className="h-3.5 w-3.5 text-dim-300" />} {r.nombre}
@@ -99,7 +103,7 @@ export function Roles() {
 
           {/* Editor */}
           {sel ? (
-            <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card p-5 space-y-4">
+            <div className="border-t border-b border-carbon-600 bg-transparent p-5 space-y-4">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
                   <div className="text-xl font-medium inline-flex items-center gap-2">
@@ -120,7 +124,7 @@ export function Roles() {
               <p className="text-[11px] text-dim-300">Al elegir este rol en una persona se autocompletan estos permisos (PASE y COMANDA); después se ajustan en su ficha.</p>
             </div>
           ) : (
-            <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card py-14 text-center text-sm text-dim-300">
+            <div className="border-t border-b border-carbon-600 bg-transparent py-14 text-center text-sm text-dim-300">
               Elegí un rol a la izquierda para ver/editar sus permisos.
             </div>
           )}
@@ -196,7 +200,7 @@ function RolesPos() {
           const n = (perms[r] ?? []).includes('*') ? '∞' : (perms[r] ?? []).length;
           return (
             <button key={r} onClick={() => setSel(r)}
-                    className={`w-full text-left rounded-xl border p-3 transition-colors ${sel === r ? 'border-brand-400 bg-brand-400/10' : 'border-carbon-600 bg-carbon-800 hover:bg-carbon-700'}`}>
+                    className={`w-full text-left rounded-sm border p-3 transition-colors ${sel === r ? 'border-brand-400 bg-brand-400/10' : 'border-carbon-600 bg-carbon-800 hover:bg-carbon-700'}`}>
               <div className="flex items-center justify-between">
                 <span className="font-medium">{ROL_POS_LABEL[r]}</span>
                 <span className="text-xs text-dim-300">{n}</span>
@@ -206,7 +210,7 @@ function RolesPos() {
         })}
       </aside>
 
-      <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card p-5 space-y-4">
+      <div className="border-t border-b border-carbon-600 bg-transparent p-5 space-y-4">
         <div className="text-xl font-medium inline-flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-brand-400" />{ROL_POS_LABEL[sel]}
           <span className="text-[11px] font-normal text-dim-300">· rol del PIN en el POS</span>
@@ -226,7 +230,7 @@ function RolesPos() {
                   const { error } = await setRolPosPermisos(sel, nuevos);
                   if (error) { toast.error(error); void reload(); }
                 }}
-                className="text-[11px] px-2.5 py-1 rounded-lg border border-carbon-500 hover:bg-carbon-700 text-dim-200"
+                className="text-[11px] px-2.5 py-1 rounded-sm border border-carbon-500 hover:bg-carbon-700 text-dim-200"
               >
                 {slugs.length >= TODOS_SLUGS_ROL_POS.length ? 'Sacar todos' : 'Dar todos'}
               </button>
@@ -256,25 +260,25 @@ function FormRol({ onClose, onSaved }: { onClose: () => void; onSaved: () => voi
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="w-full sm:max-w-sm bg-carbon-800 rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full sm:max-w-sm bg-carbon-800 rounded-t-2xl sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-xl font-medium">Nuevo rol</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-carbon-700 text-dim-200"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-sm hover:bg-carbon-700 text-dim-200"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-dim-200">Nombre *</label>
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus
-                 className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" placeholder="Encargado de turno" />
+                 className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" placeholder="Encargado de turno" />
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-dim-200">Descripción</label>
           <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                 className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" placeholder="Para qué sirve este rol" />
+                 className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" placeholder="Para qué sirve este rol" />
         </div>
         <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 rounded-lg border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
+          <button onClick={onClose} className="flex-1 rounded-sm border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
           <button onClick={() => void submit()} disabled={guardando}
-                  className="flex-1 rounded-lg bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                  className="flex-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
             {guardando ? 'Creando…' : 'Crear rol'}
           </button>
         </div>

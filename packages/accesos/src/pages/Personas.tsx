@@ -96,28 +96,32 @@ export function Personas() {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-5 max-w-5xl">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs text-brand-400 tracking-widest2">01 //</span>
+        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Personas</h1>
+      </div>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-dim-300" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o email…"
-                 className="w-full rounded-lg border border-carbon-500 bg-carbon-800 pl-9 pr-3 py-2 text-sm" />
+                 className="w-full rounded-sm border border-carbon-500 bg-transparent font-mono pl-9 pr-3 py-2 text-sm placeholder:text-dim-400 focus:outline-none focus:border-brand-400" />
         </div>
         <button onClick={() => setEditando('nuevo')}
-                className="rounded-lg bg-brand-400 hover:bg-brand-500 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
-          <Plus className="h-4 w-4" /> Nueva persona
+                className="rounded-sm bg-transparent border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 px-3 h-9 text-xs inline-flex items-center gap-1.5">
+          <Plus className="h-3.5 w-3.5" /> Nueva persona
         </button>
       </div>
 
       {cargando ? (
-        <div className="py-16 text-center text-dim-300">Cargando equipo…</div>
+        <div className="py-16 text-center text-dim-300 font-mono text-xs uppercase tracking-widest2">Cargando equipo…</div>
       ) : filtrados.length === 0 ? (
-        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card py-16 text-center">
-          <p className="font-medium">Sin resultados</p>
+        <div className="border-t border-b border-carbon-600 py-16 text-center">
+          <p className="font-medium text-dim-100">Sin resultados</p>
           <p className="text-sm text-dim-300 mt-1">Probá otra búsqueda o cargá una persona nueva.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="border-t border-carbon-600">
           {filtrados.map((u) => (
             <UsuarioCard key={u.id} u={u} locales={locales} onEditar={() => setEditando(u)}
                          onToggleActivo={() => void toggleActivo(u)} onReset={() => void reset(u).then((p) => p && window.prompt('Contraseña temporal (la cambia al entrar):', p))} />
@@ -135,26 +139,26 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   const locsAsignados = (u.locales ?? []).map((id) => locales.find((l) => l.id === id)?.nombre).filter(Boolean);
 
   return (
-    <div className={`rounded-xl bg-carbon-800 border shadow-card px-4 py-3 ${u.activo ? 'border-carbon-600' : 'border-carbon-600 opacity-60'}`}>
+    <div className={`border-b border-carbon-600 py-3 px-1 transition-colors hover:bg-brand-400/[0.04] ${u.activo ? '' : 'opacity-60'}`}>
       <div className="flex items-start gap-3 flex-wrap">
-        <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium text-sm shrink-0">
+        <div className="w-9 h-9 rounded-sm bg-carbon-700 border border-carbon-500 text-brand-300 grid place-items-center font-mono text-sm shrink-0">
           {(nombre(u)[0] ?? '?').toUpperCase()}
         </div>
         <div className="flex-1 min-w-[160px]">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium">{nombre(u)}</span>
-            <span className="text-[10px] normal-case tracking-wide px-2 py-0.5 rounded-full bg-brand-400/10 text-brand-400 border border-brand-200">{u.rol}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-dim-50">{nombre(u)}</span>
+            <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-brand-400/50 text-brand-300">{u.rol}</span>
             {apps.map((k) => {
               const app = APPS.find((a) => a.key === (k as AppKey));
               const op = app?.tier === 'operativa';
               return (
-                <span key={k} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${op ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-brand-100 text-brand-800 border-brand-200'}`}>
+                <span key={k} className={`font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border ${op ? 'border-gold/50 text-gold' : 'border-carbon-500 text-dim-200'}`}>
                   {app?.nombre ?? k}
                 </span>
               );
             })}
-            {u.password_temporal && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Password temporal</span>}
-            {!u.activo && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Inactivo</span>}
+            {u.password_temporal && <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-warn/50 text-warn">Password temporal</span>}
+            {!u.activo && <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-carbon-600 text-dim-400">Inactivo</span>}
           </div>
           <div className="text-xs text-dim-300 mt-1 flex items-center gap-1.5 flex-wrap">
             <span>{u.email}</span>
@@ -164,15 +168,15 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={onEditar} className="text-xs px-2.5 py-1.5 rounded-lg border border-brand-200 bg-carbon-800 hover:bg-brand-400/10 text-brand-400 font-medium inline-flex items-center gap-1">
-            <ShieldCheck className="h-3.5 w-3.5" /> Editar
+          <button onClick={onEditar} className="text-xs font-mono uppercase tracking-widest2 px-2.5 h-7 rounded-sm border border-brand-400/50 bg-transparent hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3 w-3" /> Editar
           </button>
-          <button onClick={onReset} className="text-xs px-2.5 py-1.5 rounded-lg border border-carbon-500 bg-carbon-800 hover:bg-carbon-700 text-dim-200 font-medium inline-flex items-center gap-1" title="Resetear contraseña">
+          <button onClick={onReset} className="h-7 w-7 rounded-sm border border-carbon-500 bg-transparent hover:border-carbon-500 hover:bg-carbon-700 text-dim-200 inline-flex items-center justify-center" title="Resetear contraseña">
             <KeyRound className="h-3.5 w-3.5" />
           </button>
           <button onClick={onToggleActivo} title={u.activo ? 'Desactivar' : 'Activar'}
-                  className={`p-2 rounded-lg border ${u.activo ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-live/40 text-live hover:bg-live/10'}`}>
-            <Power className="h-4 w-4" />
+                  className={`h-7 w-7 rounded-sm border inline-flex items-center justify-center ${u.activo ? 'border-warn/50 text-warn hover:bg-warn/10' : 'border-live/50 text-live hover:bg-live/10'}`}>
+            <Power className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -318,24 +322,24 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       </button>
 
       {/* Perfil — header + datos + credenciales, todo junto. */}
-      <section className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card overflow-hidden">
-        <div className="p-5 flex items-center gap-4 flex-wrap border-b border-carbon-600">
-          <div className="w-14 h-14 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium text-xl shrink-0">{inicial}</div>
+      <section className="border-t border-carbon-600">
+        <div className="py-5 flex items-center gap-4 flex-wrap border-b border-carbon-600">
+          <div className="w-14 h-14 rounded-sm bg-carbon-700 border border-carbon-500 text-brand-300 grid place-items-center font-mono text-xl shrink-0">{inicial}</div>
           <div className="flex-1 min-w-[160px]">
-            <h2 className="text-xl font-medium">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
+            <h2 className="text-xl font-medium text-dim-50">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
             <div className="text-sm text-dim-300 mt-0.5">{esEdicion ? usuario?.email : 'Perfil de la persona'}</div>
           </div>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="py-5 space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-dim-200">Nombre *</label>
-              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
+              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-dim-200">Rol</label>
-              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm bg-carbon-800">
+              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm bg-carbon-800">
                 <option value="">— Sin rol —</option>
                 {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
@@ -356,29 +360,29 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                 <label className="text-xs font-medium text-dim-200">Usuario (email)</label>
                 {esEdicion ? (
                   <div className="flex gap-2">
-                    <input value={email} disabled className="flex-1 rounded-lg border border-carbon-500 px-3 py-2 text-sm bg-carbon-700" />
+                    <input value={email} disabled className="flex-1 rounded-sm border border-carbon-500 px-3 py-2 text-sm bg-carbon-700" />
                     <button type="button" onClick={() => { void navigator.clipboard.writeText(email); toast.success('Email copiado'); }}
-                            className="px-2.5 rounded-lg border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
+                            className="px-2.5 rounded-sm border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
                   </div>
                 ) : (
                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="persona@ejemplo.com"
-                         className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
+                         className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
                 )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-dim-200">Contraseña</label>
                 {!esEdicion ? (
                   <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" placeholder="Contraseña inicial (mín. 6)"
-                         className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm" />
+                         className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
                 ) : tempPass ? (
                   <div className="flex gap-2">
-                    <input value={tempPass} readOnly className="flex-1 rounded-lg border border-emerald-300 bg-live/10 px-3 py-2 text-sm font-mono" />
+                    <input value={tempPass} readOnly className="flex-1 rounded-sm border border-emerald-300 bg-live/10 px-3 py-2 text-sm font-mono" />
                     <button type="button" onClick={() => { void navigator.clipboard.writeText(tempPass); toast.success('Contraseña copiada'); }}
-                            className="px-2.5 rounded-lg border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
+                            className="px-2.5 rounded-sm border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
                   </div>
                 ) : (
                   <button type="button" onClick={() => void resetear()}
-                          className="w-full rounded-lg border border-carbon-500 px-3 py-2 text-sm font-medium hover:bg-carbon-700 inline-flex items-center justify-center gap-1.5">
+                          className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm font-medium hover:bg-carbon-700 inline-flex items-center justify-center gap-1.5">
                     <KeyRound className="h-4 w-4" /> Generar contraseña nueva
                   </button>
                 )}
@@ -452,9 +456,9 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       })}
 
       <div className="flex gap-2 pt-1 pb-2">
-        <button onClick={onClose} className="flex-1 rounded-lg border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
+        <button onClick={onClose} className="flex-1 rounded-sm border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
         <button onClick={() => void guardar()} disabled={guardando}
-                className="flex-1 rounded-lg bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                className="flex-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
           {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear persona'}
         </button>
       </div>
@@ -468,8 +472,8 @@ function Seccion({ titulo, sub, icon, right, abierto, onToggle, children }: {
   abierto: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card overflow-hidden">
-      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-ink/[0.02]">
+    <section className="border-b border-carbon-600">
+      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between gap-3 py-3.5 text-left hover:bg-brand-400/[0.03]">
         <div className="flex items-center gap-2.5 min-w-0">
           {icon}
           <div className="min-w-0">
@@ -527,7 +531,7 @@ function PermisosAccordion({ categorias, value, onToggle }: {
     }
   }
   return (
-    <div className="rounded-xl border border-carbon-600 overflow-hidden">
+    <div className="rounded-sm border border-carbon-600 overflow-hidden">
       {categorias.map((cat, i) => {
         const open = abiertas.has(cat.titulo);
         const n = activos(cat);
@@ -547,7 +551,7 @@ function PermisosAccordion({ categorias, value, onToggle }: {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); bulkToggle(cat); }}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
+                    className={`text-[11px] px-2.5 py-1 rounded-sm border transition-colors ${
                       todosActivos
                         ? 'border-carbon-500 text-dim-200 hover:bg-carbon-700'
                         : 'border-brand-600/30 text-brand-400 hover:bg-brand-400/10 bg-brand-400/10/40'
@@ -606,7 +610,7 @@ function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAl
           <div className="flex items-center gap-2">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">Personalizado</span>
             <button type="button" onClick={onVolverAlRol}
-                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-carbon-500 hover:bg-carbon-700 text-dim-200">
+                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-sm border border-carbon-500 hover:bg-carbon-700 text-dim-200">
               <RotateCcw className="h-3 w-3" /> Volver a los del rol
             </button>
           </div>
@@ -654,7 +658,7 @@ function LocalesPicker({ marcas, locales, value, onToggle, onToggleMarca }: {
     ...(sinMarca.length ? [{ nombre: 'Sin marca', ids: sinMarca.map((l) => l.id) }] : []),
   ];
   return (
-    <div className="rounded-lg border border-carbon-500 overflow-hidden">
+    <div className="rounded-sm border border-carbon-500 overflow-hidden">
       <button type="button" onClick={() => setOpen((o) => !o)}
               className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-ink/[0.02]">
         <MapPin className="h-4 w-4 text-dim-300 shrink-0" />

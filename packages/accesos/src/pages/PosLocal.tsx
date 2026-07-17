@@ -25,6 +25,10 @@ function SeccionTitulo({ icon, children }: { icon: React.ReactNode; children: Re
 export function PosLocal({ localId, locales }: Props) {
   return (
     <div className="space-y-6 max-w-3xl">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs text-brand-400 tracking-widest2">02 //</span>
+        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">POS del local</h1>
+      </div>
       <section>
         <SeccionTitulo icon={<TabletIcon className="h-4 w-4" />}>Dispositivos del local</SeccionTitulo>
         <Tablet localId={localId} locales={locales} />

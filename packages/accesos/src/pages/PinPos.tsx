@@ -47,7 +47,7 @@ export function PinPos({ localId, locales }: Props) {
       <p className="text-xs text-dim-300">Cada uno entra con su <strong>PIN de 4 dígitos</strong>; el rol define qué puede hacer.</p>
 
       {!localId && locales.length > 1 && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
+        <div className="rounded-sm bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
           Elegí un local en la barra superior para ver sus empleados POS.
         </div>
       )}
@@ -55,14 +55,14 @@ export function PinPos({ localId, locales }: Props) {
       {cargando ? (
         <div className="py-16 text-center text-dim-300">Cargando…</div>
       ) : empleados.length === 0 ? (
-        <div className="rounded-2xl bg-carbon-800 border border-carbon-600 shadow-card py-14 text-center">
+        <div className="border-t border-b border-carbon-600 bg-transparent py-14 text-center">
           <p className="font-medium">Sin empleados en este local</p>
           <p className="text-sm text-dim-300 mt-1">Cargá los empleados desde PASE → RRHH.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {empleados.map((e) => (
-            <div key={e.id} className={`rounded-xl bg-carbon-800 border shadow-card px-4 py-3 flex items-center gap-3 flex-wrap ${e.pos_activo ? 'border-carbon-600' : 'border-carbon-600 opacity-60'}`}>
+            <div key={e.id} className={`rounded-sm bg-carbon-800 border shadow-card px-4 py-3 flex items-center gap-3 flex-wrap ${e.pos_activo ? 'border-carbon-600' : 'border-carbon-600 opacity-60'}`}>
               <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium text-sm shrink-0">
                 {(nombreEmpleado(e)[0] ?? '?').toUpperCase()}
               </div>
@@ -73,15 +73,15 @@ export function PinPos({ localId, locales }: Props) {
               </div>
               <div className="flex items-center gap-1.5">
                 <select value={e.rol_pos ?? ''} onChange={(ev) => void cambiarRol(e, (ev.target.value || null) as RolPos | null)}
-                        className="text-xs rounded-lg border border-carbon-500 bg-carbon-800 px-2 py-1.5 capitalize">
+                        className="text-xs rounded-sm border border-carbon-500 bg-carbon-800 px-2 py-1.5 capitalize">
                   <option value="">Sin rol</option>
                   {ROLES_POS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
-                <button onClick={() => setPinDe(e)} className="text-xs px-2.5 py-1.5 rounded-lg border border-brand-200 bg-carbon-800 hover:bg-brand-400/10 text-brand-400 font-medium inline-flex items-center gap-1">
+                <button onClick={() => setPinDe(e)} className="text-xs px-2.5 py-1.5 rounded-sm border border-brand-200 bg-carbon-800 hover:bg-brand-400/10 text-brand-400 font-medium inline-flex items-center gap-1">
                   <KeyRound className="h-3.5 w-3.5" /> {e.pin_actualizado_at ? 'Cambiar' : 'Setear'} PIN
                 </button>
                 <button onClick={() => void toggle(e)} title={e.pos_activo ? 'Desactivar' : 'Activar'}
-                        className={`p-2 rounded-lg border ${e.pos_activo ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-live/40 text-live hover:bg-live/10'}`}>
+                        className={`p-2 rounded-sm border ${e.pos_activo ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-live/40 text-live hover:bg-live/10'}`}>
                   <Power className="h-4 w-4" />
                 </button>
               </div>
@@ -114,19 +114,19 @@ function PinDialog({ empleado, onClose, onSaved }: { empleado: EmpleadoPos; onCl
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="w-full sm:max-w-xs bg-carbon-800 rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full sm:max-w-xs bg-carbon-800 rounded-t-2xl sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-xl font-medium">PIN del POS</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-carbon-700 text-dim-200"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-sm hover:bg-carbon-700 text-dim-200"><X className="h-5 w-5" /></button>
         </div>
         <p className="text-xs text-dim-300 -mt-2">Pasale los 4 dígitos a {empleado.nombre}.</p>
         <input value={pin} onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
                inputMode="numeric" autoFocus maxLength={4}
-               className="w-full rounded-lg border border-carbon-500 px-3 py-3 text-center font-mono text-2xl tracking-[0.4em]" placeholder="••••" />
+               className="w-full rounded-sm border border-carbon-500 px-3 py-3 text-center font-mono text-2xl tracking-[0.4em]" placeholder="••••" />
         <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 rounded-lg border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
+          <button onClick={onClose} className="flex-1 rounded-sm border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
           <button onClick={() => void submit()} disabled={guardando || pin.length !== 4}
-                  className="flex-1 rounded-lg bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                  className="flex-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
             {guardando ? 'Guardando…' : 'Guardar PIN'}
           </button>
         </div>

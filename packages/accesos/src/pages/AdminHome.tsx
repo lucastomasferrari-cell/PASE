@@ -240,7 +240,7 @@ function LoginScreen({
           <span>ACCESOS.SYS</span>
         </div>
 
-        <div className="bg-carbon-800 border border-carbon-500 rounded-xl shadow-card overflow-hidden">
+        <div className="bg-carbon-800 border border-carbon-500 rounded-sm shadow-card overflow-hidden">
           {/* Header: logo. */}
           <div className="px-6 pt-6 pb-4 border-b border-carbon-600">
             <div className="text-3xl font-medium text-dim-50">
@@ -324,7 +324,7 @@ function AppSidebar({
               key={it.key}
               onClick={() => setSeccion(it.key)}
               className={cn(
-                'group w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors relative',
+                'group w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm transition-colors relative',
                 activo
                   ? 'bg-brand-400/10 text-dim-50'
                   : 'text-dim-200 hover:bg-carbon-700 hover:text-dim-50',
@@ -348,7 +348,7 @@ function AppSidebar({
         <button
           onClick={() => setSeccion('mi_cuenta')}
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors',
+            'w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sm transition-colors',
             seccion === 'mi_cuenta'
               ? 'bg-brand-400/10 text-dim-50'
               : 'text-dim-200 hover:bg-carbon-700 hover:text-dim-50',
@@ -360,7 +360,7 @@ function AppSidebar({
         </button>
         <button
           onClick={() => void onLogout()}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-dim-300 hover:bg-carbon-700 hover:text-crit transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sm text-dim-300 hover:bg-carbon-700 hover:text-crit transition-colors"
         >
           <LogOut className="h-4 w-4" /> Cerrar sesión
         </button>
@@ -387,45 +387,33 @@ function StatusBar({
   );
 
   return (
-    <header className="sticky top-0 z-20 bg-carbon-800/95 backdrop-blur border-b border-carbon-600">
-      {/* Fila superior: status system. */}
-      <div className="hidden md:flex items-center justify-between px-6 h-8 text-[10px] font-mono uppercase tracking-widest2 text-dim-300 border-b border-carbon-600">
-        <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-20 bg-carbon-900/95 backdrop-blur">
+      {/* Fila única tipo Cocina: SYSTEM · SESSION · MOD ... USER. */}
+      <div className="hidden md:flex items-center justify-between px-6 h-9 text-[10px] font-mono uppercase tracking-widest2 text-dim-300 border-b border-carbon-600">
+        <div className="flex items-center gap-5">
           <div className="flex items-center gap-2">
             <StatusDot tone="live" pulse />
             <span>SYSTEM · LIVE</span>
           </div>
-          <span className="text-dim-500">|</span>
           <span>SESSION · <span className="text-dim-100 tabular-nums">{horaLive}</span></span>
-          <span className="text-dim-500">|</span>
           <span>MOD · {seccionLabel}</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
+          {locales.length > 1 && seccion === 'pos' && (
+            <LocalSwitcher locales={locales} sel={localSel} onSelect={setLocalSel} />
+          )}
           <span>USER · <span className="text-dim-100">{userEmail}</span></span>
         </div>
       </div>
 
-      {/* Fila principal. */}
-      <div className="h-14 flex items-center gap-3 px-4 sm:px-6">
-        <span className="md:hidden text-xl font-medium text-dim-50 leading-none">
+      {/* Fila mobile: solo logo + botón salir. */}
+      <div className="md:hidden h-12 flex items-center gap-3 px-4 border-b border-carbon-600">
+        <span className="text-xl font-medium text-dim-50 leading-none">
           accesos<span className="text-gold">.</span>
         </span>
-        <h1 className="hidden md:flex items-baseline gap-3">
-          <span className="font-mono text-xs text-brand-400 tracking-widest2">
-            {NAV.find((n) => n.key === seccion)?.num ?? '·'} //
-          </span>
-          <span className="text-lg font-semibold text-dim-50 tracking-tight">
-            {seccion === 'mi_cuenta' ? 'Mi cuenta' : NAV.find((n) => n.key === seccion)?.label}
-          </span>
-        </h1>
-
-        {locales.length > 1 && seccion === 'pos' && (
-          <LocalSwitcher locales={locales} sel={localSel} onSelect={setLocalSel} />
-        )}
-
         <button
           onClick={() => void onLogout()}
-          className="md:hidden ml-auto p-2 text-dim-300 hover:text-crit"
+          className="ml-auto p-2 text-dim-300 hover:text-crit"
           title="Salir"
         >
           <LogOut className="h-5 w-5" />
@@ -449,7 +437,7 @@ function LocalSwitcher({
     <div className="relative ml-auto sm:ml-4">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-md border border-carbon-500 bg-carbon-700 px-3 py-1.5 text-sm text-dim-100 hover:border-brand-400 hover:text-dim-50 max-w-[220px] transition-colors"
+        className="flex items-center gap-2 rounded-sm border border-carbon-500 bg-carbon-700 px-3 py-1.5 text-sm text-dim-100 hover:border-brand-400 hover:text-dim-50 max-w-[220px] transition-colors"
       >
         <MapPin className="h-4 w-4 text-brand-400 shrink-0" />
         <span className="truncate font-mono text-xs">{actual?.nombre ?? 'ELEGÍ LOCAL'}</span>
@@ -458,7 +446,7 @@ function LocalSwitcher({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-40 w-56 rounded-md border border-carbon-500 bg-carbon-800 shadow-card py-1">
+          <div className="absolute right-0 top-full mt-1.5 z-40 w-56 rounded-sm border border-carbon-500 bg-carbon-800 shadow-card py-1">
             {locales.map((l) => (
               <button
                 key={l.id}
