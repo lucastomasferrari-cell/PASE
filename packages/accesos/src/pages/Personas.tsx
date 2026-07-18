@@ -11,9 +11,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  Search, Plus, Power, KeyRound, ShieldCheck, MapPin, ArrowLeft, Lock,
-  ChevronDown, Copy, RotateCcw, Wrench,
+  Search, Plus, Power, KeyRound, MapPin, ArrowLeft, Lock,
+  ChevronDown, Copy, RotateCcw, Wrench, User,
 } from 'lucide-react';
+import { SystemRow, SectionHeader, Chip } from '@/components/primitives';
 import {
   listUsuarios, crearUsuario, actualizarUsuario, sincronizarUsuario,
   sincronizarComandaAcceso, resetPassword, listLocales, type Usuario,
@@ -96,39 +97,42 @@ export function Personas() {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl">
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-xs text-brand-400 tracking-widest2">01 //</span>
-        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Personas</h1>
-      </div>
-      {/* Buscador + Nueva persona — sin box, líneas de fondo tipo terminal. */}
-      <div className="flex items-center gap-3 flex-wrap border-b border-carbon-600 pb-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-dim-400" />
+    <div>
+      {/* Cabecera de sección + CTA. */}
+      <SectionHeader
+        label="Equipo activo"
+        right={
+          <button
+            onClick={() => setEditando('nuevo')}
+            className="mono text-[9px] font-semibold text-brand-400 hover:text-dim-50 flex items-center gap-2 border border-brand-400/20 px-3 py-1 rounded-[3px] transition-all uppercase tracking-widest"
+          >
+            <Plus className="h-3 w-3" /> Nueva persona
+          </button>
+        }
+      />
+
+      {/* Buscador — campo integrado slate. */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 px-4 py-2 bg-slate-900/50 rounded border border-slate-800 focus-within:border-brand-400/40 transition-colors">
+          <Search className="h-4 w-4 text-dim-300 shrink-0" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="BUSCAR POR NOMBRE O EMAIL…"
-            className="w-full bg-transparent font-mono pl-7 pr-3 py-1.5 text-xs uppercase tracking-widest2 text-dim-100 placeholder:text-dim-400 focus:outline-none border-0"
+            className="flex-1 bg-transparent border-0 outline-none mono text-[10px] tracking-widest uppercase text-dim-50 placeholder:text-dim-400/70"
           />
         </div>
-        <button
-          onClick={() => setEditando('nuevo')}
-          className="text-brand-300 font-mono uppercase tracking-widest2 text-xs inline-flex items-center gap-1.5 hover:text-brand-200 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" /> Nueva persona
-        </button>
       </div>
 
       {cargando ? (
-        <div className="py-16 text-center text-dim-300 font-mono text-xs uppercase tracking-widest2">Cargando equipo…</div>
+        <div className="py-16 text-center text-dim-300 mono text-xs uppercase tracking-widest2">Cargando equipo…</div>
       ) : filtrados.length === 0 ? (
         <div className="py-16 text-center">
           <p className="font-medium text-dim-100">Sin resultados</p>
           <p className="text-sm text-dim-300 mt-1">Probá otra búsqueda o cargá una persona nueva.</p>
         </div>
       ) : (
-        <div>
+        <div className="flex flex-col">
           {filtrados.map((u) => (
             <UsuarioCard key={u.id} u={u} locales={locales} onEditar={() => setEditando(u)}
                          onToggleActivo={() => void toggleActivo(u)} onReset={() => void reset(u).then((p) => p && window.prompt('Contraseña temporal (la cambia al entrar):', p))} />
@@ -139,65 +143,45 @@ export function Personas() {
   );
 }
 
-// Fila de persona — patrón Cocina: SIN border, mucho aire vertical, elementos
-// internos casi invisibles hasta hover. Solo se pinta un tinte celeste ultra
-// sutil al hover y los botones aparecen con opacidad plena.
+// Fila de persona — patrón cocina.os `SystemRow`. Toda la fila abre la ficha
+// (editar); reset de contraseña y activar/desactivar son botones que aparecen
+// al hover (con stopPropagation para no disparar el click de la fila).
 function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   u: Usuario; locales: LocalSimple[]; onEditar: () => void; onToggleActivo: () => void; onReset: () => void;
 }) {
   const apps = u.apps_permitidas ?? ['pase'];
   const locsAsignados = (u.locales ?? []).map((id) => locales.find((l) => l.id === id)?.nombre).filter(Boolean);
+  const appsLabel = apps
+    .map((k) => (APPS.find((a) => a.key === (k as AppKey))?.nombre ?? k).toUpperCase())
+    .join(' · ');
 
   return (
-    <div className={`group py-4 transition-colors hover:bg-brand-400/[0.025] ${u.activo ? '' : 'opacity-60'}`}>
-      <div className="flex items-center gap-4 flex-wrap">
-        {/* Avatar sin border, solo bg tenue. */}
-        <div className="w-9 h-9 bg-carbon-700/60 text-brand-300 grid place-items-center font-mono text-sm shrink-0 rounded-sm">
-          {(nombre(u)[0] ?? '?').toUpperCase()}
-        </div>
-
-        <div className="flex-1 min-w-[200px]">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="font-medium text-dim-50">{nombre(u)}</span>
-            {/* Chip rol — muy sutil, sin border, texto tinted. */}
-            <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">
-              {u.rol}
-            </span>
-            {apps.map((k) => {
-              const app = APPS.find((a) => a.key === (k as AppKey));
-              const op = app?.tier === 'operativa';
-              return (
-                <span key={k} className={`font-mono text-[10px] uppercase tracking-widest2 ${op ? 'text-gold/80' : 'text-brand-300/80'}`}>
-                  {(app?.nombre ?? k).toUpperCase()}
-                </span>
-              );
-            })}
-            {u.password_temporal && <span className="font-mono text-[10px] uppercase tracking-widest2 text-warn">TEMP PWD</span>}
-            {!u.activo && <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">INACTIVO</span>}
-          </div>
-          <div className="text-xs text-dim-400 mt-1 flex items-center gap-2 flex-wrap font-mono">
-            <span>{u.email}</span>
-            {locsAsignados.length > 0 && (
-              <>
-                <span className="opacity-40">·</span>
-                <MapPin className="h-3 w-3 shrink-0 text-dim-400" />
-                <span className="truncate">{locsAsignados.join(' · ')}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Acciones — sin border por default, aparecen al hover. Solo texto/icono. */}
-        <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={onEditar}
-            className="text-brand-300 hover:text-brand-200 hover:bg-brand-400/10 font-mono uppercase tracking-widest2 px-2 h-7 text-[11px] inline-flex items-center gap-1.5 rounded-sm transition-colors"
-          >
-            <ShieldCheck className="h-3 w-3" /> Editar
-          </button>
+    <SystemRow
+      icon={<User className="text-lg h-5 w-5" />}
+      muted={!u.activo}
+      onClick={onEditar}
+      title={nombre(u)}
+      suffix={appsLabel || undefined}
+      description={
+        locsAsignados.length > 0
+          ? <span className="inline-flex items-center gap-1.5"><span>{u.email}</span><span className="opacity-40">·</span><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{locsAsignados.join(' · ')}</span></span>
+          : u.email
+      }
+      category={
+        <>
+          <Chip>{u.rol}</Chip>
+          {u.password_temporal && <Chip tone="warn">TEMP PWD</Chip>}
+        </>
+      }
+      status={u.activo ? { label: 'ACTIVE', tone: 'active' } : { label: 'LOCKED', tone: 'inactive' }}
+      actions={
+        <div
+          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
             onClick={onReset}
-            className="h-7 w-7 rounded-sm text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center transition-colors"
+            className="h-7 w-7 rounded text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center transition-colors"
             title="Resetear contraseña"
           >
             <KeyRound className="h-3.5 w-3.5" />
@@ -205,15 +189,15 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
           <button
             onClick={onToggleActivo}
             title={u.activo ? 'Desactivar' : 'Activar'}
-            className={`h-7 w-7 rounded-sm inline-flex items-center justify-center transition-colors ${
+            className={`h-7 w-7 rounded inline-flex items-center justify-center transition-colors ${
               u.activo ? 'text-warn/70 hover:text-warn hover:bg-warn/10' : 'text-live/70 hover:text-live hover:bg-live/10'
             }`}
           >
             <Power className="h-3.5 w-3.5" />
           </button>
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
@@ -350,8 +334,8 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
 
   return (
     <div className="space-y-3 max-w-3xl">
-      <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm font-medium text-dim-200 hover:text-brand-400-400">
-        <ArrowLeft className="h-4 w-4" /> Personas
+      <button onClick={onClose} className="inline-flex items-center gap-1.5 mono text-[10px] uppercase tracking-widest2 text-dim-300 hover:text-brand-400 transition-colors">
+        <ArrowLeft className="h-3.5 w-3.5" /> Volver a personas
       </button>
 
       {/* Perfil — header + datos + credenciales, todo junto. */}
@@ -438,7 +422,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
         return (
           <Seccion key={a.key}
             titulo={a.nombre}
-            icon={<span className={`w-2 h-2 rounded-full ${op ? 'bg-amber-500' : 'bg-brand-400'}`} />}
+            icon={<span className={`w-2 h-2 rounded-full ${op ? 'bg-warn' : 'bg-brand-400'}`} />}
             abierto={abierto.has(a.key)} onToggle={() => toggleOpen(a.key)}
             right={
               <span onClick={(e) => { e.stopPropagation(); toggleApp(a.key); }}
@@ -489,9 +473,12 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       })}
 
       <div className="flex gap-2 pt-1 pb-2">
-        <button onClick={onClose} className="flex-1 rounded-sm border-b border-carbon-600 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
+        <button onClick={onClose}
+                className="flex-1 rounded-[3px] border border-carbon-600 py-2.5 mono text-[11px] uppercase tracking-widest2 text-dim-300 hover:text-dim-50 hover:border-carbon-500 hover:bg-carbon-700 transition-colors">
+          Cancelar
+        </button>
         <button onClick={() => void guardar()} disabled={guardando}
-                className="flex-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+                className="flex-1 rounded-[3px] border border-brand-400/30 bg-brand-400/10 py-2.5 mono text-[11px] uppercase tracking-widest2 text-brand-300 hover:bg-brand-400/20 hover:text-brand-200 hover:border-brand-400/60 transition-all disabled:opacity-50">
           {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear persona'}
         </button>
       </div>
@@ -587,7 +574,7 @@ function PermisosAccordion({ categorias, value, onToggle }: {
                     className={`text-[11px] px-2.5 py-1 rounded-sm border transition-colors ${
                       todosActivos
                         ? 'border-carbon-500 text-dim-200 hover:bg-carbon-700'
-                        : 'border-brand-600/30 text-brand-400 hover:bg-brand-400/10 bg-brand-400/10/40'
+                        : 'border-brand-400/30 text-brand-400 hover:bg-brand-400/20 bg-brand-400/10'
                     }`}
                   >
                     {todosActivos ? 'Quitar todos' : `Activar todos (${cat.permisos.length - n})`}

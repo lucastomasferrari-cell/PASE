@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Lock } from 'lucide-react';
+import { Lock, User } from 'lucide-react';
 import { db } from '@/lib/supabase';
+import { SectionHeader, IconBox, Input, Label, Button } from '@/components/primitives';
 
 export function MiCuenta({ email }: { email: string }) {
   const [nueva, setNueva] = useState('');
@@ -22,34 +23,43 @@ export function MiCuenta({ email }: { email: string }) {
   }
 
   return (
-    <div className="space-y-5 max-w-md">
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-xs text-brand-400 tracking-widest2">· //</span>
-        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Mi cuenta</h1>
-      </div>
-      <div className="border-t border-b border-carbon-600 bg-transparent p-5">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-full bg-brand-100 text-brand-400 grid place-items-center font-medium">{(email[0] ?? '?').toUpperCase()}</div>
-          <div>
-            <div className="font-medium">{email}</div>
-            <div className="text-xs text-dim-300">Tu cuenta del ecosistema</div>
-          </div>
-        </div>
+    <div className="max-w-md">
+      <SectionHeader label="Mi cuenta" />
 
-        <p className="text-xs normal-case tracking-wide text-dim-300 mb-2 inline-flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Cambiar contraseña</p>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-dim-200">Nueva contraseña</label>
-            <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
+      {/* Cuenta — bloque hairline con avatar + email. */}
+      <div className="border-t border-b border-carbon-600 py-4 flex items-center gap-4">
+        <IconBox className="w-11 h-11">
+          <User className="h-5 w-5" />
+        </IconBox>
+        <div className="min-w-0">
+          <div className="font-medium text-dim-50 truncate">{email}</div>
+          <div className="mono text-[10px] uppercase tracking-widest2 text-dim-300 mt-0.5">Tu cuenta del ecosistema</div>
+        </div>
+      </div>
+
+      {/* Cambiar contraseña. */}
+      <div className="mt-8 space-y-4">
+        <p className="mono text-[11px] uppercase tracking-widest2 text-dim-200 inline-flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5" /> Cambiar contraseña
+        </p>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="mc-nueva">Nueva contraseña</Label>
+            <Input id="mc-nueva" type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-dim-200">Repetir</label>
-            <input type="password" value={confirma} onChange={(e) => setConfirma(e.target.value)} className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
+          <div>
+            <Label htmlFor="mc-confirma">Repetir</Label>
+            <Input id="mc-confirma" type="password" value={confirma} onChange={(e) => setConfirma(e.target.value)} />
           </div>
-          <button onClick={() => void submit()} disabled={guardando || !nueva || !confirma}
-                  className="w-full rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => void submit()}
+            disabled={guardando || !nueva || !confirma}
+            className="w-full border border-brand-400/20 hover:border-brand-400/50"
+          >
             {guardando ? 'Guardando…' : 'Actualizar contraseña'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

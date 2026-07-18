@@ -4,11 +4,8 @@
 
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode } from 'react';
 import { forwardRef } from 'react';
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-export function cn(...xs: (string | false | null | undefined)[]): string {
-  return xs.filter(Boolean).join(' ');
-}
+import { ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/cn';
 
 // ─── StatusDot ──────────────────────────────────────────────────────────────
 // Puntito con halo — semáforo del sistema. `live` es el más común (verde neón
@@ -156,28 +153,110 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 );
 
 // ─── Chip / Pill ────────────────────────────────────────────────────────────
-// Refactor 17-jul: outline sin fondo, esquinas rectas (rounded-sm) — mucho más
-// cerca del patrón Cocina "CORE_OPS · ACTIVE · MOD+1" que del pill relleno.
+// Cocina.OS: pill RELLENO sutil slate, esquinas redondeadas, mono 9px. Es el
+// chip de categoría de las filas (DUENO, ENCARGADO, SECURITY, ...).
 type ChipTone = 'default' | 'brand' | 'live' | 'warn' | 'gold' | 'off';
 const CHIP_TONE: Record<ChipTone, string> = {
-  default: 'text-dim-200 border-carbon-500',
-  brand:   'text-brand-300 border-brand-400/50',
-  live:    'text-live border-live/50',
-  warn:    'text-warn border-warn/50',
-  gold:    'text-gold border-gold/50',
-  off:     'text-dim-400 border-carbon-600',
+  default: 'text-dim-300',
+  brand:   'text-brand-300',
+  live:    'text-live',
+  warn:    'text-warn',
+  gold:    'text-gold',
+  off:     'text-dim-400',
 };
 export function Chip({ tone = 'default', className, children }: { tone?: ChipTone; className?: string; children: ReactNode }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 h-[22px] px-2 rounded-sm font-mono text-[10px] uppercase tracking-widest2 border bg-transparent',
+        'inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded',
         CHIP_TONE[tone],
         className,
       )}
     >
       {children}
     </span>
+  );
+}
+
+// ─── IconBox ──────────────────────────────────────────────────────────────────
+// Cuadrado celeste tenue que encabeza una fila (o una tarjeta). Copiado de la
+// `.icon-box` de cocina.os. `muted` = estado inactivo (gris + grayscale).
+export function IconBox({
+  children, muted, className,
+}: { children: ReactNode; muted?: boolean; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'w-9 h-9 flex-shrink-0 flex items-center justify-center rounded border',
+        muted ? 'border-slate-700/50 grayscale text-slate-500' : 'icon-box border-brand-400/20',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── SystemRow ────────────────────────────────────────────────────────────────
+// Fila de lista — el patrón CENTRAL del look cocina.os. Estructura:
+//   [icon-box] · [title + suffix / description] · [chip · status] · [kbd · chevron]
+// Toda la fila es clickeable (→ abrir/editar). `actions` inserta botones extra
+// (ej. toggle activo, reset) antes del chevron; se puede ocultar el chevron.
+type RowStatus = { label: string; tone?: 'active' | 'inactive' };
+export function SystemRow({
+  icon, title, suffix, description, category, status, kbd, actions,
+  muted, hideChevron, onClick, className,
+}: {
+  icon: ReactNode;
+  title: ReactNode;
+  suffix?: string;
+  description?: ReactNode;
+  category?: ReactNode;
+  status?: RowStatus;
+  kbd?: string;
+  actions?: ReactNode;
+  muted?: boolean;
+  hideChevron?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        'system-row group px-4 py-4 flex items-center gap-4 sm:gap-6',
+        onClick && 'cursor-pointer',
+        muted && 'opacity-50',
+        className,
+      )}
+    >
+      <IconBox muted={muted}>{icon}</IconBox>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-3">
+          <h3 className="text-base font-semibold group-hover:text-brand-400 transition-colors truncate">{title}</h3>
+          {suffix && <span className="font-mono text-[9px] text-dim-300 opacity-50 shrink-0">{suffix}</span>}
+        </div>
+        {description != null && <p className="text-xs text-dim-300 truncate">{description}</p>}
+      </div>
+      {(category || status) && (
+        <div className="hidden md:flex items-center gap-6 shrink-0">
+          {category && <div className="flex items-center gap-2">{category}</div>}
+          {status && (
+            <div className="flex items-center gap-2">
+              <span className={status.tone === 'inactive' ? 'status-inactive' : 'status-active'} />
+              <span className="font-mono text-[9px] text-dim-300">{status.label}</span>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-3 sm:gap-4 ml-2 sm:ml-4 shrink-0">
+        {actions}
+        {kbd && <span className="kbd-hint hidden sm:block">{kbd}</span>}
+        {!hideChevron && (
+          <ChevronRight className="h-4 w-4 text-brand-400 opacity-30 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all" />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -225,26 +304,22 @@ export function PageTitle({
 // + hairline horizontal completa. Se usa para separar bloques dentro de una
 // página sin envolverlos en cajas. Ver mockup 17-jul.
 export function SectionHeader({
-  icon,
-  code,
   label,
-  count,
   right,
+  count,
+  className,
 }: {
-  icon?: ReactNode;
-  code?: string;
   label: string;
-  count?: string | number;
   right?: ReactNode;
+  count?: string | number;
+  className?: string;
 }) {
   return (
-    <div className="flex items-center gap-3.5 pb-3 border-b border-carbon-600 mb-1">
-      {icon && <span className="text-brand-400 opacity-80 inline-flex items-center justify-center w-3.5 h-3.5">{icon}</span>}
-      {code && <span className="font-mono text-[11px] text-dim-400 tracking-[0.25em]">{code}</span>}
-      <span className="font-mono text-xs uppercase tracking-widest2 text-dim-100 font-medium">{label}</span>
-      <span className="flex-1" />
-      {right}
+    <div className={cn('flex items-center gap-3 mb-6', className)}>
+      <h2 className="font-mono text-[11px] font-semibold text-brand-400 tracking-[0.3em] uppercase whitespace-nowrap">{label}</h2>
+      <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
       {count != null && <span className="font-mono text-[10px] text-dim-400 tracking-widest2">{String(count).padStart(2, '0')}</span>}
+      {right}
     </div>
   );
 }

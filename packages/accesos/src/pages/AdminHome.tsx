@@ -1,15 +1,16 @@
-// Accesos — panel del dueño. Shell "Command Center" (17-jul-2026):
-// - Fondo carbon con acento celeste + dorado restringido.
-// - Sidebar oscuro numerado, hover celeste, indicador de sección activa.
-// - Status bar en el header (LIVE dot + tenant + sesión).
-// - Login card estilo terminal.
+// Accesos — panel del dueño. Shell "Cocina.OS" (17-jul-2026, refactor B):
+// - Launcher de una sola columna centrada (sin sidebar), fiel al launcher
+//   cocina.os (PASE/cocina/index.html).
+// - Status bar superior: dot DORADO "System Live" + SECURITY/SYNC + OPERATOR + reloj vivo.
+// - Hero de terminal `root@accesos:~# accesos.os` con cursor parpadeante y log de arranque.
+// - Navegación por fila de tabs mono (01 / Personas, 02 / POS, …).
+// - Scanline CRT sutil sobre todo.
 // Centraliza personas, roles, accesos a apps, PIN POS, auditoría, mi cuenta.
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  LogOut, ShieldCheck, Users, ScrollText, User, MapPin, ChevronDown, Check, Tags,
-  Tablet as TabletIcon, ArrowRight,
+  LogOut, MapPin, ChevronDown, Check, ArrowRight, Shield, Database,
 } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { esLocalVisible } from '@/lib/locales';
@@ -19,17 +20,28 @@ import { Marcas } from './Marcas';
 import { Roles } from './Roles';
 import { Auditoria } from './Auditoria';
 import { MiCuenta } from './MiCuenta';
-import { StatusDot, Button, Input, Label, cn } from '@/components/primitives';
+import { Input, Label } from '@/components/primitives';
+import { cn } from '@/lib/cn';
 
 type Seccion = 'personas' | 'pos' | 'roles' | 'marcas' | 'audit' | 'mi_cuenta';
 
-const NAV: { key: Seccion; label: string; num: string; icon: React.ReactNode }[] = [
-  { key: 'personas', num: '01', label: 'Personas',          icon: <Users className="h-[18px] w-[18px]" /> },
-  { key: 'pos',      num: '02', label: 'POS del local',     icon: <TabletIcon className="h-[18px] w-[18px]" /> },
-  { key: 'roles',    num: '03', label: 'Roles',             icon: <ShieldCheck className="h-[18px] w-[18px]" /> },
-  { key: 'marcas',   num: '04', label: 'Marcas y locales',  icon: <Tags className="h-[18px] w-[18px]" /> },
-  { key: 'audit',    num: '05', label: 'Actividad',         icon: <ScrollText className="h-[18px] w-[18px]" /> },
+const NAV: { key: Seccion; label: string; num: string }[] = [
+  { key: 'personas', num: '01', label: 'Personas' },
+  { key: 'pos',      num: '02', label: 'POS' },
+  { key: 'roles',    num: '03', label: 'Roles' },
+  { key: 'marcas',   num: '04', label: 'Marcas' },
+  { key: 'audit',    num: '05', label: 'Actividad' },
 ];
+
+// Log de arranque del hero por sección (sabor "consola").
+const BOOT: Record<Seccion, string[]> = {
+  personas: ['> AUTH_GATE: VERIFIED', '> ROSTER_01_LOADED: PERSONAS', '> PERMISSION_MATRIX: OK'],
+  pos:      ['> AUTH_GATE: VERIFIED', '> MODULE_02: POS_TERMINALS', '> PIN_REGISTRY: SYNCED'],
+  roles:    ['> AUTH_GATE: VERIFIED', '> MODULE_03: ROLE_MATRIX', '> PERMISSION_SETS: LOADED'],
+  marcas:   ['> AUTH_GATE: VERIFIED', '> MODULE_04: BRAND_REGISTRY', '> LOCALES_MAP: OK'],
+  audit:    ['> AUTH_GATE: VERIFIED', '> MODULE_05: ACTIVITY_LOG', '> STREAM: LIVE'],
+  mi_cuenta:['> AUTH_GATE: VERIFIED', '> SESSION_OWNER: SELF', '> CREDENTIALS: EDITABLE'],
+};
 
 interface LocalLite { id: number; nombre: string; }
 
@@ -126,6 +138,11 @@ export function AdminHome() {
     setSesion(null); setLocales([]); setLocalSel(null);
   }
 
+  const operator = useMemo(() => {
+    const base = (sesion?.email ?? '').split('@')[0] ?? '';
+    return base ? base.toUpperCase() : 'OPERATOR';
+  }, [sesion]);
+
   // ─── Estados de arranque / sin sesión ─────────────────────────────────────
   if (!supabaseConfigurado) {
     return (
@@ -141,29 +158,60 @@ export function AdminHome() {
                         setEmail={setEmail} setPassword={setPassword} onSubmit={entrar} />;
   }
 
-  // ─── App shell logueada ────────────────────────────────────────────────────
+  // ─── App shell logueada (launcher de una columna) ──────────────────────────
   return (
-    <div className="min-h-screen bg-carbon-900 md:flex">
-      <AppSidebar
-        seccion={seccion}
-        setSeccion={setSeccion}
-        email={sesion.email}
-        onLogout={salir}
-      />
+    <div className="min-h-screen flex flex-col bg-carbon-900">
+      <div className="scanline" />
 
-      <div className="flex-1 min-w-0 md:pl-64 flex flex-col min-h-screen">
-        <StatusBar
-          seccion={seccion}
-          horaLive={horaLive}
-          locales={locales}
-          localSel={localSel}
-          setLocalSel={setLocalSel}
-          userEmail={sesion.email}
-          onLogout={salir}
-        />
+      {/* Status bar superior. */}
+      <nav className="status-bar sticky top-0 z-40 px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-gold glow-dot animate-pulse" />
+            <span className="mono text-[10px] font-medium tracking-[0.2em] text-gold uppercase">System Live</span>
+          </div>
+          <div className="hidden md:flex gap-4 mono text-[10px] text-dim-300">
+            <span className="flex items-center gap-1.5"><Shield className="h-3 w-3" /> SECURITY: ENCRYPTED</span>
+            <span className="flex items-center gap-1.5"><Database className="h-3 w-3" /> SYNC: OK</span>
+          </div>
+        </div>
 
-        {/* Nav mobile — chips horizontales. */}
-        <nav className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 border-b border-carbon-600 bg-carbon-800">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {locales.length > 1 && seccion === 'pos' && (
+            <LocalSwitcher locales={locales} sel={localSel} onSelect={setLocalSel} />
+          )}
+          <button
+            onClick={() => setSeccion('mi_cuenta')}
+            className="mono text-[10px] text-dim-300 hover:text-dim-50 transition-colors"
+            title="Mi cuenta"
+          >
+            OPERATOR: <span className="text-brand-400">{operator}</span>
+          </button>
+          <div className="h-4 w-px bg-slate-800" />
+          <span className="mono text-[11px] font-medium tabular-nums">{horaLive}</span>
+          <button onClick={() => void salir()} className="text-dim-300 hover:text-crit transition-colors" title="Cerrar sesión">
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </nav>
+
+      <main className="flex-1 w-full max-w-[1000px] mx-auto px-4 sm:px-6 pt-8 pb-12">
+        {/* Hero de terminal. */}
+        <header className="mb-8 sm:mb-10 pl-1 sm:pl-2">
+          <div className="mono flex items-baseline gap-2 mb-2 flex-wrap">
+            <span className="text-brand-400 opacity-70">root@accesos:~#</span>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              accesos<span className="text-gold">.</span><span className="text-dim-300 font-light text-lg sm:text-xl">os</span>
+            </h1>
+            <span className="cursor" />
+          </div>
+          <div className="mono text-[10px] text-dim-300 opacity-60 flex flex-col gap-0.5 border-l border-slate-800 pl-4">
+            {BOOT[seccion].map((line) => <p key={line}>{line}</p>)}
+          </div>
+        </header>
+
+        {/* Fila de tabs de módulos. */}
+        <nav className="flex gap-5 sm:gap-6 mb-10 sm:mb-12 border-b border-slate-800 pb-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
           {NAV.map((it) => {
             const activo = seccion === it.key;
             return (
@@ -171,28 +219,40 @@ export function AdminHome() {
                 key={it.key}
                 onClick={() => setSeccion(it.key)}
                 className={cn(
-                  'shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono uppercase tracking-widest2 transition-colors',
+                  'mono text-[11px] tracking-[0.2em] uppercase pb-2 transition-colors',
                   activo
-                    ? 'bg-brand-400 text-carbon-900'
-                    : 'text-dim-300 hover:bg-carbon-700 hover:text-dim-50',
+                    ? 'font-semibold text-brand-400 border-b-2 border-brand-400'
+                    : 'font-medium text-dim-300 hover:text-dim-50',
                 )}
               >
-                <span>{it.num}</span>
-                <span>{it.label}</span>
+                {it.num} / {it.label}
               </button>
             );
           })}
         </nav>
 
-        <main className="flex-1 px-4 sm:px-6 py-6 min-w-0">
-          {seccion === 'personas' ? <Personas />
-            : seccion === 'pos' ? <PosLocal localId={localSel} locales={locales} />
-            : seccion === 'roles' ? <Roles />
-            : seccion === 'marcas' ? <Marcas />
-            : seccion === 'audit' ? <Auditoria />
-            : <MiCuenta email={sesion.email} />}
-        </main>
-      </div>
+        {/* Contenido de la sección. */}
+        {seccion === 'personas' ? <Personas />
+          : seccion === 'pos' ? <PosLocal localId={localSel} locales={locales} />
+          : seccion === 'roles' ? <Roles />
+          : seccion === 'marcas' ? <Marcas />
+          : seccion === 'audit' ? <Auditoria />
+          : <MiCuenta email={sesion.email} />}
+      </main>
+
+      <footer className="p-6 border-t border-slate-900 bg-[#04060B] flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-4 mono text-[10px] text-dim-300">
+          <span className="text-brand-400 uppercase font-semibold">v.05-STABLE</span>
+          <div className="w-1 h-1 rounded-full bg-slate-800" />
+          <span>ENCRYPTED_LINK: ACTIVE</span>
+          <div className="w-1 h-1 rounded-full bg-slate-800" />
+          <span>ECOSISTEMA · PASE · COMANDA · MESA</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs mono">
+          <span className="text-dim-300 opacity-60">BUILT_BY</span>
+          <span className="font-bold tracking-tight">accesos<span className="text-gold">.</span></span>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -201,13 +261,14 @@ export function AdminHome() {
 function BootScreen() {
   return (
     <div className="min-h-screen grid place-items-center bg-carbon-900">
+      <div className="scanline" />
       <div className="flex flex-col items-center gap-3">
         <div className="flex items-center gap-2">
-          <StatusDot tone="brand" pulse />
-          <span className="label-sys">Iniciando sistema</span>
+          <div className="w-2 h-2 rounded-full bg-gold glow-dot animate-pulse" />
+          <span className="mono text-[10px] font-medium tracking-[0.2em] text-gold uppercase">Iniciando sistema</span>
         </div>
-        <div className="text-3xl font-medium text-dim-50">
-          accesos<span className="text-gold">.</span>
+        <div className="mono text-3xl font-bold tracking-tight text-dim-50">
+          accesos<span className="text-gold">.</span><span className="text-dim-300 font-light text-xl">os</span>
         </div>
       </div>
     </div>
@@ -227,26 +288,30 @@ function LoginScreen({
 }) {
   return (
     <div className="min-h-screen grid place-items-center px-4 bg-carbon-900 relative overflow-hidden">
+      <div className="scanline" />
       {/* Halo celeste sutil detrás de la tarjeta. */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(117,170,219,0.10),transparent_60%)]" />
 
       <form onSubmit={onSubmit} className="relative w-full max-w-md">
         {/* Barra superior tipo consola. */}
-        <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest2 text-dim-300 mb-2 px-1">
+        <div className="flex items-center justify-between mono text-[10px] uppercase tracking-[0.2em] text-dim-300 mb-2 px-1">
           <div className="flex items-center gap-2">
-            <StatusDot tone="live" pulse />
-            <span>SYSTEM · READY</span>
+            <div className="w-2 h-2 rounded-full bg-gold glow-dot animate-pulse" />
+            <span className="text-gold">System · Ready</span>
           </div>
           <span>ACCESOS.SYS</span>
         </div>
 
-        <div className="bg-carbon-800 border-b border-carbon-600 rounded-sm shadow-card overflow-hidden">
-          {/* Header: logo. */}
+        <div className="bg-carbon-800 border border-carbon-600 rounded shadow-[0_8px_40px_rgba(0,0,0,0.5)] overflow-hidden">
+          {/* Header: logo terminal. */}
           <div className="px-6 pt-6 pb-4 border-b border-carbon-600">
-            <div className="text-3xl font-medium text-dim-50">
-              accesos<span className="text-gold">.</span>
+            <div className="mono flex items-baseline gap-2">
+              <span className="text-brand-400 opacity-70">root@accesos:~#</span>
+              <div className="text-2xl font-bold tracking-tight">
+                accesos<span className="text-gold">.</span><span className="text-dim-300 font-light text-lg">os</span>
+              </div>
             </div>
-            <p className="text-sm text-dim-200 mt-1">Gestión de personas y accesos del ecosistema.</p>
+            <p className="text-sm text-dim-300 mt-2">Gestión de personas y accesos del ecosistema.</p>
           </div>
 
           {/* Form. */}
@@ -271,155 +336,23 @@ function LoginScreen({
                 placeholder="••••••••"
               />
             </div>
-            <Button
+            <button
               type="submit"
-              variant="terminal"
-              size="lg"
               disabled={entrando}
-              className="w-full"
-              rightIcon={<ArrowRight className="h-4 w-4" />}
+              className="w-full inline-flex items-center justify-center gap-2 h-10 rounded-[3px] mono uppercase tracking-[0.2em] text-xs text-brand-300 border border-brand-400/20 hover:bg-brand-400/10 hover:text-brand-200 hover:border-brand-400/50 transition-all disabled:opacity-50"
             >
               {entrando ? 'Autenticando…' : 'Ejecutar ingreso'}
-            </Button>
+              <ArrowRight className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="px-6 pb-4 flex items-center justify-between text-[10px] font-mono uppercase tracking-widest2 text-dim-400">
+          <div className="px-6 pb-4 flex items-center justify-between mono text-[10px] uppercase tracking-[0.2em] text-dim-400">
             <span>ECOSISTEMA COCINA</span>
             <span>PASE · COMANDA · MESA</span>
           </div>
         </div>
       </form>
     </div>
-  );
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────
-function AppSidebar({
-  seccion, setSeccion, email, onLogout,
-}: {
-  seccion: Seccion;
-  setSeccion: (s: Seccion) => void;
-  email: string;
-  onLogout: () => void | Promise<void>;
-}) {
-  return (
-    <aside className="hidden md:flex md:flex-col md:w-64 md:fixed md:inset-y-0 z-30 bg-carbon-800 border-r border-carbon-600">
-      {/* Logo. */}
-      <div className="px-5 h-16 flex items-center justify-between border-b border-carbon-600">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-medium text-dim-50 leading-none">
-            accesos<span className="text-gold">.</span>
-          </span>
-        </div>
-        <span className="label-sys mb-0">v.05</span>
-      </div>
-
-      {/* Nav numerada. */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <div className="label-sys px-3 mb-2">Módulos</div>
-        {NAV.map((it) => {
-          const activo = seccion === it.key;
-          return (
-            <button
-              key={it.key}
-              onClick={() => setSeccion(it.key)}
-              className={cn(
-                'group w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm transition-colors relative',
-                activo
-                  ? 'bg-brand-400/10 text-dim-50'
-                  : 'text-dim-200 hover:bg-carbon-700 hover:text-dim-50',
-              )}
-            >
-              {/* Barra vertical de sección activa. */}
-              {activo && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-brand-400 rounded-r" />}
-              <span className={cn(
-                'font-mono text-[10px] tracking-widest2',
-                activo ? 'text-brand-400' : 'text-dim-400 group-hover:text-dim-300',
-              )}>{it.num}</span>
-              {it.icon}
-              <span className="flex-1 text-left">{it.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Footer: mi cuenta + salir. */}
-      <div className="border-t border-carbon-600 p-3 space-y-0.5">
-        <button
-          onClick={() => setSeccion('mi_cuenta')}
-          className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sm transition-colors',
-            seccion === 'mi_cuenta'
-              ? 'bg-brand-400/10 text-dim-50'
-              : 'text-dim-200 hover:bg-carbon-700 hover:text-dim-50',
-          )}
-          title={email}
-        >
-          <User className="h-4 w-4 shrink-0" />
-          <span className="truncate">{email}</span>
-        </button>
-        <button
-          onClick={() => void onLogout()}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sm text-dim-300 hover:bg-carbon-700 hover:text-crit transition-colors"
-        >
-          <LogOut className="h-4 w-4" /> Cerrar sesión
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-// ─── Status bar (header) ──────────────────────────────────────────────────
-function StatusBar({
-  seccion, horaLive, locales, localSel, setLocalSel, userEmail, onLogout,
-}: {
-  seccion: Seccion;
-  horaLive: string;
-  locales: LocalLite[];
-  localSel: number | null;
-  setLocalSel: (id: number) => void;
-  userEmail: string;
-  onLogout: () => void | Promise<void>;
-}) {
-  const seccionLabel = useMemo(
-    () => (seccion === 'mi_cuenta' ? 'MI CUENTA' : NAV.find((n) => n.key === seccion)?.label.toUpperCase()) ?? '',
-    [seccion],
-  );
-
-  return (
-    <header className="sticky top-0 z-20 bg-carbon-900/95 backdrop-blur">
-      {/* Fila única tipo Cocina: SYSTEM · SESSION · MOD ... USER. */}
-      <div className="hidden md:flex items-center justify-between px-6 h-9 text-[10px] font-mono uppercase tracking-widest2 text-dim-300 border-b border-carbon-600">
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2">
-            <StatusDot tone="live" pulse />
-            <span>SYSTEM · LIVE</span>
-          </div>
-          <span>SESSION · <span className="text-dim-100 tabular-nums">{horaLive}</span></span>
-          <span>MOD · {seccionLabel}</span>
-        </div>
-        <div className="flex items-center gap-5">
-          {locales.length > 1 && seccion === 'pos' && (
-            <LocalSwitcher locales={locales} sel={localSel} onSelect={setLocalSel} />
-          )}
-          <span>USER · <span className="text-dim-100">{userEmail}</span></span>
-        </div>
-      </div>
-
-      {/* Fila mobile: solo logo + botón salir. */}
-      <div className="md:hidden h-12 flex items-center gap-3 px-4 border-b border-carbon-600">
-        <span className="text-xl font-medium text-dim-50 leading-none">
-          accesos<span className="text-gold">.</span>
-        </span>
-        <button
-          onClick={() => void onLogout()}
-          className="ml-auto p-2 text-dim-300 hover:text-crit"
-          title="Salir"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
-      </div>
-    </header>
   );
 }
 
@@ -434,31 +367,31 @@ function LocalSwitcher({
   const [open, setOpen] = useState(false);
   const actual = locales.find((l) => l.id === sel);
   return (
-    <div className="relative ml-auto sm:ml-4">
+    <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-sm border-b border-carbon-600 bg-carbon-700 px-3 py-1.5 text-sm text-dim-100 hover:border-brand-400 hover:text-dim-50 max-w-[220px] transition-colors"
+        className="flex items-center gap-2 rounded border border-carbon-600 bg-carbon-800 px-3 py-1.5 text-dim-100 hover:border-brand-400 hover:text-dim-50 max-w-[200px] transition-colors"
       >
         <MapPin className="h-4 w-4 text-brand-400 shrink-0" />
-        <span className="truncate font-mono text-xs">{actual?.nombre ?? 'ELEGÍ LOCAL'}</span>
+        <span className="truncate mono text-[10px] tracking-widest2 uppercase">{actual?.nombre ?? 'ELEGÍ LOCAL'}</span>
         <ChevronDown className={cn('h-4 w-4 text-dim-300 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-40 w-56 rounded-sm border-b border-carbon-600 bg-carbon-800 shadow-card py-1">
+          <div className="absolute right-0 top-full mt-1.5 z-40 w-56 rounded border border-carbon-600 bg-carbon-800 shadow-[0_8px_40px_rgba(0,0,0,0.5)] py-1">
             {locales.map((l) => (
               <button
                 key={l.id}
                 onClick={() => { onSelect(l.id); setOpen(false); }}
                 className={cn(
-                  'w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors',
+                  'w-full flex items-center justify-between gap-2 px-3 py-2 text-left transition-colors',
                   l.id === sel
                     ? 'text-brand-300 bg-brand-400/10'
                     : 'text-dim-100 hover:bg-carbon-700',
                 )}
               >
-                <span className="truncate font-mono text-xs">{l.nombre}</span>
+                <span className="truncate mono text-[10px] tracking-widest2 uppercase">{l.nombre}</span>
                 {l.id === sel && <Check className="h-4 w-4 text-brand-400 shrink-0" />}
               </button>
             ))}

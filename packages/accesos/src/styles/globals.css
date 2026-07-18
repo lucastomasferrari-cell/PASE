@@ -1,107 +1,184 @@
+/* Inter (UI) + JetBrains Mono (system labels) — mismos pesos que el launcher
+   cocina.os (fuente de verdad del diseño). @import debe ir antes de todo. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* JetBrains Mono — carga local via Google Fonts (se resuelve por Vite/HTTP).
-   Peso 400/500 para uppercase labels + tabular-nums. */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* ─── Tokens Cocina.OS ─────────────────────────────────────────────────────
+   Copiados 1:1 de PASE/cocina/index.html. Son la fuente de verdad del look. */
+:root {
+  --pase-celeste: #75AADB;  /* acento primario */
+  --pase-gold:    #F5C518;  /* RESTRINGIDO: System Live, cursor, punto del logo */
+  --bg-command:   #060912;  /* fondo raíz */
+  --card-bg:      #0D1425;  /* paneles elevados (status bar, dropdowns) */
+  --border-dim:   #162035;  /* hairlines */
+  --text-dim:     #94A3B8;  /* texto secundario (slate) */
+  --text-bright:  #F8FAFC;  /* texto principal */
+  --status-green: #10b981;  /* estado operativo (ACTIVE/ONLINE/...) */
+}
 
 @layer base {
-  /* Base compacta (14px) como el prototipo aprobado. En 16px la UI se sentía
-     "con zoom": textos y paddings ocupaban demasiado. Todo lo que usa rem
-     (text-sm, p-4, gap, etc.) escala a ~87.5% de forma uniforme. */
+  /* Base 16px — la referencia respira; el 14px anterior apretaba todo. */
   html {
-    font-size: 14px;
+    font-size: 16px;
     color-scheme: dark;
   }
   body {
-    @apply bg-carbon-900 text-dim-50 antialiased;
-    /* Textura sutil: gradiente radial celeste imperceptible + grid de puntos
-       muy tenue para dar profundidad sin distraer. */
-    background-image:
-      radial-gradient(circle at 20% 0%, rgba(117,170,219,0.06), transparent 40%),
-      radial-gradient(circle at 100% 100%, rgba(245,197,24,0.03), transparent 40%);
-    background-attachment: fixed;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--bg-command);
+    color: var(--text-bright);
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
   }
 
-  /* Focus visible — halo celeste consistente en todo lado (accesibilidad). */
+  /* Foco visible — halo celeste consistente (accesibilidad). */
   :focus-visible {
-    @apply outline-none ring-2 ring-brand-400 ring-offset-2 ring-offset-carbon-900;
+    @apply outline-none ring-2 ring-brand-400 ring-offset-2;
+    --tw-ring-offset-color: var(--bg-command);
   }
 
-  /* Selección de texto en celeste PASE. */
   ::selection {
     background-color: rgba(117, 170, 219, 0.35);
-    color: #E6ECF5;
+    color: var(--text-bright);
   }
 }
 
 @layer components {
-  /* Etiqueta uppercase mono — se usa en toda la UI para "system labels"
-     (ROLES, ESTADO, USUARIO, etc.). Convención Command Center. */
+  /* Fuente mono para etiquetas de sistema, IDs, timestamps. */
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* Etiqueta uppercase mono — "system labels" (ROLES, ESTADO, etc.). */
   .label-sys {
     @apply font-mono text-[10px] uppercase tracking-widest2 text-dim-300;
   }
-  /* Valor mono con tabular-nums (para IDs, timestamps, contadores). */
   .value-mono {
     @apply font-mono tabular-nums text-dim-50;
   }
-  /* Tarjeta base del sistema. */
-  .card-sys {
-    @apply bg-carbon-800 border border-carbon-600 rounded-lg shadow-card;
+
+  /* ─── Piezas firma de cocina.os ───────────────────────────────────────── */
+
+  /* Scanline CRT sutil sobre todo. Un <div class="scanline"> al tope del body. */
+  .scanline {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 50;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent 50%, rgba(6, 9, 18, 0.07) 50%);
+    background-size: 100% 4px;
+  }
+
+  /* Cursor de terminal parpadeante (dorado). */
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 18px;
+    background: var(--pase-gold);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  /* Dot dorado con halo — "System Live". */
+  .glow-dot { box-shadow: 0 0 10px var(--pase-gold), 0 0 4px var(--pase-gold); }
+
+  /* Status bar superior. */
+  .status-bar {
+    background: rgba(13, 20, 37, 0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-dim);
+  }
+
+  /* Fila de lista — patrón central. */
+  .system-row {
+    border-bottom: 1px solid rgba(22, 32, 53, 0.6);
+    transition: all 0.2s ease;
+    background: transparent;
+  }
+  .system-row:hover {
+    background: rgba(117, 170, 219, 0.04);
+    border-color: var(--pase-celeste);
+    box-shadow: inset 0 0 20px rgba(117, 170, 219, 0.02);
+  }
+
+  /* Contenedor de icono de fila. */
+  .icon-box {
+    background: rgba(117, 170, 219, 0.08);
+    color: var(--pase-celeste);
+  }
+
+  /* Atajo de teclado. */
+  .kbd-hint {
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(117, 170, 219, 0.03);
+    border: 1px solid rgba(117, 170, 219, 0.1);
+    color: var(--text-dim);
+  }
+
+  /* Dots de estado de ítem (verde operativo / gris bloqueado). */
+  .status-active {
+    width: 6px; height: 6px; border-radius: 50%;
+    background-color: var(--status-green);
+    box-shadow: 0 0 8px var(--status-green);
+  }
+  .status-inactive {
+    width: 6px; height: 6px; border-radius: 50%;
+    background-color: #475569;
   }
 }
 
-/* ─── Reset global de form controls ───────────────────────────────────────
-   Chrome/Firefox aplican `background-color: field` a inputs y selects por
-   default. Ese fondo se "come" al `bg-transparent` de Tailwind y genera el
-   look de cajón grisáceo que Lucas rechazó. Este reset fuerza fondo
-   transparente + underline hairline en TODOS los inputs, sin salvedad
-   (checkbox/radio se excluyen). Sirve como piso — cualquier página puede
-   overridear con clases si necesita.
-   17-jul-2026. */
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ─── Reset de form controls ───────────────────────────────────────────────
+   Fondo transparente + underline hairline en inputs/select/textarea, alineado
+   a los tokens cocina.os. (checkbox/radio/color/range excluidos). */
 input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),
 select,
 textarea {
-  background-color: transparent !important;
+  background-color: transparent;
   background-image: none;
   border: 0;
-  border-bottom: 1px solid #1B2338; /* carbon-600 */
+  border-bottom: 1px solid var(--border-dim);
   border-radius: 0;
-  color: #E6ECF5;
+  color: var(--text-bright);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   transition: border-color 0.15s;
   box-shadow: none;
 }
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-bottom-color: #75AADB; /* brand-400 */
+  border-bottom-color: var(--pase-celeste);
 }
-/* Sacar el arrow default del select y poner uno custom (mono / dim). */
+/* Arrow custom del select (mono / dim). */
 select {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 22px;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237683A0' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 4px center;
   cursor: pointer;
 }
-/* Autofill (Chrome): eliminar el fondo amarillo/celeste que rompe el look. */
+/* Autofill (Chrome): eliminar fondo que rompe el look. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px #060912 inset !important;
-  -webkit-text-fill-color: #E6ECF5 !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-command) inset !important;
+  -webkit-text-fill-color: var(--text-bright) !important;
   transition: background-color 9999s;
 }
 
-/* Scrollbar fina y oscura — armoniza con el fondo carbon. */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #060912; }
-::-webkit-scrollbar-thumb {
-  background: #242D45;
-  border-radius: 999px;
-  border: 2px solid #060912;
-}
-::-webkit-scrollbar-thumb:hover { background: #3F4A63; }
+/* Scrollbar fina y oscura. */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-command); }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+/* Ocultar scrollbar horizontal en la barra de tabs. */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }

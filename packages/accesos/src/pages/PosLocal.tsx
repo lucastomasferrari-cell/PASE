@@ -7,7 +7,6 @@
 // header horizontal con label mono + count a la derecha + hairline debajo;
 // los items viven directo debajo, separados por hairlines.
 
-import { Tablet as TabletIcon, KeyRound } from 'lucide-react';
 import { Tablet } from './Tablet';
 import { PinPos } from './PinPos';
 import { SectionHeader } from '@/components/primitives';
@@ -19,28 +18,14 @@ interface Props {
 
 export function PosLocal({ localId, locales }: Props) {
   return (
-    <div className="space-y-8 max-w-4xl">
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-xs text-brand-400 tracking-widest2">02 //</span>
-        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">POS del local</h1>
-      </div>
-
+    <div className="space-y-12 max-w-4xl">
       <section>
-        <SectionHeader
-          icon={<TabletIcon className="h-3.5 w-3.5" />}
-          code="A0"
-          label="Dispositivos del local"
-          count={1}
-        />
+        <SectionHeader label="A0 · Dispositivos del local" count={1} />
         <Tablet localId={localId} locales={locales} />
       </section>
 
       <section>
-        <SectionHeader
-          icon={<KeyRound className="h-3.5 w-3.5" />}
-          code="A1"
-          label="Empleados con PIN"
-        />
+        <SectionHeader label="A1 · Empleados con PIN" />
         <PinPos localId={localId} locales={locales} />
       </section>
     </div>

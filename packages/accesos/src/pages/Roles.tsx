@@ -10,6 +10,20 @@ import { CATEGORIAS, type CategoriaPermisos } from '@/lib/permisos';
 import { CATEGORIAS_COMANDA } from '@/lib/permisosComanda';
 import { listRolPosPermisos, setRolPosPermisos } from '@/lib/rolPosService';
 import { CATEGORIAS_ROL_POS, TODOS_SLUGS_ROL_POS, ROLES_POS, ROL_POS_LABEL, type RolPos } from '@/lib/permisosRolPos';
+import { SystemRow, SectionHeader, Chip } from '@/components/primitives';
+import { cn } from '@/lib/cn';
+
+// Botón CTA mono outline — mismo patrón que "Nueva persona" de Personas.
+function CtaButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="mono text-[9px] font-semibold text-brand-400 hover:text-dim-50 flex items-center gap-2 border border-brand-400/20 px-3 py-1 rounded-[3px] transition-all uppercase tracking-widest"
+    >
+      {children}
+    </button>
+  );
+}
 
 export function Roles() {
   const [roles, setRoles] = useState<Rol[]>([]);
@@ -53,27 +67,30 @@ export function Roles() {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-xs text-brand-400 tracking-widest2">03 //</span>
-        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Roles</h1>
-      </div>
-      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-carbon-600">
-        <div className="inline-flex gap-6">
-          <button onClick={() => setFamilia('gestion')}
-                  className={`pb-2.5 -mb-px font-mono text-xs uppercase tracking-widest2 border-b-2 transition-colors ${familia === 'gestion' ? 'border-brand-400 text-brand-300' : 'border-transparent text-dim-300 hover:text-dim-100'}`}>Gestión · MAIL</button>
-          <button onClick={() => setFamilia('pos')}
-                  className={`pb-2.5 -mb-px font-mono text-xs uppercase tracking-widest2 border-b-2 transition-colors ${familia === 'pos' ? 'border-brand-400 text-brand-300' : 'border-transparent text-dim-300 hover:text-dim-100'}`}>POS · PIN</button>
-        </div>
-        {familia === 'gestion' && (
-          <button onClick={() => setCreando(true)}
-                  className="mb-2 rounded-sm bg-transparent border-0 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 px-3 h-8 text-xs inline-flex items-center gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> Nuevo rol
-          </button>
-        )}
-      </div>
+    <div className="max-w-5xl">
+      {/* Tabs de familia — mono celeste underline (mismo look que las tabs del shell). */}
+      <nav className="flex gap-5 sm:gap-6 mb-6 border-b border-slate-800 pb-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+        <button
+          onClick={() => setFamilia('gestion')}
+          className={cn(
+            'mono text-[11px] tracking-[0.2em] uppercase pb-2 transition-colors',
+            familia === 'gestion' ? 'font-semibold text-brand-400 border-b-2 border-brand-400' : 'font-medium text-dim-300 hover:text-dim-50',
+          )}
+        >
+          Gestión · Mail
+        </button>
+        <button
+          onClick={() => setFamilia('pos')}
+          className={cn(
+            'mono text-[11px] tracking-[0.2em] uppercase pb-2 transition-colors',
+            familia === 'pos' ? 'font-semibold text-brand-400 border-b-2 border-brand-400' : 'font-medium text-dim-300 hover:text-dim-50',
+          )}
+        >
+          POS · PIN
+        </button>
+      </nav>
 
-      <p className="text-xs text-dim-300">
+      <p className="text-xs text-dim-300 mb-6">
         {familia === 'gestion'
           ? 'Roles de las personas que entran con mail + contraseña (PASE, COMANDA admin). Se aplican al instante a todos los usuarios con ese rol.'
           : 'Roles de los empleados que entran con PIN en el terminal del POS. Definen qué puede hacer cada uno en el POS.'}
@@ -82,78 +99,78 @@ export function Roles() {
       {familia === 'pos' ? (
         <RolesPos />
       ) : cargando ? (
-        <div className="py-16 text-center text-dim-300">Cargando…</div>
+        <div className="py-16 text-center text-dim-300 mono text-xs uppercase tracking-widest2">Cargando…</div>
       ) : (
-        <div className="grid md:grid-cols-[360px_1fr] border-t border-carbon-600 min-h-[500px]">
-          {/* Lista de roles — filas apiladas con hairlines, sin cards individuales. */}
-          <aside className="md:border-r md:border-carbon-600 md:pr-5">
-            {roles.map((r) => {
-              const activo = sel?.id === r.id;
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => setSel(r)}
-                  className={`relative w-full text-left border-b border-carbon-600 py-3.5 px-1 flex items-center gap-3 transition-colors ${activo ? 'bg-brand-400/[0.06]' : 'hover:bg-brand-400/[0.03]'}`}
-                >
-                  {activo && <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-brand-400" />}
-                  <Lock className={`h-4 w-4 shrink-0 ${activo ? 'text-brand-400' : 'text-dim-400'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-medium text-dim-50 truncate">{r.nombre}</span>
-                      <span className={`font-mono text-[10px] uppercase tracking-widest2 shrink-0 ${activo ? 'text-brand-300' : 'text-dim-400'}`}>
-                        {r.permisos.length} PERMS
+        <>
+          <SectionHeader
+            label="Roles de gestión"
+            count={roles.length || undefined}
+            right={<CtaButton onClick={() => setCreando(true)}><Plus className="h-3 w-3" /> Nuevo rol</CtaButton>}
+          />
+
+          <div className="grid md:grid-cols-[340px_1fr] border-t border-carbon-600 min-h-[500px]">
+            {/* Lista de roles — SystemRows apiladas con hairlines. */}
+            <aside className="md:border-r md:border-carbon-600">
+              {roles.map((r) => {
+                const activo = sel?.id === r.id;
+                return (
+                  <SystemRow
+                    key={r.id}
+                    icon={<ShieldCheck className="h-5 w-5" />}
+                    title={r.nombre}
+                    description={r.descripcion || undefined}
+                    category={<Chip tone={activo ? 'brand' : 'default'}>{r.permisos.length} PERMS</Chip>}
+                    onClick={() => setSel(r)}
+                    className={cn(activo && 'bg-brand-400/[0.06]')}
+                  />
+                );
+              })}
+            </aside>
+
+            {/* Editor / detalle */}
+            {sel ? (
+              <div className="md:pl-8 pt-5 space-y-5">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <ShieldCheck className="h-5 w-5 text-brand-400" />
+                      <span className="text-xl font-semibold text-dim-50">{sel.nombre}</span>
+                      <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">
+                        {sel.permisos.length} PERMS · GESTIÓN
                       </span>
                     </div>
-                    {r.descripcion && <p className="text-xs text-dim-300 mt-1 line-clamp-2">{r.descripcion}</p>}
+                    {sel.descripcion && <p className="text-sm text-dim-300 mt-2">{sel.descripcion}</p>}
                   </div>
-                </button>
-              );
-            })}
-          </aside>
-
-          {/* Editor / detalle */}
-          {sel ? (
-            <div className="md:pl-8 pt-5 space-y-5">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <ShieldCheck className="h-5 w-5 text-brand-400" />
-                    <span className="text-xl font-semibold text-dim-50">{sel.nombre}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">
-                      {sel.permisos.length} PERMS · GESTIÓN
-                    </span>
-                  </div>
-                  {sel.descripcion && <p className="text-sm text-dim-300 mt-2">{sel.descripcion}</p>}
+                  {!sel.sistema && (
+                    <button
+                      onClick={() => void borrar(sel)}
+                      className="h-8 px-2.5 rounded-sm border-0 hover:border-crit hover:bg-crit/10 text-crit font-mono uppercase tracking-widest2 text-[11px] inline-flex items-center gap-1.5"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Borrar
+                    </button>
+                  )}
                 </div>
-                {!sel.sistema && (
-                  <button
-                    onClick={() => void borrar(sel)}
-                    className="h-8 px-2.5 rounded-sm border-0 hover:border-crit hover:bg-crit/10 text-crit font-mono uppercase tracking-widest2 text-[11px] inline-flex items-center gap-1.5"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Borrar
-                  </button>
-                )}
-              </div>
 
-              <AppPerms label="PASE" categorias={CATEGORIAS} activos={sel.permisos} toggle={toggle} />
-              <AppPerms label="COMANDA" categorias={CATEGORIAS_COMANDA} activos={sel.permisos} toggle={toggle} />
-              <p className="text-[11px] text-dim-400 pt-2">
-                Al elegir este rol en una persona se autocompletan estos permisos (PASE y COMANDA); después se ajustan en su ficha.
-              </p>
-            </div>
-          ) : (
-            <div className="md:pl-8 py-16 flex items-start justify-center">
-              <div className="border border-dashed border-carbon-500 px-10 py-8 text-center max-w-sm">
-                <p className="font-mono text-[11px] uppercase tracking-widest2 text-dim-300">
-                  Elegí un rol a la izquierda
-                </p>
-                <p className="font-mono text-[10px] tracking-widest2 text-brand-400 mt-1.5">
-                  ← // SELECT_ROLE
+                <AppPerms label="PASE" categorias={CATEGORIAS} activos={sel.permisos} toggle={toggle} />
+                <AppPerms label="COMANDA" categorias={CATEGORIAS_COMANDA} activos={sel.permisos} toggle={toggle} />
+                <p className="text-[11px] text-dim-400 pt-2">
+                  Al elegir este rol en una persona se autocompletan estos permisos (PASE y COMANDA); después se ajustan en su ficha.
                 </p>
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="md:pl-8 py-16 flex items-start justify-center">
+                <div className="border border-dashed border-carbon-500 px-10 py-8 text-center max-w-sm">
+                  <p className="font-mono text-[11px] uppercase tracking-widest2 text-dim-300">
+                    Elegí un rol a la izquierda
+                  </p>
+                  <p className="font-mono text-[10px] tracking-widest2 text-brand-400 mt-1.5">
+                    ← // SELECT_ROLE
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {creando && (
@@ -242,30 +259,29 @@ function RolesPos() {
     if (error) { toast.error(error); void reload(); }
   }
 
-  if (cargando) return <div className="py-16 text-center text-dim-300">Cargando…</div>;
+  if (cargando) return <div className="py-16 text-center text-dim-300 mono text-xs uppercase tracking-widest2">Cargando…</div>;
 
   return (
-    <div className="grid md:grid-cols-[360px_1fr] border-t border-carbon-600 min-h-[500px]">
-      {/* Lista de roles POS — filas con hairlines. */}
-      <aside className="md:border-r md:border-carbon-600 md:pr-5">
+    <div className="grid md:grid-cols-[340px_1fr] border-t border-carbon-600 min-h-[500px]">
+      {/* Lista de roles POS — SystemRows con hairlines. */}
+      <aside className="md:border-r md:border-carbon-600">
         {ROLES_POS.map((r) => {
           const activo = sel === r;
-          const n = (perms[r] ?? []).includes('*') ? '∞' : (perms[r] ?? []).length;
+          const total = perms[r] ?? [];
+          const n: number | '∞' = total.includes('*') ? '∞' : total.length;
           return (
-            <button
+            <SystemRow
               key={r}
-              onClick={() => setSel(r)}
-              className={`relative w-full text-left border-b border-carbon-600 py-3.5 px-1 flex items-center gap-3 transition-colors ${activo ? 'bg-brand-400/[0.06]' : 'hover:bg-brand-400/[0.03]'}`}
-            >
-              {activo && <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-brand-400" />}
-              <Lock className={`h-4 w-4 shrink-0 ${activo ? 'text-brand-400' : 'text-dim-400'}`} />
-              <div className="flex-1 flex items-baseline justify-between gap-3">
-                <span className="text-sm font-medium text-dim-50">{ROL_POS_LABEL[r]}</span>
-                <span className={`font-mono text-[10px] uppercase tracking-widest2 ${activo ? 'text-brand-300' : 'text-dim-400'}`}>
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title={ROL_POS_LABEL[r]}
+              category={
+                <Chip tone={activo ? 'brand' : 'default'}>
                   {n} {typeof n === 'number' && n === 1 ? 'PERM' : 'PERMS'}
-                </span>
-              </div>
-            </button>
+                </Chip>
+              }
+              onClick={() => setSel(r)}
+              className={cn(activo && 'bg-brand-400/[0.06]')}
+            />
           );
         })}
       </aside>

@@ -1,2 +1,7 @@
 .vercel
 .env*
+
+# superdesign — scaffolding de diseño (efímero); se conserva solo design-system.md
+.superdesign/init/
+.superdesign/tmp/
+.superdesign/reference-cocina-os.html

@@ -81,17 +81,11 @@ export function Marcas() {
   if (cargando) return <div className="text-dim-300 font-mono text-xs uppercase tracking-widest2 py-8">Cargando marcas…</div>;
 
   return (
-    <div className="space-y-8 max-w-4xl">
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-xs text-brand-400 tracking-widest2">04 //</span>
-        <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Marcas y locales</h1>
-      </div>
-
+    <div className="space-y-12 max-w-4xl">
       {/* ── Marcas del grupo ────────────────────────────────── */}
       <section>
         <SectionHeader
-          code="B0"
-          label="Marcas del grupo"
+          label="B0 · Marcas del grupo"
           count={marcas.length}
           right={
             !creando ? (
@@ -223,8 +217,7 @@ export function Marcas() {
       {/* ── Asignar locales → marca ────────────────────────── */}
       <section>
         <SectionHeader
-          code="B1"
-          label="Locales → marca"
+          label="B1 · Locales → marca"
           count={locales.length}
         />
         <p className="text-xs text-dim-400 mt-3 mb-2">A qué marca pertenece cada sucursal.</p>

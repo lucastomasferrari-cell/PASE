@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Tablet as TabletIcon, Copy, Eye, EyeOff, Info } from 'lucide-react';
 import { db } from '@/lib/supabase';
-import { MiniNote } from '@/components/primitives';
+import { MiniNote, IconBox } from '@/components/primitives';
 
 interface Props {
   localId: number | null;
@@ -126,12 +126,12 @@ export function Tablet({ localId, locales }: Props) {
       {/* Fila del dispositivo — sin caja, sin border interno. */}
       <div className="py-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-sm bg-carbon-700/60 flex items-center justify-center text-brand-300 shrink-0">
+          <IconBox muted={!yaExiste}>
             <TabletIcon className="h-4 w-4" />
-          </div>
+          </IconBox>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h3 className="text-[15px] font-medium text-dim-50">{local.nombre}</h3>
+              <h3 className="text-base font-semibold text-dim-50">{local.nombre}</h3>
               {yaExiste ? (
                 <span className="font-mono text-[10px] uppercase tracking-widest2 text-live">ACTIVA</span>
               ) : (
@@ -149,7 +149,7 @@ export function Tablet({ localId, locales }: Props) {
         </div>
 
         {/* Mail actual + form nueva contraseña, alineados al bloque de contenido. */}
-        <div className="pl-[54px] space-y-3 mt-4">
+        <div className="pl-[50px] space-y-3 mt-4">
           {yaExiste && (
             <div>
               <p className="label-sys mb-1.5">Mail de la tablet</p>
