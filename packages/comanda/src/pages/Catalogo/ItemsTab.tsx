@@ -54,8 +54,13 @@ export function ItemsTab({ user, forceScope }: Props) {
   const [hookScope] = useCatalogoScope();
   const scope = forceScope ?? hookScope;
 
-  const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
-  const puedeEliminar = tienePermiso(user, 'comanda.catalogo.eliminar');
+  // Gating por alcance: editar/eliminar el MAESTRO requiere el permiso
+  // maestro.editar (solo dueño). En una sucursal, los permisos genéricos.
+  // Así un manager con solo "importar" ve el maestro pero NO lo puede editar.
+  const puedeEditar = tienePermiso(user, scope === 'maestro' ? 'comanda.catalogo.maestro.editar' : 'comanda.catalogo.editar');
+  const puedeEliminar = tienePermiso(user, scope === 'maestro' ? 'comanda.catalogo.maestro.editar' : 'comanda.catalogo.eliminar');
+  // Importar el maestro a una sucursal: permiso propio (o el de editar, que lo incluye).
+  const puedeImportar = tienePermiso(user, 'comanda.catalogo.maestro.importar') || tienePermiso(user, 'comanda.catalogo.maestro.editar');
 
   const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
 
@@ -106,23 +111,27 @@ export function ItemsTab({ user, forceScope }: Props) {
               : `${items.length} ${items.length === 1 ? 'item' : 'items'} · copia editable de esta sucursal`}
           </p>
         </div>
-        {puedeEditar && (
+        {(puedeEditar || (scope === 'maestro' && puedeImportar) || !forceScope) && (
           <div className="flex items-center gap-2 flex-wrap">
             {/* Si el scope viene forzado (rutas /menu/maestro/*), no mostramos
                 el selector — el usuario está en la sección de marca dedicada y
                 el alcance está fijo en 'maestro'. En rutas /menu/* (sucursal),
                 el selector no muestra la opción 'maestro' (hideMaestro). */}
             {!forceScope && <CatalogoScopeSelector hideMaestro />}
-            {scope === 'maestro' && (
+            {/* Importar: visible con permiso de importar (aunque NO pueda editar
+                el maestro). Es la acción que un manager necesita. */}
+            {scope === 'maestro' && puedeImportar && (
               <Button variant="outline" onClick={() => setImportOpen(true)}>
                 <Download className="h-4 w-4 mr-1.5" />
                 Importar a sucursal
               </Button>
             )}
-            <Button onClick={() => setEditingItem('new')}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Nuevo item
-            </Button>
+            {puedeEditar && (
+              <Button onClick={() => setEditingItem('new')}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Nuevo item
+              </Button>
+            )}
           </div>
         )}
       </header>

@@ -47,8 +47,13 @@ export function ListaPreciosTab({ user, forceScope }: Props) {
 
   const [hookScope] = useCatalogoScope();
   const scope = forceScope ?? hookScope;
-  const puedeEditar = tienePermiso(user, 'comanda.precios.editar');
-  const puedeAumento = tienePermiso(user, 'comanda.precios.aumento_masivo');
+  // Editar precios del MAESTRO requiere maestro.editar (solo dueño); en sucursal, el genérico.
+  const puedeEditar = scope === 'maestro'
+    ? tienePermiso(user, 'comanda.catalogo.maestro.editar')
+    : tienePermiso(user, 'comanda.precios.editar');
+  const puedeAumento = scope === 'maestro'
+    ? tienePermiso(user, 'comanda.catalogo.maestro.editar')
+    : tienePermiso(user, 'comanda.precios.aumento_masivo');
 
   const reload = useCallback(async () => {
     setLoading(true);

@@ -10,6 +10,7 @@ const SLUGS_ACCIONES_COMANDA: ReadonlyArray<{ slug: string; label: string; modul
   { slug: 'comanda.inventario.ver',       label: 'Ver Inventario',                     modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.editar',      label: 'Editar items y grupos',              modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.eliminar',    label: 'Eliminar items',                     modulo: 'Catálogo' },
+  { slug: 'comanda.catalogo.maestro.importar', label: 'Importar Menú Marca a sucursal', modulo: 'Catálogo' },
   { slug: 'comanda.catalogo.maestro.editar', label: 'Editar Menú Marca (maestro)',    modulo: 'Catálogo' },
   { slug: 'comanda.canales.ver',          label: 'Ver canales',                        modulo: 'Catálogo' },
   { slug: 'comanda.canales.editar',       label: 'Editar canales',                     modulo: 'Catálogo' },

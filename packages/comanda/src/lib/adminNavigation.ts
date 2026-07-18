@@ -56,14 +56,16 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
     ],
   },
   {
-    // Menú Marca (maestro) — solo dueño. Es la plantilla que se replica
-    // a cada sucursal vía "Importar a sucursal". Los encargados de local
-    // no lo pueden tocar (permission gate).
+    // Menú Marca (maestro). Es la plantilla que se replica a cada sucursal
+    // vía "Importar a sucursal". Acceso: quien tenga IMPORTAR (o EDITAR, que lo
+    // incluye) — típicamente un manager con importar ve el maestro en lectura y
+    // lo importa a su local, pero NO puede editarlo (editar = solo dueño, se
+    // gatea adentro de cada tab). Ver ItemsTab/GruposTab/ListaPreciosTab.
     slug: 'menu-marca',
     label: 'Menú Marca',
     icon: Layers,
     href: '/menu/maestro/items',
-    requiredPermission: 'comanda.catalogo.maestro.editar',
+    requiredPermission: 'comanda.catalogo.maestro.importar',
     subItems: [
       { slug: 'items',         label: 'Items',           href: '/menu/maestro/items' },
       { slug: 'grupos',        label: 'Grupos',          href: '/menu/maestro/grupos' },

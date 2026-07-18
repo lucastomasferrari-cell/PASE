@@ -58,6 +58,7 @@ export const CATEGORIAS_ROL_POS: CategoriaPermisos[] = [
     titulo: 'Editar / gestión', emoji: '',
     permisos: [
       { slug: 'comanda.catalogo.editar', label: 'Editar menú' },
+      { slug: 'comanda.catalogo.maestro.importar', label: 'Importar Menú Marca a su local', descripcion: 'Ve el menú de la marca y lo importa a su sucursal. NO edita el maestro.' },
       { slug: 'comanda.pagos.editar', label: 'Editar métodos de cobro' },
       { slug: 'comanda.empleados.editar_pos', label: 'Setear PIN / rol de empleados' },
       { slug: 'comanda.clientes.editar', label: 'Editar clientes' },

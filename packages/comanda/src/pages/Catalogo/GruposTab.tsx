@@ -45,7 +45,8 @@ export function GruposTab({ user, forceScope }: Props) {
   const [hookScope] = useCatalogoScope();
   const scope = forceScope ?? hookScope;
 
-  const puedeEditar = tienePermiso(user, 'comanda.catalogo.editar');
+  // Editar el MAESTRO requiere maestro.editar (solo dueño); en sucursal, el genérico.
+  const puedeEditar = tienePermiso(user, scope === 'maestro' ? 'comanda.catalogo.maestro.editar' : 'comanda.catalogo.editar');
   const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
 
   const reload = useCallback(async () => {

@@ -98,13 +98,20 @@ export function usePermiso(slug: string): boolean {
   const { empleado } = useAuthPos();
   const slugsRolPos = usePermisosRolPos(empleado?.rol_pos ?? null);
 
+  // Convención: EDITAR incluye IMPORTAR el menú maestro (quien edita, importa).
+  // Así, dar acceso a la sección con "importar" no le saca acceso a quien tenga
+  // solo "editar".
+  const slugsAceptados = slug === 'comanda.catalogo.maestro.importar'
+    ? [slug, 'comanda.catalogo.maestro.editar']
+    : [slug];
+
   // 1. Sesión Supabase con permisos hidratados (superadmin/dueño/admin
   // pasan por bypass; encargados llevan el array de slugs en user.permisos).
-  if (user && userTienePermiso(user, slug)) return true;
+  if (user && slugsAceptados.some((s) => userTienePermiso(user, s))) return true;
 
   // 2. Sesión POS con empleado autenticado: derivar del rol_pos.
   if (empleado?.rol_pos && slugsRolPos) {
-    if (slugsRolPos.includes('*') || slugsRolPos.includes(slug)) return true;
+    if (slugsRolPos.includes('*') || slugsAceptados.some((s) => slugsRolPos.includes(s))) return true;
   }
 
   return false;

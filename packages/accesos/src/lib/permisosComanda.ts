@@ -165,6 +165,8 @@ export const CATEGORIAS_COMANDA: CategoriaPermisos[] = [
     permisos: [
       { slug: 'comanda.catalogo.editar', label: 'Editar items y grupos' },
       { slug: 'comanda.catalogo.eliminar', label: 'Eliminar items' },
+      { slug: 'comanda.catalogo.maestro.importar', label: 'Importar Menú Marca a sucursal', descripcion: 'Ve el menú de la marca (solo lectura) y lo importa a su local. NO edita el maestro.' },
+      { slug: 'comanda.catalogo.maestro.editar', label: 'Editar Menú Marca (maestro)', descripcion: 'Crear/editar/borrar items, grupos y precios de la plantilla de la marca. Uso dueño.' },
       { slug: 'comanda.canales.editar', label: 'Editar canales' },
       { slug: 'comanda.precios.editar', label: 'Editar precios' },
       { slug: 'comanda.precios.aumento_masivo', label: 'Aumento masivo de precios' },
