@@ -114,16 +114,16 @@ export function TenantWizard({ apiBase, onClose, onCreated }: Props) {
   return (
     <div className="fixed inset-0 z-50 bg-admin-bg/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-admin-surface border border-admin-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto shadow-xl"
+        className="bg-admin-surface border border-admin-border rounded max-w-2xl w-full max-h-[90vh] overflow-auto shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-admin-border">
           <div>
-            <h2 className="text-base font-medium text-admin-text">Crear nuevo tenant</h2>
-            <p className="text-xs text-admin-muted mt-0.5">Paso {paso} de 4</p>
+            <h2 className="mono text-[11px] font-semibold text-admin-accent uppercase tracking-[0.3em]">Crear nuevo tenant</h2>
+            <p className="mono text-[9px] text-admin-muted mt-1 uppercase tracking-widest">Paso {paso} de 4</p>
           </div>
-          <button onClick={onClose} className="text-admin-muted hover:text-admin-text">
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -146,7 +146,7 @@ export function TenantWizard({ apiBase, onClose, onCreated }: Props) {
         {/* Body */}
         <div className="px-5 py-5 space-y-4">
           {err && (
-            <div className="rounded border border-admin-danger/30 bg-admin-danger/10 text-admin-danger px-3 py-2 text-sm">
+            <div className="rounded border border-admin-danger/20 bg-admin-danger/10 text-admin-danger px-3 py-2 text-sm">
               {err}
             </div>
           )}
@@ -271,14 +271,14 @@ export function TenantWizard({ apiBase, onClose, onCreated }: Props) {
           <button
             onClick={paso === 1 ? onClose : back}
             disabled={creating}
-            className="flex items-center gap-1 px-3 py-2 rounded text-sm text-admin-muted hover:text-admin-text hover:bg-admin-border/40 disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-3 py-2 rounded-[3px] border border-admin-border mono text-[11px] uppercase tracking-widest text-admin-muted hover:bg-admin-surface-2 hover:text-admin-text disabled:opacity-50 transition-colors"
           >
             {paso === 1 ? 'Cancelar' : (<><ChevronLeft className="w-4 h-4" /> Atrás</>)}
           </button>
           {paso < 4 ? (
             <button
               onClick={next}
-              className="flex items-center gap-1 px-3 py-2 rounded text-sm bg-admin-accent text-admin-bg hover:bg-admin-accent/90"
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-[3px] border border-admin-accent/30 bg-admin-accent/10 mono text-[11px] uppercase tracking-widest text-admin-accent hover:bg-admin-accent/20 transition-colors"
             >
               Siguiente <ChevronRight className="w-4 h-4" />
             </button>
@@ -286,7 +286,7 @@ export function TenantWizard({ apiBase, onClose, onCreated }: Props) {
             <button
               onClick={crear}
               disabled={creating}
-              className="flex items-center gap-1.5 px-3 py-2 rounded text-sm bg-admin-success text-admin-bg hover:bg-admin-success/90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[3px] border border-admin-success/40 bg-admin-success/10 mono text-[11px] uppercase tracking-widest text-admin-success hover:bg-admin-success/20 disabled:opacity-50 transition-colors"
             >
               {creating ? (<><Loader2 className="w-4 h-4 animate-spin" /> Creando…</>) : 'Crear tenant'}
             </button>
@@ -297,12 +297,12 @@ export function TenantWizard({ apiBase, onClose, onCreated }: Props) {
   );
 }
 
-const inputCls = 'w-full px-3 py-2 rounded border border-admin-border bg-admin-bg text-sm text-admin-text placeholder-admin-muted focus:outline-none focus:border-admin-accent';
+const inputCls = 'w-full py-1.5 text-sm';
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="block text-xs text-admin-muted">{label}</label>
+      <label className="label-sys block">{label}</label>
       {children}
       {hint && <div className="text-[10px] text-admin-muted">{hint}</div>}
     </div>
@@ -311,8 +311,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function SummaryCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded border border-admin-border bg-admin-bg p-3">
-      <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-1">{label}</div>
+    <div className="rounded border border-admin-border bg-admin-surface-2 p-3">
+      <div className="label-sys mb-1">{label}</div>
       {children}
     </div>
   );

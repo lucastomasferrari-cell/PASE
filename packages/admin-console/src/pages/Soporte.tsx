@@ -92,7 +92,7 @@ export function Soporte() {
           onBack={() => setSelectedId(null)}
         />
       ) : (
-        <div className="flex-1 hidden md:flex items-center justify-center text-admin-muted text-sm">
+        <div className="flex-1 hidden md:flex items-center justify-center bg-admin-bg mono text-[11px] uppercase tracking-widest text-admin-muted">
           {tickets.length === 0
             ? 'No hay tickets que coincidan con los filtros.'
             : 'Seleccioná un ticket de la lista.'}

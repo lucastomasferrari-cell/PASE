@@ -10,27 +10,31 @@ const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
       colors: {
         admin: {
-          // Base — paleta "Argentina 2006" idéntica a dark mode de PASE
-          bg:           '#0C1220',  // canvas
-          surface:      '#1A2540',  // cards / panels
-          'surface-2':  '#2A3550',  // chips / secciones
-          border:       '#2A3550',  // hairlines
-          'border-strong': '#3F4D6E',
-          text:         '#F0F4F8',  // primary
-          muted:        '#93A8C2',  // muted text
+          // Base — retuneado 1:1 a los tokens de cocina.os (ver index.css :root).
+          bg:           '#060912',  // --bg-command : canvas
+          surface:      '#0D1425',  // --card-bg    : cards / panels
+          'surface-2':  '#0F1A2E',  // chips / secciones (hover elevado)
+          border:       '#162035',  // --border-dim : hairlines
+          'border-strong': '#1E293B',
+          text:         '#F8FAFC',  // --text-bright : primary
+          muted:        '#94A3B8',  // --text-dim    : muted text
 
           // Acentos de marca — únicos celestes/dorados permitidos
-          accent:       '#75AADB',  // pase-celeste (IRAM 7677-2002)
-          'accent-100': '#1E3155',  // hover/active backgrounds (dark)
+          accent:       '#75AADB',  // --pase-celeste (IRAM 7677-2002)
+          'accent-100': '#12233B',  // hover/active backgrounds (dark)
           'accent-300': '#4A6FA8',  // sparkline / mid
-          gold:         '#F5C518',  // SOLO logo dot + indicador "en vivo"
+          gold:         '#F5C518',  // --pase-gold : SOLO System Live + logo dot
 
-          // Estados funcionales — alineados con --success/--warn/--danger de PASE
-          success:      '#2C7A55',
-          warn:         '#D97706',
-          danger:       '#B91C1C',
+          // Estados funcionales.
+          success:      '#10b981',  // --status-green
+          warn:         '#FBBF24',
+          danger:       '#F87171',
         },
       },
     },

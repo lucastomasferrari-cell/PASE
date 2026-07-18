@@ -92,25 +92,25 @@ export function TenantsFeaturesMatriz() {
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
-          <Grid3x3 className="w-5 h-5 text-admin-accent" />
-          Funciones (matriz)
-        </h1>
-        <p className="text-xs text-admin-muted mt-1">
-          Vista comparativa tenants × funciones. Click en una celda para activar/desactivar.
-        </p>
-      </header>
+      <div className="flex items-center gap-4">
+        <h2 className="font-mono text-[11px] font-semibold text-admin-accent tracking-[0.3em] uppercase whitespace-nowrap inline-flex items-center gap-2">
+          <Grid3x3 className="w-3.5 h-3.5" /> 03 / Funciones · Matriz
+        </h2>
+        <div className="h-px flex-1 bg-gradient-to-r from-admin-border-strong to-transparent" />
+      </div>
+      <p className="text-xs text-admin-muted">
+        Vista comparativa tenants × funciones. Click en una celda para activar/desactivar.
+      </p>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-admin-muted">Categoría:</span>
+        <span className="label-sys">Categoría</span>
         <button
           onClick={() => setFiltroCat('todas')}
           className={cn(
-            'px-2.5 py-1 rounded text-xs border',
+            'px-2.5 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border transition-colors',
             filtroCat === 'todas'
-              ? 'bg-admin-accent text-admin-bg border-admin-accent'
-              : 'border-admin-border text-admin-muted hover:text-admin-text',
+              ? 'border-admin-accent/30 bg-admin-accent/10 text-admin-accent'
+              : 'border-admin-border text-admin-muted hover:text-admin-text hover:bg-admin-surface-2',
           )}
         >
           Todas ({FEATURES.length})
@@ -123,10 +123,10 @@ export function TenantsFeaturesMatriz() {
               key={cat}
               onClick={() => setFiltroCat(cat)}
               className={cn(
-                'px-2.5 py-1 rounded text-xs border',
+                'px-2.5 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border transition-colors',
                 filtroCat === cat
-                  ? 'bg-admin-accent text-admin-bg border-admin-accent'
-                  : 'border-admin-border text-admin-muted hover:text-admin-text',
+                  ? 'border-admin-accent/30 bg-admin-accent/10 text-admin-accent'
+                  : 'border-admin-border text-admin-muted hover:text-admin-text hover:bg-admin-surface-2',
               )}
             >
               {cat} ({n})
@@ -135,10 +135,10 @@ export function TenantsFeaturesMatriz() {
         })}
       </div>
 
-      {error && <div className="rounded border border-admin-danger/30 bg-admin-danger/10 text-admin-danger px-3 py-2 text-sm">{error}</div>}
+      {error && <div className="rounded border border-admin-danger/20 bg-admin-danger/10 text-admin-danger px-3 py-2 text-sm">{error}</div>}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-admin-muted text-sm gap-2">
+        <div className="flex items-center justify-center py-12 text-admin-muted mono text-xs uppercase tracking-widest gap-2">
           <Loader2 className="w-4 h-4 animate-spin" /> Cargando matriz…
         </div>
       ) : (
@@ -146,36 +146,36 @@ export function TenantsFeaturesMatriz() {
           <table className="w-full text-sm">
             <thead className="bg-admin-bg">
               <tr>
-                <th className="text-left px-3 py-2 sticky left-0 bg-admin-bg border-r border-admin-border min-w-[220px] font-medium text-admin-muted text-xs normal-case tracking-wider">
+                <th className="text-left px-3 py-2.5 sticky left-0 bg-admin-bg border-r border-admin-border min-w-[220px] label-sys">
                   Función
                 </th>
                 {tenants.map((t) => (
-                  <th key={t.id} className="text-center px-2 py-2 min-w-[100px] font-medium">
+                  <th key={t.id} className="text-center px-2 py-2.5 min-w-[100px]">
                     <button
                       onClick={() => navigate(`/tenants/${t.id}/features`)}
-                      className="text-xs text-admin-accent hover:underline"
+                      className="mono text-[10px] uppercase tracking-widest text-admin-accent hover:underline"
                       title="Ver detalle"
                     >
                       {t.nombre}
                     </button>
-                    <div className="text-[10px] text-admin-muted font-mono mt-0.5">{t.slug}</div>
+                    <div className="text-[9px] text-admin-muted font-mono mt-0.5">{t.slug}</div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {featuresVisibles.map((f, idx) => (
-                <tr key={f.slug} className={cn(idx > 0 && 'border-t border-admin-border/50')}>
+                <tr key={f.slug} className={cn(idx > 0 && 'border-t border-admin-border')}>
                   <td className="px-3 py-2.5 sticky left-0 bg-admin-surface border-r border-admin-border">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-medium text-admin-text">{f.label}</span>
                       {f.beta && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-admin-accent/15 text-admin-accent font-medium">
+                        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-admin-accent/10 text-admin-accent border border-admin-accent/20 uppercase tracking-wider">
                           BETA
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-admin-muted font-mono mt-0.5">
+                    <div className="text-[9px] text-admin-muted font-mono mt-0.5">
                       {f.slug} · def {f.default_habilitado ? 'ON' : 'OFF'}
                     </div>
                   </td>
@@ -200,7 +200,7 @@ export function TenantsFeaturesMatriz() {
                           )}
                         >
                           <span className={cn(
-                            'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all',
+                            'absolute top-0.5 w-4 h-4 rounded-full bg-admin-text shadow transition-all',
                             habilitado ? 'left-[18px]' : 'left-0.5',
                           )} />
                         </button>

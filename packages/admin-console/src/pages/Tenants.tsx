@@ -29,13 +29,13 @@ interface TenantRow {
 
 // Mapeo estado de subscription → color del badge.
 const ESTADO_COLORS: Record<string, string> = {
-  trial:          'bg-admin-accent/15 text-admin-accent border-admin-accent/30',
-  pending_payment:'bg-admin-warn/15 text-admin-warn border-admin-warn/30',
-  active:         'bg-admin-success/15 text-admin-success border-admin-success/30',
-  past_due:       'bg-admin-warn/15 text-admin-warn border-admin-warn/30',
-  suspended:      'bg-admin-danger/15 text-admin-danger border-admin-danger/30',
-  cancelled:      'bg-admin-border text-admin-muted border-admin-border',
-  trial_expired:  'bg-admin-danger/15 text-admin-danger border-admin-danger/30',
+  trial:          'bg-admin-accent/10 text-admin-accent border-admin-accent/20',
+  pending_payment:'bg-admin-warn/10 text-admin-warn border-admin-warn/20',
+  active:         'bg-admin-success/10 text-admin-success border-admin-success/20',
+  past_due:       'bg-admin-warn/10 text-admin-warn border-admin-warn/20',
+  suspended:      'bg-admin-danger/10 text-admin-danger border-admin-danger/20',
+  cancelled:      'bg-slate-900/50 text-admin-muted border-admin-border',
+  trial_expired:  'bg-admin-danger/10 text-admin-danger border-admin-danger/20',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
@@ -173,164 +173,175 @@ export function Tenants() {
     : tenants;
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-admin-accent" />
-            Tenants
-          </h1>
-          <p className="text-xs text-admin-muted mt-1">
-            Gestión de cuentas-cliente. Crear, suspender, ver como.
-          </p>
-        </div>
+    <div>
+      {/* Cabecera de sección + CTA. */}
+      <div className="flex items-center gap-4 mb-6">
+        <h2 className="font-mono text-[11px] font-semibold text-admin-accent tracking-[0.3em] uppercase whitespace-nowrap">
+          02 / Tenants
+        </h2>
+        <div className="h-px flex-1 bg-gradient-to-r from-admin-border-strong to-transparent" />
+        <span className="mono text-[9px] text-admin-muted tracking-widest whitespace-nowrap">
+          {filtered.length} / {tenants.length}
+        </span>
         <button
           onClick={() => setWizardOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded text-sm bg-admin-accent text-admin-bg hover:bg-admin-accent/90 transition-colors"
+          className="border border-admin-accent/20 text-admin-accent px-3 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest hover:bg-admin-accent/10 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
         >
-          <Plus className="w-4 h-4" /> Nuevo tenant
+          <Plus className="w-3 h-3" /> Nuevo tenant
         </button>
-      </header>
+      </div>
 
       {flash && (
-        <div className="rounded border border-admin-success/30 bg-admin-success/10 text-admin-success px-3 py-2 text-sm">
+        <div className="rounded border border-admin-success/20 bg-admin-success/10 text-admin-success px-3 py-2 text-sm mb-6">
           {flash}
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-muted" />
+      {/* Buscador — campo integrado slate. */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 px-4 py-2 bg-slate-900/50 rounded border border-admin-border focus-within:border-admin-accent/40 transition-colors">
+          <Search className="w-4 h-4 text-admin-muted shrink-0" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nombre o slug…"
-            className="w-full pl-8 pr-3 py-2 rounded border border-admin-border bg-admin-surface text-sm text-admin-text placeholder-admin-muted focus:outline-none focus:border-admin-accent"
+            placeholder="BUSCAR POR NOMBRE O SLUG…"
+            className="flex-1 bg-transparent border-0 mono text-[10px] tracking-widest uppercase text-admin-text placeholder:text-admin-muted/70"
           />
         </div>
-        <span className="text-xs text-admin-muted">{filtered.length} de {tenants.length}</span>
       </div>
 
-      <div className="rounded border border-admin-border bg-admin-surface overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-12 text-admin-muted text-sm gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Cargando tenants…
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-12 text-center text-admin-muted text-sm">
-            {search ? 'No hay tenants que coincidan con la búsqueda.' : 'No hay tenants todavía. Creá el primero.'}
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-admin-bg border-b border-admin-border">
-              <tr className="text-left">
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Nombre</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Plan / Estado</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Locales</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Usuarios</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right" title="Costo del bot IG hoy / cap diario">IG hoy</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Creado</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(t => (
-                <tr key={t.id} className={cn('border-b border-admin-border/50 last:border-0', !t.activo && 'opacity-50')}>
-                  <td className="px-3 py-2.5">
-                    <div className="text-admin-text font-medium">{t.nombre}</div>
-                    <div className="text-[11px] text-admin-muted font-mono">{t.slug}</div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="text-admin-text text-xs">{t.plan || '—'}</div>
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-admin-muted mono text-xs uppercase tracking-widest gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Cargando tenants…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 text-center">
+          <p className="font-medium text-admin-text">Sin resultados</p>
+          <p className="text-sm text-admin-muted mt-1">
+            {search ? 'Probá otra búsqueda o creá un tenant nuevo.' : 'No hay tenants todavía. Creá el primero.'}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          {filtered.map(t => {
+            const gasto = t.ig_gasto_hoy ?? 0;
+            const cap = t.ig_cap_diario ?? 5;
+            const pct = cap > 0 ? gasto / cap : 0;
+            const igCls = pct >= 1 ? 'text-admin-danger font-medium'
+              : pct >= 0.8 ? 'text-admin-warn font-medium'
+              : gasto > 0 ? 'text-admin-text'
+              : 'text-admin-muted';
+            return (
+              <div key={t.id} className={cn('system-row group px-4 py-4 flex items-center gap-4 sm:gap-6', !t.activo && 'opacity-60')}>
+                <div className="icon-box w-9 h-9 rounded border border-admin-accent/20 flex items-center justify-center shrink-0">
+                  <Building2 className="w-4 h-4" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-semibold text-admin-text group-hover:text-admin-accent transition-colors truncate">{t.nombre}</span>
+                    <span className="font-mono text-[9px] text-admin-muted opacity-50 shrink-0">{t.slug}</span>
+                  </div>
+                  <div className="text-xs text-admin-muted truncate flex items-center gap-2">
+                    <span>{t.plan || '—'}</span>
+                    <span className="opacity-40">·</span>
+                    <span className="font-mono">{t.created_at ? t.created_at.slice(0, 10) : '—'}</span>
                     {t.sub_estado && (
                       <span className={cn(
-                        'inline-block mt-0.5 text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded border',
+                        'font-mono text-[9px] uppercase tracking-wider px-2 py-0.5 rounded border',
                         ESTADO_COLORS[t.sub_estado] || ESTADO_COLORS['cancelled'],
                       )}>
                         {ESTADO_LABELS[t.sub_estado] || t.sub_estado}
                       </span>
                     )}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-admin-text font-mono">{t.num_locales}</td>
-                  <td className="px-3 py-2.5 text-right text-admin-text font-mono">{t.num_usuarios}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-xs">
-                    {t.ig_cap_diario != null ? (() => {
-                      const gasto = t.ig_gasto_hoy ?? 0;
-                      const cap = t.ig_cap_diario ?? 5;
-                      const pct = cap > 0 ? gasto / cap : 0;
-                      const cls = pct >= 1 ? 'text-admin-danger font-medium'
-                        : pct >= 0.8 ? 'text-admin-warn font-medium'
-                        : gasto > 0 ? 'text-admin-text'
-                        : 'text-admin-muted';
-                      return <span className={cls} title={`${(pct * 100).toFixed(0)}% del cap`}>
-                        ${gasto.toFixed(2)} / ${cap.toFixed(0)}
-                      </span>;
-                    })() : <span className="text-admin-muted">—</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-admin-muted text-xs font-mono">
-                    {t.created_at ? t.created_at.slice(0, 10) : '—'}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center justify-end gap-1">
-                      {/* AUDIT F6B#1: botón "Ver" oculto hasta implementar el handler en PASE.
-                          Antes hacía window.open(?as=uuid) pero PASE nunca lo leía. */}
-                      <button
-                        onClick={() => verComo(t)}
-                        className="hidden px-2 py-1 rounded text-xs text-admin-muted hover:text-admin-text hover:bg-admin-border/40 flex items-center gap-1"
-                        title="Pendiente: implementar handler ?as=<uuid> en PASE"
-                      >
-                        <ExternalLink className="w-3 h-3" /> Ver
-                      </button>
-                      <button
-                        onClick={() => navigate(`/tenants/${t.id}/features`)}
-                        className="px-2 py-1 rounded text-xs text-admin-muted hover:text-admin-text hover:bg-admin-border/40 flex items-center gap-1"
-                        title="Activar/desactivar funciones del tenant"
-                      >
-                        <ToggleLeft className="w-3 h-3" /> Funciones
-                      </button>
-                      <button
-                        onClick={() => navigate(`/tenants/${t.id}/billing`)}
-                        className="px-2 py-1 rounded text-xs text-admin-muted hover:text-admin-text hover:bg-admin-border/40 flex items-center gap-1"
-                        title="Suscripción y facturación"
-                      >
-                        <CreditCard className="w-3 h-3" /> Billing
-                      </button>
-                      <button
-                        onClick={() => toggleActivo(t)}
-                        className={cn(
-                          'px-2 py-1 rounded text-xs hover:bg-admin-border/40',
-                          t.activo ? 'text-admin-muted hover:text-admin-warn' : 'text-admin-success',
-                        )}
-                      >
-                        {t.activo ? 'Desactivar' : 'Activar'}
-                      </button>
-                      {/* AUDIT F6B: botones eliminar/restaurar (antes solo
-                          accesibles vía scripts a mano). Confirmación fuerte
-                          en eliminar — requiere typing del slug. */}
-                      {!t.activo && (
-                        <button
-                          onClick={() => restaurarTenant(t)}
-                          className="px-2 py-1 rounded text-xs text-admin-success hover:bg-admin-border/40"
-                          title="Restaurar tenant desde backup"
-                        >
-                          Restaurar
-                        </button>
-                      )}
-                      <button
-                        onClick={() => eliminarTenant(t)}
-                        className="px-2 py-1 rounded text-xs text-admin-danger hover:bg-admin-border/40"
-                        title="Eliminar tenant PERMANENTEMENTE (requiere typing del slug)"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                  </div>
+                </div>
+
+                {/* Métricas — chips slate. */}
+                <div className="hidden lg:flex items-center gap-2 shrink-0">
+                  <span className="font-mono text-[9px] uppercase tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded text-admin-muted">
+                    {t.num_locales} LOC
+                  </span>
+                  <span className="font-mono text-[9px] uppercase tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded text-admin-muted">
+                    {t.num_usuarios} USR
+                  </span>
+                  {t.ig_cap_diario != null && (
+                    <span
+                      className={cn('font-mono text-[9px] bg-slate-900/50 px-2 py-0.5 rounded', igCls)}
+                      title={`IG hoy — ${(pct * 100).toFixed(0)}% del cap`}
+                    >
+                      IG ${gasto.toFixed(2)}/${cap.toFixed(0)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Estado activo. */}
+                <div className="hidden sm:flex items-center gap-1.5 shrink-0 w-16">
+                  <span className={t.activo ? 'status-active' : 'status-inactive'} />
+                  <span className="mono text-[9px] text-admin-muted">{t.activo ? 'ACTIVE' : 'OFF'}</span>
+                </div>
+
+                {/* Acciones. */}
+                <div className="flex items-center justify-end flex-wrap gap-1 shrink-0">
+                  {/* AUDIT F6B#1: botón "Ver" oculto hasta implementar el handler en PASE.
+                      Antes hacía window.open(?as=uuid) pero PASE nunca lo leía. */}
+                  <button
+                    onClick={() => verComo(t)}
+                    className="hidden px-2 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest text-admin-muted hover:text-admin-text hover:bg-admin-surface-2 items-center gap-1"
+                    title="Pendiente: implementar handler ?as=<uuid> en PASE"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Ver
+                  </button>
+                  <button
+                    onClick={() => navigate(`/tenants/${t.id}/features`)}
+                    className="px-2 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border border-admin-border text-admin-muted hover:text-admin-text hover:bg-admin-surface-2 inline-flex items-center gap-1 transition-colors"
+                    title="Activar/desactivar funciones del tenant"
+                  >
+                    <ToggleLeft className="w-3 h-3" /> Funciones
+                  </button>
+                  <button
+                    onClick={() => navigate(`/tenants/${t.id}/billing`)}
+                    className="px-2 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border border-admin-border text-admin-muted hover:text-admin-text hover:bg-admin-surface-2 inline-flex items-center gap-1 transition-colors"
+                    title="Suscripción y facturación"
+                  >
+                    <CreditCard className="w-3 h-3" /> Billing
+                  </button>
+                  <button
+                    onClick={() => toggleActivo(t)}
+                    className={cn(
+                      'px-2 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border transition-colors',
+                      t.activo
+                        ? 'border-admin-border text-admin-muted hover:text-admin-warn hover:border-admin-warn/40'
+                        : 'border-admin-success/40 text-admin-success hover:bg-admin-success/10',
+                    )}
+                  >
+                    {t.activo ? 'Desactivar' : 'Activar'}
+                  </button>
+                  {/* AUDIT F6B: botones eliminar/restaurar (antes solo
+                      accesibles vía scripts a mano). Confirmación fuerte
+                      en eliminar — requiere typing del slug. */}
+                  {!t.activo && (
+                    <button
+                      onClick={() => restaurarTenant(t)}
+                      className="px-2 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border border-admin-success/40 text-admin-success hover:bg-admin-success/10 transition-colors"
+                      title="Restaurar tenant desde backup"
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => eliminarTenant(t)}
+                    className="px-2 py-1 rounded-[3px] mono text-[9px] uppercase tracking-widest border border-admin-danger/40 text-admin-danger hover:bg-admin-danger/10 transition-colors"
+                    title="Eliminar tenant PERMANENTEMENTE (requiere typing del slug)"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Wizard de creación — modal de 4 pasos como antes en PASE. */}
       {wizardOpen && (

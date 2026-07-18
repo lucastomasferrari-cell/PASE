@@ -46,25 +46,20 @@ export function PushToggle({ userId }: Props) {
   }
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={loading}
-        className="w-full text-left text-xs flex items-center gap-1.5 px-2 py-1.5 rounded text-admin-muted hover:text-admin-text hover:bg-admin-border/40 disabled:opacity-50"
-      >
-        {loading ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : state.subscribed ? (
-          <Bell className="w-3.5 h-3.5 text-admin-success" />
-        ) : (
-          <BellOff className="w-3.5 h-3.5" />
-        )}
-        <span>{state.subscribed ? 'Notificaciones activas' : 'Activar notificaciones'}</span>
-      </button>
-      {error && (
-        <div className="text-[10px] text-admin-danger px-2 mt-1">{error}</div>
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={loading}
+      title={error ?? (state.subscribed ? 'Notificaciones activas' : 'Activar notificaciones')}
+      className={`transition-colors disabled:opacity-50 ${state.subscribed ? 'text-admin-accent' : 'text-admin-muted hover:text-admin-accent'}`}
+    >
+      {loading ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : state.subscribed ? (
+        <Bell className="w-4 h-4" />
+      ) : (
+        <BellOff className="w-4 h-4" />
       )}
-    </div>
+    </button>
   );
 }

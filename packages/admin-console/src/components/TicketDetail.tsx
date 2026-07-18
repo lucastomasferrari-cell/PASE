@@ -86,41 +86,44 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
 
   return (
     <div className="flex-1 flex flex-col bg-admin-bg overflow-hidden">
-      {/* Header */}
-      <header className="px-4 md:px-6 py-4 border-b border-admin-border">
+      {/* Header — barra de estado del ticket. */}
+      <header className="px-4 md:px-6 py-4 border-b border-admin-border bg-admin-surface">
         <div className="flex items-start gap-3">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="md:hidden w-9 h-9 rounded hover:bg-admin-border/40 flex items-center justify-center text-admin-muted shrink-0"
+              className="md:hidden w-9 h-9 rounded border border-admin-border hover:border-admin-accent/40 hover:bg-admin-accent/5 flex items-center justify-center text-admin-muted shrink-0 transition-colors"
               aria-label="Volver al listado"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <div className="w-9 h-9 rounded bg-admin-accent/15 text-admin-accent flex items-center justify-center shrink-0">
-            <LifeBuoy className="w-4 h-4" />
+          <div className="icon-box w-9 h-9 rounded border border-admin-accent/20 flex items-center justify-center shrink-0">
+            <LifeBuoy className="w-4 h-4 text-admin-accent" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-admin-muted">
-              {ticket.autor_email || `User ${ticket.autor_user_id}`}
-              {' · '}
-              <span className="normal-case tracking-wider">{ticket.sistema}</span>
+            <div className="mono text-[9px] uppercase tracking-widest text-admin-muted flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span className="normal-case tracking-normal text-admin-text">{ticket.autor_email || `User ${ticket.autor_user_id}`}</span>
+              <span className="opacity-40">/</span>
+              <span>{ticket.sistema}</span>
               {ticket.pantalla_origen && (
-                <>{' · '}<code className="text-admin-accent">{ticket.pantalla_origen}</code></>
+                <>
+                  <span className="opacity-40">/</span>
+                  <span className="text-admin-accent">{ticket.pantalla_origen}</span>
+                </>
               )}
-              {' · '}
-              {new Date(ticket.created_at).toLocaleString('es-AR')}
+              <span className="opacity-40">/</span>
+              <span>{new Date(ticket.created_at).toLocaleString('es-AR')}</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-2">
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
               {ticket.categoria && (
-                <span className="text-[10px] normal-case px-1.5 py-0.5 rounded bg-admin-border text-admin-muted">
+                <span className="mono text-[9px] uppercase tracking-tighter px-1.5 py-0.5 rounded border border-admin-border bg-slate-900/50 text-admin-muted">
                   {ticket.categoria}
                 </span>
               )}
               <PrioridadPicker prioridad={ticket.prioridad} onChange={onSetPrioridad} />
-              <span className="text-[10px] normal-case px-1.5 py-0.5 rounded bg-admin-border text-admin-muted ml-auto">
+              <span className="mono text-[9px] uppercase tracking-tighter px-1.5 py-0.5 rounded border border-admin-border bg-slate-900/50 text-admin-muted ml-auto">
                 {ticket.estado}
               </span>
             </div>
@@ -133,16 +136,16 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
         {/* Panel del agente — destacado arriba del todo cuando hay actividad. */}
         <AgentPanel ticket={ticket} onChange={onChange} />
 
-        {/* Mensaje original */}
-        <div className="rounded border border-admin-border bg-admin-surface p-4">
-          <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-2">Mensaje original</div>
+        {/* Mensaje original — burbuja entrante (usuario). */}
+        <div className="rounded border border-slate-800 bg-slate-900 p-4">
+          <div className="label-sys mb-2">Mensaje original</div>
           <p className="text-sm whitespace-pre-wrap text-admin-text">{ticket.mensaje}</p>
         </div>
 
         {/* Screenshot si hay */}
         {ticket.screenshot_url && (
-          <div className="rounded border border-admin-border bg-admin-surface p-4">
-            <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1">
+          <div className="rounded border border-slate-800 bg-slate-900 p-4">
+            <div className="label-sys mb-2 flex items-center gap-1">
               <ImageIcon className="w-3 h-3" /> Captura adjunta
             </div>
             {screenshotSignedUrl ? (
@@ -150,34 +153,34 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
                 <img src={screenshotSignedUrl} alt="Captura del usuario" className="rounded border border-admin-border max-h-96 object-contain" />
               </a>
             ) : (
-              <div className="text-xs text-admin-muted">Cargando captura…</div>
+              <div className="mono text-[11px] uppercase tracking-widest text-admin-muted">Cargando captura…</div>
             )}
           </div>
         )}
 
         {/* Contexto JSONB si tiene contenido */}
         {Object.keys(ticket.contexto_jsonb || {}).length > 0 && (
-          <details className="rounded border border-admin-border bg-admin-surface p-4">
-            <summary className="text-[10px] normal-case tracking-wider text-admin-muted cursor-pointer">
+          <details className="rounded border border-slate-800 bg-slate-900 p-4">
+            <summary className="label-sys cursor-pointer">
               Contexto técnico
             </summary>
-            <pre className="text-[11px] text-admin-text mt-2 overflow-auto">
+            <pre className="mono text-[11px] text-admin-text mt-2 overflow-auto">
               {JSON.stringify(ticket.contexto_jsonb, null, 2)}
             </pre>
           </details>
         )}
 
-        {/* Respuesta automática del LLM */}
+        {/* Respuesta automática del LLM — bloque de consola acento. */}
         {ticket.respuesta_llm && (
-          <div className="rounded border border-admin-accent/30 bg-admin-accent/5 p-4">
-            <div className="text-[10px] normal-case tracking-wider text-admin-accent mb-2">
+          <div className="rounded border border-admin-accent/30 bg-admin-accent/10 p-4">
+            <div className="label-sys text-admin-accent mb-2">
               Auto-respuesta del asistente
             </div>
-            <p className="text-sm whitespace-pre-wrap text-admin-text">{ticket.respuesta_llm}</p>
+            <p className="text-sm whitespace-pre-wrap text-admin-accent">{ticket.respuesta_llm}</p>
           </div>
         )}
 
-        {/* Comentarios */}
+        {/* Comentarios — staff/superadmin acento; autor entrante slate. */}
         {ticket.comentarios.map((c, i) => {
           const esSuperadmin = c.autor_rol === 'superadmin';
           return (
@@ -186,16 +189,19 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
               className={cn(
                 'rounded border p-4',
                 esSuperadmin
-                  ? 'border-admin-accent/30 bg-admin-accent/5 ml-8'
-                  : 'border-admin-border bg-admin-surface mr-8',
+                  ? 'border-admin-accent/30 bg-admin-accent/10 ml-8'
+                  : 'border-slate-800 bg-slate-900 mr-8',
               )}
             >
-              <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1">
+              <div className={cn(
+                'label-sys mb-2 flex items-center gap-1',
+                esSuperadmin && 'text-admin-accent',
+              )}>
                 <MessageSquare className="w-3 h-3" />
                 {esSuperadmin ? 'Superadmin' : (c.autor_rol || 'Autor')}
-                <span className="ml-auto normal-case">{new Date(c.created_at).toLocaleString('es-AR')}</span>
+                <span className="mono text-[9px] normal-case tracking-normal ml-auto opacity-70">{new Date(c.created_at).toLocaleString('es-AR')}</span>
               </div>
-              <p className="text-sm whitespace-pre-wrap text-admin-text">{c.texto}</p>
+              <p className={cn('text-sm whitespace-pre-wrap', esSuperadmin ? 'text-admin-accent' : 'text-admin-text')}>{c.texto}</p>
             </div>
           );
         })}
@@ -203,19 +209,19 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
 
       {/* Composer + acciones */}
       {!isCerrado && (
-        <footer className="border-t border-admin-border bg-admin-surface p-4 space-y-2">
+        <footer className="border-t border-admin-border bg-admin-surface p-4 space-y-3">
           <textarea
             value={comentario}
             onChange={(e) => setComentario(e.target.value)}
             placeholder="Escribí tu respuesta al usuario…"
             rows={3}
-            className="w-full px-3 py-2 rounded bg-admin-bg border border-admin-border text-admin-text text-sm focus:outline-none focus:border-admin-accent resize-none"
+            className="w-full px-0 py-2 bg-transparent text-admin-text text-sm resize-none"
           />
           <div className="flex items-center gap-2">
             <button
               onClick={onEnviar}
               disabled={!comentario.trim() || sending}
-              className="px-3 py-1.5 rounded bg-admin-accent text-white text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded border border-admin-accent/30 bg-admin-accent/10 text-admin-accent mono text-[10px] uppercase tracking-widest font-medium hover:bg-admin-accent/20 hover:border-admin-accent/60 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
             >
               {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
               Enviar respuesta
@@ -223,7 +229,7 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
             <button
               onClick={onCerrar}
               disabled={closing}
-              className="px-3 py-1.5 rounded bg-admin-border text-admin-text text-sm hover:bg-admin-border/70 disabled:opacity-40 flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded border border-admin-border text-admin-muted mono text-[10px] uppercase tracking-widest hover:text-admin-text hover:border-admin-border-strong hover:bg-admin-surface-2 disabled:opacity-40 flex items-center gap-1.5 transition-colors"
             >
               <CheckCircle className="w-3.5 h-3.5" />
               {yaResuelto ? 'Cerrar definitivamente' : 'Marcar como resuelto'}
@@ -232,9 +238,9 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
         </footer>
       )}
       {isCerrado && (
-        <footer className="border-t border-admin-border bg-admin-surface p-3 flex items-center justify-between text-xs text-admin-muted">
+        <footer className="border-t border-admin-border bg-admin-surface p-3 flex items-center justify-between mono text-[10px] text-admin-muted">
           <span>Ticket cerrado el {new Date(ticket.resuelto_at || ticket.updated_at).toLocaleString('es-AR')}.</span>
-          <button onClick={onReabrir} className="text-admin-accent hover:underline flex items-center gap-1">
+          <button onClick={onReabrir} className="text-admin-accent hover:text-admin-text uppercase tracking-widest flex items-center gap-1 transition-colors">
             <RotateCcw className="w-3 h-3" /> Reabrir
           </button>
         </footer>
@@ -248,7 +254,7 @@ function PrioridadPicker({ prioridad, onChange }: { prioridad: PrioridadTicket |
     <select
       value={prioridad ?? 'media'}
       onChange={(e) => onChange(e.target.value as PrioridadTicket)}
-      className="text-[10px] normal-case tracking-wider bg-admin-border border-0 rounded px-1.5 py-0.5 text-admin-text focus:outline-none"
+      className="mono text-[9px] uppercase tracking-tighter bg-slate-900/50 border border-admin-border rounded px-1.5 py-0.5 text-admin-text focus:outline-none focus:border-admin-accent"
     >
       <option value="critica">Crítica</option>
       <option value="alta">Alta</option>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { db } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
-import { Wallet, Plus, FileText, CheckCircle2, Loader2, CreditCard, Info } from 'lucide-react';
+import { Plus, FileText, CheckCircle2, Loader2, CreditCard, Info } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Pantalla Pagos del Admin Console
@@ -60,23 +60,27 @@ interface InvoiceRow {
   tenant_nombre?: string;
 }
 
+// Chips de estado — pill relleno slate con tinte + borde semántico (cocina.os).
 const SUB_ESTADO_COLORS: Record<string, string> = {
-  trial:           'text-admin-accent bg-admin-accent/15',
-  pending_payment: 'text-admin-warn bg-admin-warn/15',
-  active:          'text-admin-success bg-admin-success/15',
-  past_due:        'text-admin-warn bg-admin-warn/15',
-  suspended:       'text-admin-danger bg-admin-danger/15',
-  cancelled:       'text-admin-muted bg-admin-border',
-  trial_expired:   'text-admin-danger bg-admin-danger/15',
+  trial:           'text-admin-accent bg-admin-accent/10 border border-admin-accent/30',
+  pending_payment: 'text-admin-warn bg-admin-warn/10 border border-admin-warn/30',
+  active:          'text-admin-success bg-admin-success/10 border border-admin-success/30',
+  past_due:        'text-admin-warn bg-admin-warn/10 border border-admin-warn/30',
+  suspended:       'text-admin-danger bg-admin-danger/10 border border-admin-danger/30',
+  cancelled:       'text-admin-muted bg-slate-900/50 border border-admin-border',
+  trial_expired:   'text-admin-danger bg-admin-danger/10 border border-admin-danger/30',
 };
 
 const INV_ESTADO_COLORS: Record<string, string> = {
-  pendiente:    'text-admin-warn bg-admin-warn/15',
-  pagada:       'text-admin-success bg-admin-success/15',
-  vencida:      'text-admin-danger bg-admin-danger/15',
-  anulada:      'text-admin-muted bg-admin-border',
-  reembolsada:  'text-admin-muted bg-admin-border',
+  pendiente:    'text-admin-warn bg-admin-warn/10 border border-admin-warn/30',
+  pagada:       'text-admin-success bg-admin-success/10 border border-admin-success/30',
+  vencida:      'text-admin-danger bg-admin-danger/10 border border-admin-danger/30',
+  anulada:      'text-admin-muted bg-slate-900/50 border border-admin-border',
+  reembolsada:  'text-admin-muted bg-slate-900/50 border border-admin-border',
 };
+
+// Clase base de todo chip de estado (mono, uppercase, denso).
+const CHIP_BASE = 'mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded';
 
 const fmtMoney = (n: number | null | undefined) =>
   typeof n === 'number'
@@ -178,16 +182,8 @@ export function Pagos() {
   const subsAtraso = subs.filter(s => ['past_due', 'pending_payment'].includes(s.estado)).length;
 
   return (
-    <div className="space-y-4">
-      <header>
-        <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
-          <Wallet className="w-5 h-5 text-admin-accent" />
-          Pagos
-        </h1>
-        <p className="text-xs text-admin-muted mt-1">
-          Suscripciones, invoices y configuración de gateway de pago.
-        </p>
-      </header>
+    <div className="space-y-6">
+      <SectionHeader label="04 / Pagos" />
 
       {/* KPIs rápidos */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -198,14 +194,14 @@ export function Pagos() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-admin-border">
+      <div className="flex gap-6 border-b border-admin-border-strong">
         <TabBtn active={tab === 'subs'} onClick={() => setTab('subs')} label="Suscripciones" count={subs.length} />
         <TabBtn active={tab === 'invoices'} onClick={() => setTab('invoices')} label="Invoices" count={invoices.length} />
         <TabBtn active={tab === 'gateway'} onClick={() => setTab('gateway')} label="Gateway" />
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-admin-muted text-sm gap-2">
+        <div className="flex items-center justify-center py-12 text-admin-muted mono text-xs uppercase tracking-widest gap-2">
           <Loader2 className="w-4 h-4 animate-spin" /> Cargando…
         </div>
       ) : tab === 'subs' ? (
@@ -229,6 +225,19 @@ export function Pagos() {
 
 // ─── Componentes ─────────────────────────────────────────────────────────
 
+// Cabecera de sección cocina.os: título mono celeste + hairline degradado.
+function SectionHeader({ label, right }: { label: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 mb-1">
+      <h2 className="mono text-[11px] font-semibold text-admin-accent tracking-[0.3em] uppercase whitespace-nowrap">
+        {label}
+      </h2>
+      <div className="h-px flex-1 bg-gradient-to-r from-admin-border-strong to-transparent" />
+      {right}
+    </div>
+  );
+}
+
 function Kpi({ label, value, tone }: { label: string; value: number; tone: 'default' | 'success' | 'warn' | 'muted' }) {
   const toneCls = {
     default: 'text-admin-text',
@@ -237,9 +246,9 @@ function Kpi({ label, value, tone }: { label: string; value: number; tone: 'defa
     muted:   'text-admin-muted',
   }[tone];
   return (
-    <div className="rounded border border-admin-border bg-admin-surface px-4 py-3">
-      <div className="text-[10px] normal-case tracking-wider text-admin-muted">{label}</div>
-      <div className={cn('text-2xl font-medium mt-1', toneCls)}>{value}</div>
+    <div className="rounded border border-admin-border bg-admin-surface p-4">
+      <div className="label-sys">{label}</div>
+      <div className={cn('mono tabular-nums text-2xl mt-1', toneCls)}>{value}</div>
     </div>
   );
 }
@@ -249,13 +258,15 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
     <button
       onClick={onClick}
       className={cn(
-        'px-4 py-2 text-sm border-b-2 transition-colors',
-        active ? 'text-admin-accent border-admin-accent' : 'text-admin-muted border-transparent hover:text-admin-text',
+        'mono text-[11px] tracking-[0.2em] uppercase pb-2 -mb-px border-b-2 transition-colors flex items-center gap-1.5',
+        active
+          ? 'font-semibold text-admin-accent border-admin-accent'
+          : 'font-medium text-admin-muted border-transparent hover:text-admin-text',
       )}
     >
       {label}
       {count !== undefined && (
-        <span className="ml-1.5 text-xs bg-admin-border px-1.5 py-0.5 rounded">{count}</span>
+        <span className="mono text-[9px] bg-slate-900/50 px-1.5 py-0.5 rounded tabular-nums">{count}</span>
       )}
     </button>
   );
@@ -267,37 +278,37 @@ function SubsTable({ subs, actionLoading, onGenerarInvoice }: { subs: SubRow[]; 
       <table className="w-full text-sm">
         <thead className="bg-admin-bg border-b border-admin-border">
           <tr className="text-left">
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Tenant</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Plan</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Estado</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Precio/mes</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Próximo cobro</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Gateway</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider"></th>
+            <th className="px-3 py-2 label-sys">Tenant</th>
+            <th className="px-3 py-2 label-sys">Plan</th>
+            <th className="px-3 py-2 label-sys">Estado</th>
+            <th className="px-3 py-2 label-sys text-right">Precio/mes</th>
+            <th className="px-3 py-2 label-sys">Próximo cobro</th>
+            <th className="px-3 py-2 label-sys">Gateway</th>
+            <th className="px-3 py-2 label-sys"></th>
           </tr>
         </thead>
         <tbody>
           {subs.length === 0 && (
-            <tr><td colSpan={7} className="px-3 py-8 text-center text-admin-muted text-sm">No hay suscripciones.</td></tr>
+            <tr><td colSpan={7} className="px-3 py-8 text-center text-admin-muted mono text-xs uppercase tracking-widest">No hay suscripciones.</td></tr>
           )}
           {subs.map(s => (
-            <tr key={s.id} className="border-b border-admin-border/50 last:border-0">
+            <tr key={s.id} className="border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors">
               <td className="px-3 py-2.5 text-admin-text font-medium">{s.tenant_nombre}</td>
               <td className="px-3 py-2.5 text-admin-text">{s.plan_nombre}</td>
               <td className="px-3 py-2.5">
-                <span className={cn('text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded', SUB_ESTADO_COLORS[s.estado] || SUB_ESTADO_COLORS.cancelled)}>
+                <span className={cn(CHIP_BASE, SUB_ESTADO_COLORS[s.estado] || SUB_ESTADO_COLORS.cancelled)}>
                   {s.estado.replace('_', ' ')}
                 </span>
               </td>
-              <td className="px-3 py-2.5 text-right text-admin-text font-mono">{fmtMoney(s.precio_mensual_ars)}</td>
-              <td className="px-3 py-2.5 text-admin-muted text-xs font-mono">
+              <td className="px-3 py-2.5 text-right text-admin-text mono tabular-nums">{fmtMoney(s.precio_mensual_ars)}</td>
+              <td className="px-3 py-2.5 text-admin-muted text-xs mono tabular-nums">
                 {fmtDate(s.next_billing_at || s.current_period_end || s.trial_ends_at)}
               </td>
-              <td className="px-3 py-2.5 text-admin-muted text-xs">
+              <td className="px-3 py-2.5 text-xs">
                 {s.gateway_provider ? (
-                  <span className="text-admin-success">{s.gateway_provider}</span>
+                  <span className={cn(CHIP_BASE, 'text-admin-success bg-admin-success/10 border border-admin-success/30')}>{s.gateway_provider}</span>
                 ) : (
-                  <span className="text-admin-muted">manual</span>
+                  <span className={cn(CHIP_BASE, 'text-admin-muted bg-slate-900/50 border border-admin-border')}>manual</span>
                 )}
               </td>
               <td className="px-3 py-2.5 text-right">
@@ -305,7 +316,7 @@ function SubsTable({ subs, actionLoading, onGenerarInvoice }: { subs: SubRow[]; 
                   <button
                     onClick={() => onGenerarInvoice(s)}
                     disabled={actionLoading === `gen-${s.id}`}
-                    className="px-2 py-1 rounded text-xs text-admin-accent hover:bg-admin-accent/10 disabled:opacity-50 flex items-center gap-1 ml-auto"
+                    className="mono text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-admin-accent/30 text-admin-accent hover:bg-admin-accent/10 disabled:opacity-50 flex items-center gap-1 ml-auto transition-colors"
                   >
                     {actionLoading === `gen-${s.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                     Invoice
@@ -326,39 +337,39 @@ function InvoicesTable({ invoices, actionLoading, onMarcarPagada }: { invoices: 
       <table className="w-full text-sm">
         <thead className="bg-admin-bg border-b border-admin-border">
           <tr className="text-left">
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Tenant</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Período</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Total</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Estado</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Vence</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Cobrada</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider"></th>
+            <th className="px-3 py-2 label-sys">Tenant</th>
+            <th className="px-3 py-2 label-sys">Período</th>
+            <th className="px-3 py-2 label-sys text-right">Total</th>
+            <th className="px-3 py-2 label-sys">Estado</th>
+            <th className="px-3 py-2 label-sys">Vence</th>
+            <th className="px-3 py-2 label-sys">Cobrada</th>
+            <th className="px-3 py-2 label-sys"></th>
           </tr>
         </thead>
         <tbody>
           {invoices.length === 0 && (
-            <tr><td colSpan={7} className="px-3 py-8 text-center text-admin-muted text-sm">
+            <tr><td colSpan={7} className="px-3 py-8 text-center text-admin-muted mono text-xs uppercase tracking-widest">
               No hay invoices todavía. Generá la primera desde la tab de Suscripciones.
             </td></tr>
           )}
           {invoices.map(i => (
-            <tr key={i.id} className="border-b border-admin-border/50 last:border-0">
+            <tr key={i.id} className="border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors">
               <td className="px-3 py-2.5 text-admin-text font-medium">{i.tenant_nombre}</td>
-              <td className="px-3 py-2.5 text-admin-muted text-xs font-mono">
+              <td className="px-3 py-2.5 text-admin-muted text-xs mono tabular-nums">
                 {fmtDate(i.periodo_desde)} → {fmtDate(i.periodo_hasta)}
               </td>
-              <td className="px-3 py-2.5 text-right text-admin-text font-mono">{fmtMoney(i.total_ars)}</td>
+              <td className="px-3 py-2.5 text-right text-admin-text mono tabular-nums">{fmtMoney(i.total_ars)}</td>
               <td className="px-3 py-2.5">
-                <span className={cn('text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded', INV_ESTADO_COLORS[i.estado] || INV_ESTADO_COLORS.anulada)}>
+                <span className={cn(CHIP_BASE, INV_ESTADO_COLORS[i.estado] || INV_ESTADO_COLORS.anulada)}>
                   {i.estado}
                 </span>
               </td>
-              <td className="px-3 py-2.5 text-admin-muted text-xs font-mono">{fmtDate(i.fecha_vencimiento)}</td>
+              <td className="px-3 py-2.5 text-admin-muted text-xs mono tabular-nums">{fmtDate(i.fecha_vencimiento)}</td>
               <td className="px-3 py-2.5 text-admin-muted text-xs">
                 {i.fecha_pago ? (
                   <>
-                    <div className="font-mono">{fmtDate(i.fecha_pago)}</div>
-                    <div className="text-[10px]">{i.metodo_pago}</div>
+                    <div className="mono tabular-nums">{fmtDate(i.fecha_pago)}</div>
+                    <div className="mono text-[9px] uppercase tracking-wider opacity-70">{i.metodo_pago}</div>
                   </>
                 ) : '—'}
               </td>
@@ -367,7 +378,7 @@ function InvoicesTable({ invoices, actionLoading, onMarcarPagada }: { invoices: 
                   <button
                     onClick={() => onMarcarPagada(i)}
                     disabled={actionLoading === `pay-${i.id}`}
-                    className="px-2 py-1 rounded text-xs text-admin-success hover:bg-admin-success/10 disabled:opacity-50 flex items-center gap-1 ml-auto"
+                    className="mono text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-admin-success/30 text-admin-success hover:bg-admin-success/10 disabled:opacity-50 flex items-center gap-1 ml-auto transition-colors"
                   >
                     {actionLoading === `pay-${i.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                     Pagada
@@ -444,31 +455,31 @@ function GatewaySetup() {
       </div>
 
       <details className="rounded border border-admin-border bg-admin-surface p-4">
-        <summary className="cursor-pointer text-sm text-admin-text font-medium">
+        <summary className="cursor-pointer mono text-[11px] uppercase tracking-widest text-admin-accent font-semibold">
           Schema técnico ya preparado para conectar gateway
         </summary>
         <div className="mt-3 text-xs text-admin-muted space-y-2">
           <p>
-            La tabla <code className="text-admin-accent">tenant_subscriptions</code> ya tiene los campos para
+            La tabla <code className="mono text-admin-accent">tenant_subscriptions</code> ya tiene los campos para
             integrar cualquier gateway sin migration adicional:
           </p>
           <ul className="ml-4 space-y-1 list-disc">
-            <li><code className="text-admin-accent">gateway_provider</code> — &apos;mercadopago&apos; / &apos;dlocal&apos; / &apos;stripe&apos; / &apos;manual&apos;</li>
-            <li><code className="text-admin-accent">gateway_subscription_id</code> — ID de la sub en el gateway externo</li>
-            <li><code className="text-admin-accent">gateway_customer_id</code> — ID del cliente en el gateway</li>
-            <li><code className="text-admin-accent">modo_cobro</code> — &apos;manual&apos; o &apos;automatico&apos;</li>
+            <li><code className="mono text-admin-accent">gateway_provider</code> — &apos;mercadopago&apos; / &apos;dlocal&apos; / &apos;stripe&apos; / &apos;manual&apos;</li>
+            <li><code className="mono text-admin-accent">gateway_subscription_id</code> — ID de la sub en el gateway externo</li>
+            <li><code className="mono text-admin-accent">gateway_customer_id</code> — ID del cliente en el gateway</li>
+            <li><code className="mono text-admin-accent">modo_cobro</code> — &apos;manual&apos; o &apos;automatico&apos;</li>
           </ul>
           <p>
-            Y en <code className="text-admin-accent">tenant_invoices</code>:
+            Y en <code className="mono text-admin-accent">tenant_invoices</code>:
           </p>
           <ul className="ml-4 space-y-1 list-disc">
-            <li><code className="text-admin-accent">gateway_payment_id</code> — ID de la transacción del webhook</li>
-            <li><code className="text-admin-accent">comprobante_numero/cae/url</code> — factura AFIP si la emite el gateway o se emite afuera</li>
+            <li><code className="mono text-admin-accent">gateway_payment_id</code> — ID de la transacción del webhook</li>
+            <li><code className="mono text-admin-accent">comprobante_numero/cae/url</code> — factura AFIP si la emite el gateway o se emite afuera</li>
           </ul>
           <p className="text-admin-text">
-            Próximo paso cuando elijas gateway: crear <code className="text-admin-accent">api/billing-webhook.js</code> que reciba eventos
+            Próximo paso cuando elijas gateway: crear <code className="mono text-admin-accent">api/billing-webhook.js</code> que reciba eventos
             <span className="text-admin-muted"> (payment.created / subscription.cancelled / etc.)</span> y llame las mismas RPCs
-            <code className="text-admin-accent"> fn_registrar_pago_invoice</code> que hoy usás manualmente.
+            <code className="mono text-admin-accent"> fn_registrar_pago_invoice</code> que hoy usás manualmente.
           </p>
         </div>
       </details>
@@ -486,10 +497,10 @@ function GatewayCard({ name, badge, badgeTone, description, steps, url, status }
   status: 'disponible' | 'planeado' | 'descartado' | 'activo';
 }) {
   const badgeCls = {
-    success: 'bg-admin-success/15 text-admin-success border-admin-success/30',
-    default: 'bg-admin-accent/15 text-admin-accent border-admin-accent/30',
-    danger:  'bg-admin-danger/15 text-admin-danger border-admin-danger/30',
-    muted:   'bg-admin-border text-admin-muted border-admin-border',
+    success: 'bg-admin-success/10 text-admin-success border-admin-success/30',
+    default: 'bg-admin-accent/10 text-admin-accent border-admin-accent/30',
+    danger:  'bg-admin-danger/10 text-admin-danger border-admin-danger/30',
+    muted:   'bg-slate-900/50 text-admin-muted border-admin-border',
   }[badgeTone];
   const statusCls = {
     disponible: 'text-admin-text',
@@ -504,7 +515,7 @@ function GatewayCard({ name, badge, badgeTone, description, steps, url, status }
           <CreditCard className="w-4 h-4" />
           {name}
         </div>
-        <span className={cn('text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded border', badgeCls)}>
+        <span className={cn('mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border', badgeCls)}>
           {badge}
         </span>
       </div>
@@ -519,7 +530,7 @@ function GatewayCard({ name, badge, badgeTone, description, steps, url, status }
           href={url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 mt-3 text-xs text-admin-accent hover:underline"
+          className="inline-flex items-center gap-1 mt-3 mono text-[10px] uppercase tracking-widest text-admin-accent hover:underline"
         >
           <FileText className="w-3 h-3" /> Documentación
         </a>

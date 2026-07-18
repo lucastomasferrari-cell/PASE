@@ -1,6 +1,9 @@
 import type { Ticket, EstadoTicket, PrioridadTicket, SistemaOrigen, AgentStatus } from '@/lib/tickets';
 import { cn } from '@/lib/cn';
-import { Inbox, GitPullRequest, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  Inbox, GitPullRequest, CheckCircle2, AlertCircle, Loader2,
+  MessageSquare, Copy, ChevronRight,
+} from 'lucide-react';
 
 export interface ListFilters {
   estado: EstadoTicket | 'todos';
@@ -22,11 +25,12 @@ interface Props {
   counts: { abiertos: number; prs: number; todos: number };
 }
 
+// Chip mono relleno slate con tinte semántico por prioridad.
 const PRIORIDAD_COLORS: Record<PrioridadTicket, string> = {
   critica: 'bg-admin-danger/15 text-admin-danger border-admin-danger/30',
   alta: 'bg-admin-warn/15 text-admin-warn border-admin-warn/30',
   media: 'bg-admin-accent/15 text-admin-accent border-admin-accent/30',
-  baja: 'bg-admin-border text-admin-muted border-admin-border',
+  baja: 'bg-slate-900/50 text-admin-muted border-admin-border',
 };
 
 const ESTADO_LABELS: Record<EstadoTicket, string> = {
@@ -36,21 +40,45 @@ const ESTADO_LABELS: Record<EstadoTicket, string> = {
   duplicado: 'Duplicado',
 };
 
+// Chip de estado — tinte semántico + borde.
+const ESTADO_CHIP: Record<EstadoTicket, string> = {
+  abierto: 'bg-admin-accent/10 text-admin-accent border-admin-accent/30',
+  respondido: 'bg-admin-success/10 text-admin-success border-admin-success/30',
+  cerrado: 'bg-slate-900/50 text-admin-muted border-admin-border',
+  duplicado: 'bg-slate-900/50 text-admin-muted border-admin-border',
+};
+
+// Icono + tinte del icon-box, derivado del estado del ticket.
+const ESTADO_ICON: Record<EstadoTicket, { icon: typeof Inbox; color: string }> = {
+  abierto: { icon: Inbox, color: 'text-admin-accent' },
+  respondido: { icon: MessageSquare, color: 'text-admin-success' },
+  cerrado: { icon: CheckCircle2, color: 'text-admin-muted' },
+  duplicado: { icon: Copy, color: 'text-admin-muted' },
+};
+
 const AGENT_BADGE: Partial<Record<AgentStatus, { label: string; icon: typeof Loader2; cls: string }>> = {
-  pending: { label: 'En cola', icon: Loader2, cls: 'text-admin-muted bg-admin-border/40' },
-  investigating: { label: 'Investigando', icon: Loader2, cls: 'text-admin-accent bg-admin-accent/15' },
-  escalating: { label: 'Escalado', icon: Loader2, cls: 'text-admin-warn bg-admin-warn/15' },
-  fixing: { label: 'Fixeando', icon: Loader2, cls: 'text-admin-accent bg-admin-accent/15' },
-  pr_opened: { label: 'PR listo', icon: AlertCircle, cls: 'text-admin-warn bg-admin-warn/15' },
-  resolved: { label: 'Resuelto', icon: CheckCircle2, cls: 'text-admin-success bg-admin-success/15' },
-  failed: { label: 'Falló', icon: AlertCircle, cls: 'text-admin-danger bg-admin-danger/15' },
+  pending: { label: 'En cola', icon: Loader2, cls: 'text-admin-muted bg-slate-900/50 border-admin-border' },
+  investigating: { label: 'Investigando', icon: Loader2, cls: 'text-admin-accent bg-admin-accent/10 border-admin-accent/30' },
+  escalating: { label: 'Escalado', icon: Loader2, cls: 'text-admin-warn bg-admin-warn/10 border-admin-warn/30' },
+  fixing: { label: 'Fixeando', icon: Loader2, cls: 'text-admin-accent bg-admin-accent/10 border-admin-accent/30' },
+  pr_opened: { label: 'PR listo', icon: AlertCircle, cls: 'text-admin-warn bg-admin-warn/10 border-admin-warn/30' },
+  resolved: { label: 'Resuelto', icon: CheckCircle2, cls: 'text-admin-success bg-admin-success/10 border-admin-success/30' },
+  failed: { label: 'Falló', icon: AlertCircle, cls: 'text-admin-danger bg-admin-danger/10 border-admin-danger/30' },
 };
 
 export function TicketsList({ tickets, selectedId, onSelect, loading, filters, setFilters, counts }: Props) {
   return (
     <div className="w-full md:w-96 shrink-0 border-r border-admin-border flex flex-col bg-admin-surface">
+      {/* Cabecera de sección. */}
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+        <h2 className="font-mono text-[11px] font-semibold text-admin-accent tracking-[0.3em] uppercase whitespace-nowrap">
+          Bandeja
+        </h2>
+        <div className="h-px flex-1 bg-gradient-to-r from-admin-border-strong to-transparent" />
+      </div>
+
       {/* Pestañas rápidas */}
-      <div className="flex border-b border-admin-border">
+      <div className="flex border-b border-admin-border px-2">
         <TabBtn
           active={filters.tab === 'abiertos'}
           onClick={() => setFilters({ ...filters, tab: 'abiertos', estado: 'abierto', agentStatus: 'todos' })}
@@ -104,42 +132,56 @@ export function TicketsList({ tickets, selectedId, onSelect, loading, filters, s
       {/* Lista */}
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="p-4 text-sm text-admin-muted">Cargando…</div>
+          <div className="p-4 mono text-[11px] uppercase tracking-widest text-admin-muted">Cargando…</div>
         ) : tickets.length === 0 ? (
-          <div className="p-4 text-sm text-admin-muted">No hay tickets que coincidan con los filtros.</div>
+          <div className="p-4 mono text-[11px] uppercase tracking-widest text-admin-muted">Sin tickets para estos filtros.</div>
         ) : (
-          <ul className="divide-y divide-admin-border">
+          <ul>
             {tickets.map((t) => {
               const agentBadge = t.agent_status ? AGENT_BADGE[t.agent_status] : null;
               const agentSpinning = ['pending', 'investigating', 'escalating', 'fixing'].includes(t.agent_status || '');
+              const estadoIcon = ESTADO_ICON[t.estado];
+              const EstadoIcon = estadoIcon.icon;
               return (
                 <li
                   key={t.id}
                   onClick={() => onSelect(t.id)}
                   className={cn(
-                    'p-3 cursor-pointer hover:bg-admin-border/30 transition-colors',
-                    selectedId === t.id && 'bg-admin-accent/10 border-l-2 border-l-admin-accent',
+                    'system-row group px-4 py-4 flex items-start gap-3 cursor-pointer',
+                    selectedId === t.id && 'bg-admin-accent/[0.08] border-l-2 border-l-admin-accent',
                   )}
                 >
-                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                    <span className="text-[10px] normal-case tracking-wider text-admin-muted">{t.sistema}</span>
-                    {t.prioridad && (
-                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded border', PRIORIDAD_COLORS[t.prioridad])}>
-                        {t.prioridad}
+                  <div className="icon-box w-9 h-9 rounded border border-admin-accent/20 flex items-center justify-center shrink-0">
+                    <EstadoIcon className={cn('w-4 h-4', estadoIcon.color)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                      <span className="mono text-[9px] uppercase tracking-tighter text-admin-muted opacity-70">{t.sistema}</span>
+                      {t.prioridad && (
+                        <span className={cn('mono text-[9px] uppercase tracking-tighter px-1.5 py-0.5 rounded border', PRIORIDAD_COLORS[t.prioridad])}>
+                          {t.prioridad}
+                        </span>
+                      )}
+                      <span className={cn('mono text-[9px] uppercase tracking-tighter px-1.5 py-0.5 rounded border ml-auto', ESTADO_CHIP[t.estado])}>
+                        {ESTADO_LABELS[t.estado]}
                       </span>
-                    )}
+                    </div>
+                    <div className="text-base font-semibold text-admin-text group-hover:text-admin-accent transition-colors line-clamp-2 mb-1.5 leading-snug">
+                      {t.mensaje}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="mono text-[9px] text-admin-muted truncate flex-1" title={t.autor_email ?? ''}>
+                        {t.autor_email || `User ${t.autor_user_id}`}
+                      </span>
+                      <span className="mono text-[9px] text-admin-muted shrink-0">{new Date(t.created_at).toLocaleDateString('es-AR')}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-admin-accent opacity-30 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </div>
                     {agentBadge && (
-                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-1', agentBadge.cls)}>
+                      <span className={cn('mt-2 mono text-[9px] uppercase tracking-tighter px-1.5 py-0.5 rounded border inline-flex items-center gap-1', agentBadge.cls)}>
                         <agentBadge.icon className={cn('w-2.5 h-2.5', agentSpinning && 'animate-spin')} />
                         {agentBadge.label}
                       </span>
                     )}
-                    <span className="text-[10px] text-admin-muted ml-auto">{ESTADO_LABELS[t.estado]}</span>
-                  </div>
-                  <div className="text-sm text-admin-text line-clamp-2 mb-1">{t.mensaje}</div>
-                  <div className="text-[10px] text-admin-muted flex items-center gap-2">
-                    <span className="truncate flex-1" title={t.autor_email ?? ''}>{t.autor_email || `User ${t.autor_user_id}`}</span>
-                    <span>{new Date(t.created_at).toLocaleDateString('es-AR')}</span>
                   </div>
                 </li>
               );
@@ -166,20 +208,22 @@ function TabBtn({ active, onClick, icon: Icon, label, count, highlight }: TabBtn
       type="button"
       onClick={onClick}
       className={cn(
-        'flex-1 px-2 py-3 text-xs flex flex-col items-center gap-1 border-b-2 transition-colors',
+        'flex-1 px-2 py-3 flex flex-col items-center gap-1.5 border-b-2 transition-colors',
         active
-          ? 'border-admin-accent text-admin-accent bg-admin-accent/5'
-          : 'border-transparent text-admin-muted hover:text-admin-text hover:bg-admin-border/30',
+          ? 'border-admin-accent text-admin-accent'
+          : 'border-transparent text-admin-muted hover:text-admin-text',
       )}
     >
       <div className="flex items-center gap-1.5">
         <Icon className="w-3.5 h-3.5" />
-        <span className="font-medium">{label}</span>
+        <span className="mono text-[10px] uppercase tracking-[0.15em] font-medium">{label}</span>
       </div>
       {count > 0 && (
         <span className={cn(
-          'text-[10px] px-1.5 py-0.5 rounded',
-          highlight && !active ? 'bg-admin-warn text-admin-bg font-medium' : 'bg-admin-border text-admin-muted',
+          'mono text-[9px] px-1.5 py-0.5 rounded border',
+          highlight && !active
+            ? 'bg-admin-warn/15 text-admin-warn border-admin-warn/30 font-medium'
+            : 'bg-slate-900/50 text-admin-muted border-admin-border',
         )}>
           {count}
         </span>
@@ -199,7 +243,7 @@ function Select({ value, onChange, options }: SelectProps) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full text-xs bg-admin-bg border border-admin-border rounded px-1.5 py-1 text-admin-text focus:outline-none focus:border-admin-accent"
+      className="w-full mono text-[10px] uppercase tracking-tighter bg-slate-900/50 border border-admin-border rounded px-2 py-1.5 text-admin-text focus:outline-none focus:border-admin-accent"
     >
       {options.map(([val, label]) => (
         <option key={val} value={val}>{label}</option>

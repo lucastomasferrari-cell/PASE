@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { db } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
 import {
-  BarChart3, TrendingUp, TrendingDown, Users, Building2, DollarSign,
+  TrendingUp, TrendingDown, Users, Building2, DollarSign,
   AlertTriangle, Activity, Loader2,
 } from 'lucide-react';
 
@@ -145,19 +145,11 @@ export function Metricas() {
   const ticketsMap = new Map(tickets.map(t => [t.tenant_id, t]));
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-admin-accent" />
-          Métricas
-        </h1>
-        <p className="text-xs text-admin-muted mt-1">
-          Salud del negocio cross-tenant: MRR, ARR, GMV de la plataforma, clientes en riesgo.
-        </p>
-      </header>
+    <div className="space-y-8">
+      <SectionHeader label="05 / Métricas" />
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-admin-muted text-sm gap-2">
+        <div className="flex items-center justify-center py-12 text-admin-muted mono text-xs uppercase tracking-widest gap-2">
           <Loader2 className="w-4 h-4 animate-spin" /> Cargando métricas…
         </div>
       ) : (
@@ -180,10 +172,8 @@ export function Metricas() {
           )}
 
           {/* ─── KPIs principales del SaaS ─── */}
-          <section>
-            <h2 className="text-xs normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5" /> Ingresos del SaaS
-            </h2>
+          <section className="space-y-4">
+            <SectionHeader label="Ingresos del SaaS" icon={<DollarSign className="w-3.5 h-3.5" />} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiBig
                 label="MRR"
@@ -215,10 +205,8 @@ export function Metricas() {
           </section>
 
           {/* ─── Métricas de la plataforma (GMV) ─── */}
-          <section>
-            <h2 className="text-xs normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5" /> Uso de la plataforma
-            </h2>
+          <section className="space-y-4">
+            <SectionHeader label="Uso de la plataforma" icon={<Activity className="w-3.5 h-3.5" />} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiBig
                 label="GMV mes actual"
@@ -255,18 +243,18 @@ export function Metricas() {
               {topFacturacion.length === 0 ? (
                 <Empty>Sin datos de facturación este mes.</Empty>
               ) : (
-                <ul className="divide-y divide-admin-border/50">
+                <ul>
                   {topFacturacion.map((d, idx) => (
-                    <li key={d.tenant_id} className="flex items-center justify-between py-2 px-1 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-admin-muted text-xs font-mono w-4">{idx + 1}.</span>
-                        <span className="text-admin-text font-medium">{d.tenant_nombre}</span>
-                        <span className="text-[10px] text-admin-muted">({d.locales_count}L · {d.plan_nombre})</span>
+                    <li key={d.tenant_id} className="flex items-center justify-between py-2 px-3 text-sm border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-admin-muted text-xs mono tabular-nums w-4">{idx + 1}.</span>
+                        <span className="text-admin-text font-medium truncate">{d.tenant_nombre}</span>
+                        <span className="text-[10px] text-admin-muted mono shrink-0">({d.locales_count}L · {d.plan_nombre})</span>
                       </div>
-                      <div className="text-right">
-                        <div className="text-admin-text font-mono">{fmtMoney(d.facturado_mes_actual)}</div>
+                      <div className="text-right shrink-0">
+                        <div className="text-admin-text mono tabular-nums">{fmtMoney(d.facturado_mes_actual)}</div>
                         {d.crecimiento_pct !== null && (
-                          <div className={cn('text-[10px] font-mono', d.crecimiento_pct >= 0 ? 'text-admin-success' : 'text-admin-danger')}>
+                          <div className={cn('text-[10px] mono tabular-nums', d.crecimiento_pct >= 0 ? 'text-admin-success' : 'text-admin-danger')}>
                             {fmtPct(d.crecimiento_pct)}
                           </div>
                         )}
@@ -281,20 +269,20 @@ export function Metricas() {
               {trialsPorVencer.length === 0 ? (
                 <Empty>No hay trials por vencer esta semana.</Empty>
               ) : (
-                <ul className="divide-y divide-admin-border/50">
+                <ul>
                   {trialsPorVencer.map(d => {
                     const dias = Math.ceil((new Date(d.trial_ends_at!).getTime() - Date.now()) / 86_400_000);
                     return (
-                      <li key={d.tenant_id} className="flex items-center justify-between py-2 px-1 text-sm">
-                        <div>
-                          <div className="text-admin-text font-medium">{d.tenant_nombre}</div>
-                          <div className="text-[10px] text-admin-muted">{d.slug}</div>
+                      <li key={d.tenant_id} className="flex items-center justify-between py-2 px-3 text-sm border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors">
+                        <div className="min-w-0">
+                          <div className="text-admin-text font-medium truncate">{d.tenant_nombre}</div>
+                          <div className="text-[10px] text-admin-muted mono">{d.slug}</div>
                         </div>
-                        <div className="text-right">
-                          <div className={cn('text-xs font-mono', dias <= 2 ? 'text-admin-danger' : 'text-admin-warn')}>
+                        <div className="text-right shrink-0">
+                          <div className={cn('text-xs mono tabular-nums', dias <= 2 ? 'text-admin-danger' : 'text-admin-warn')}>
                             {dias}d
                           </div>
-                          <div className="text-[10px] text-admin-muted font-mono">{d.trial_ends_at?.slice(0, 10)}</div>
+                          <div className="text-[10px] text-admin-muted mono tabular-nums">{d.trial_ends_at?.slice(0, 10)}</div>
                         </div>
                       </li>
                     );
@@ -310,18 +298,18 @@ export function Metricas() {
               {enRiesgo.length === 0 ? (
                 <Empty>Ningún cliente en riesgo.</Empty>
               ) : (
-                <ul className="divide-y divide-admin-border/50">
+                <ul>
                   {enRiesgo.map(d => (
-                    <li key={d.tenant_id} className="flex items-center justify-between py-2 px-1 text-sm">
-                      <div>
-                        <div className="text-admin-text font-medium">{d.tenant_nombre}</div>
-                        <div className="text-[10px] text-admin-muted">{d.plan_nombre} · {d.locales_count}L · {d.usuarios_count}U</div>
+                    <li key={d.tenant_id} className="flex items-center justify-between py-2 px-3 text-sm border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors">
+                      <div className="min-w-0">
+                        <div className="text-admin-text font-medium truncate">{d.tenant_nombre}</div>
+                        <div className="text-[10px] text-admin-muted mono">{d.plan_nombre} · {d.locales_count}L · {d.usuarios_count}U</div>
                       </div>
                       <span className={cn(
-                        'text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded',
-                        d.sub_estado === 'suspended' ? 'bg-admin-danger/15 text-admin-danger' :
-                        d.sub_estado === 'trial_expired' ? 'bg-admin-danger/15 text-admin-danger' :
-                        'bg-admin-warn/15 text-admin-warn',
+                        'mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0',
+                        d.sub_estado === 'suspended' ? 'bg-admin-danger/10 text-admin-danger border-admin-danger/30' :
+                        d.sub_estado === 'trial_expired' ? 'bg-admin-danger/10 text-admin-danger border-admin-danger/30' :
+                        'bg-admin-warn/10 text-admin-warn border-admin-warn/30',
                       )}>
                         {d.sub_estado?.replace('_', ' ')}
                       </span>
@@ -335,17 +323,17 @@ export function Metricas() {
               {tickets.length === 0 ? (
                 <Empty>No hay tickets abiertos.</Empty>
               ) : (
-                <ul className="divide-y divide-admin-border/50">
+                <ul>
                   {tickets
                     .sort((a, b) => b.abiertos - a.abiertos)
                     .map(t => {
                       const tenant = data.find(d => d.tenant_id === t.tenant_id);
                       return (
-                        <li key={t.tenant_id} className="flex items-center justify-between py-2 px-1 text-sm">
-                          <div className="text-admin-text">{tenant?.tenant_nombre || t.tenant_id.slice(0, 8)}</div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-admin-warn font-mono">{t.abiertos} abiertos</span>
-                            <span className="text-[10px] text-admin-muted">/ {t.totales} total</span>
+                        <li key={t.tenant_id} className="flex items-center justify-between py-2 px-3 text-sm border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors">
+                          <div className="text-admin-text truncate">{tenant?.tenant_nombre || t.tenant_id.slice(0, 8)}</div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs text-admin-warn mono tabular-nums">{t.abiertos} abiertos</span>
+                            <span className="text-[10px] text-admin-muted mono tabular-nums">/ {t.totales} total</span>
                           </div>
                         </li>
                       );
@@ -356,18 +344,18 @@ export function Metricas() {
           </div>
 
           {/* ─── Tabla completa de tenants ─── */}
-          <Card title={`Todos los clientes (${data.length})`}>
-            <div className="overflow-x-auto -mx-3">
+          <Card title={`Todos los clientes (${data.length})`} flush>
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-admin-bg border-b border-admin-border">
                   <tr className="text-left">
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Cliente</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Estado</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Locales</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Usuarios</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Mes actual</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">vs prev</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Tickets</th>
+                    <th className="px-3 py-2 label-sys">Cliente</th>
+                    <th className="px-3 py-2 label-sys">Estado</th>
+                    <th className="px-3 py-2 label-sys text-right">Locales</th>
+                    <th className="px-3 py-2 label-sys text-right">Usuarios</th>
+                    <th className="px-3 py-2 label-sys text-right">Mes actual</th>
+                    <th className="px-3 py-2 label-sys text-right">vs prev</th>
+                    <th className="px-3 py-2 label-sys text-right">Tickets</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -376,29 +364,29 @@ export function Metricas() {
                     .map(d => {
                       const tk = ticketsMap.get(d.tenant_id);
                       return (
-                        <tr key={d.tenant_id} className={cn('border-b border-admin-border/40 last:border-0', !d.activo && 'opacity-50')}>
+                        <tr key={d.tenant_id} className={cn('border-b border-admin-border last:border-0 hover:bg-admin-accent/[0.03] transition-colors', !d.activo && 'opacity-50')}>
                           <td className="px-3 py-2">
                             <div className="text-admin-text font-medium">{d.tenant_nombre}</div>
-                            <div className="text-[10px] text-admin-muted">{d.plan_nombre}</div>
+                            <div className="text-[10px] text-admin-muted mono">{d.plan_nombre}</div>
                           </td>
                           <td className="px-3 py-2">
-                            <span className="text-[10px] normal-case tracking-wider text-admin-muted">
+                            <span className="mono text-[10px] uppercase tracking-wider text-admin-muted">
                               {d.sub_estado?.replace('_', ' ') || '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-admin-text">{d.locales_count}</td>
-                          <td className="px-3 py-2 text-right font-mono text-admin-text">{d.usuarios_count}</td>
-                          <td className="px-3 py-2 text-right font-mono text-admin-text">{fmtMoney(d.facturado_mes_actual)}</td>
-                          <td className={cn('px-3 py-2 text-right font-mono text-xs', d.crecimiento_pct === null ? 'text-admin-muted' : d.crecimiento_pct >= 0 ? 'text-admin-success' : 'text-admin-danger')}>
+                          <td className="px-3 py-2 text-right mono tabular-nums text-admin-text">{d.locales_count}</td>
+                          <td className="px-3 py-2 text-right mono tabular-nums text-admin-text">{d.usuarios_count}</td>
+                          <td className="px-3 py-2 text-right mono tabular-nums text-admin-text">{fmtMoney(d.facturado_mes_actual)}</td>
+                          <td className={cn('px-3 py-2 text-right mono tabular-nums text-xs', d.crecimiento_pct === null ? 'text-admin-muted' : d.crecimiento_pct >= 0 ? 'text-admin-success' : 'text-admin-danger')}>
                             {fmtPct(d.crecimiento_pct)}
                           </td>
                           <td className="px-3 py-2 text-right text-xs">
                             {tk ? (
-                              <span className={cn('font-mono', tk.abiertos > 0 ? 'text-admin-warn' : 'text-admin-muted')}>
+                              <span className={cn('mono tabular-nums', tk.abiertos > 0 ? 'text-admin-warn' : 'text-admin-muted')}>
                                 {tk.abiertos}/{tk.totales}
                               </span>
                             ) : (
-                              <span className="text-admin-muted font-mono">0/0</span>
+                              <span className="text-admin-muted mono tabular-nums">0/0</span>
                             )}
                           </td>
                         </tr>
@@ -416,6 +404,19 @@ export function Metricas() {
 
 // ─── Componentes auxiliares ──────────────────────────────────────────────
 
+// Cabecera de sección cocina.os: título mono celeste + hairline degradado.
+function SectionHeader({ label, icon, right }: { label: string; icon?: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <h2 className="mono text-[11px] font-semibold text-admin-accent tracking-[0.3em] uppercase whitespace-nowrap flex items-center gap-2">
+        {icon}{label}
+      </h2>
+      <div className="h-px flex-1 bg-gradient-to-r from-admin-border-strong to-transparent" />
+      {right}
+    </div>
+  );
+}
+
 function KpiBig({ label, value, exact, hint, tone, icon }: {
   label: string;
   value: string;
@@ -432,28 +433,30 @@ function KpiBig({ label, value, exact, hint, tone, icon }: {
     muted:   'text-admin-muted',
   }[tone || 'default'];
   return (
-    <div className="rounded border border-admin-border bg-admin-surface px-4 py-3">
+    <div className="rounded border border-admin-border bg-admin-surface p-4">
       <div className="flex items-center justify-between">
-        <div className="text-[10px] normal-case tracking-wider text-admin-muted">{label}</div>
+        <div className="label-sys">{label}</div>
         {icon}
       </div>
-      <div className={cn('text-2xl font-medium mt-1', toneCls)} title={exact}>{value}</div>
-      {hint && <div className="text-[10px] text-admin-muted mt-1">{hint}</div>}
+      <div className={cn('mono tabular-nums text-2xl mt-1', toneCls)} title={exact}>{value}</div>
+      {hint && <div className="mono text-[10px] text-admin-muted mt-1">{hint}</div>}
     </div>
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children, flush }: { title: string; children: React.ReactNode; flush?: boolean }) {
   return (
-    <div className="rounded border border-admin-border bg-admin-surface p-3">
-      <div className="text-xs normal-case tracking-wider text-admin-muted mb-2 px-1">{title}</div>
-      <div>{children}</div>
+    <div className="rounded border border-admin-border bg-admin-surface overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-admin-border">
+        <span className="label-sys">{title}</span>
+      </div>
+      <div className={flush ? '' : 'p-2'}>{children}</div>
     </div>
   );
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="py-6 text-center text-admin-muted text-sm">{children}</div>
+    <div className="py-6 text-center text-admin-muted mono text-xs uppercase tracking-widest">{children}</div>
   );
 }

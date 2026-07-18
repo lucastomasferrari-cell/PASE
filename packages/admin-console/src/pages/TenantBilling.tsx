@@ -89,8 +89,8 @@ export function TenantBilling() {
     }
   }
 
-  if (loading) return <div className="p-6 text-admin-muted text-sm inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>;
-  if (!tenant) return <div className="p-6 text-admin-muted">Tenant no encontrado.</div>;
+  if (loading) return <div className="p-6 text-admin-muted mono text-xs uppercase tracking-widest inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>;
+  if (!tenant) return <div className="p-6 text-admin-muted mono text-xs uppercase tracking-widest">Tenant no encontrado.</div>;
 
   const planActual = plans.find((p) => p.id === sub?.plan_id);
   const estadoClr = sub?.estado === 'active' ? 'text-admin-success'
@@ -100,21 +100,22 @@ export function TenantBilling() {
     : 'text-admin-muted';
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-medium text-admin-text">Facturación — {tenant.nombre}</h1>
-          <p className="text-sm text-admin-muted">{tenant.slug}</p>
-        </div>
-        <button onClick={() => void load()} className="px-3 py-1.5 rounded border border-admin-border text-sm hover:bg-admin-border/40 inline-flex items-center gap-1.5">
-          <RefreshCw className="h-3.5 w-3.5" /> Recargar
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center gap-4">
+        <h2 className="font-mono text-[11px] font-semibold text-admin-accent tracking-[0.3em] uppercase whitespace-nowrap inline-flex items-center gap-2">
+          <CreditCard className="h-3.5 w-3.5" /> Facturación · {tenant.nombre}
+        </h2>
+        <div className="h-px flex-1 bg-gradient-to-r from-admin-border-strong to-transparent" />
+        <span className="mono text-[9px] text-admin-muted opacity-60 whitespace-nowrap">{tenant.slug}</span>
+        <button onClick={() => void load()} className="px-3 py-1 rounded-[3px] border border-admin-border mono text-[9px] uppercase tracking-widest text-admin-muted hover:bg-admin-surface-2 hover:text-admin-text inline-flex items-center gap-1.5 transition-colors whitespace-nowrap">
+          <RefreshCw className="h-3 w-3" /> Recargar
         </button>
-      </header>
+      </div>
 
       {/* Estado actual */}
       <div className="rounded border border-admin-border bg-admin-surface p-5">
-        <h2 className="font-medium text-admin-text mb-3 flex items-center gap-2">
-          <CreditCard className="h-4 w-4" /> Suscripción actual
+        <h2 className="label-sys mb-3 flex items-center gap-2">
+          <CreditCard className="h-3.5 w-3.5" /> Suscripción actual
         </h2>
         {!sub ? (
           <p className="text-sm text-admin-muted">Sin suscripción registrada. Elegí un plan abajo para crearla.</p>
@@ -140,7 +141,7 @@ export function TenantBilling() {
 
       {/* Cambiar plan */}
       <div className="rounded border border-admin-border bg-admin-surface p-5">
-        <h2 className="font-medium text-admin-text mb-3">{sub ? 'Cambiar plan' : 'Elegir plan'}</h2>
+        <h2 className="label-sys mb-3">{sub ? 'Cambiar plan' : 'Elegir plan'}</h2>
         <p className="text-xs text-admin-muted mb-4">
           Al activar un plan, el dueño del tenant recibe el link de Stripe Checkout para pagar.
           Requiere que el tenant tenga Stripe configurado en Settings → Integraciones.
@@ -149,11 +150,11 @@ export function TenantBilling() {
           {plans.map((p) => (
             <div key={p.id} className={cn(
               'rounded border p-4 flex flex-col gap-2',
-              sub?.plan_id === p.id ? 'border-admin-accent bg-admin-accent/5' : 'border-admin-border'
+              sub?.plan_id === p.id ? 'border-admin-accent/40 bg-admin-accent/5' : 'border-admin-border'
             )}>
               <div className="flex items-baseline justify-between">
-                <span className="font-medium text-admin-text">{p.nombre}</span>
-                {sub?.plan_id === p.id && <span className="text-[10px] normal-case text-admin-accent">Actual</span>}
+                <span className="font-semibold text-admin-text">{p.nombre}</span>
+                {sub?.plan_id === p.id && <span className="mono text-[9px] uppercase tracking-widest text-admin-accent">Actual</span>}
               </div>
               <div className="text-2xl font-medium tabular-nums">${p.precio_mensual_ars.toLocaleString('es-AR')}<span className="text-xs text-admin-muted font-normal">/mes</span></div>
               <div className="text-xs text-admin-muted">
@@ -163,7 +164,7 @@ export function TenantBilling() {
               <button
                 onClick={() => void iniciarCheckout(p.id)}
                 disabled={creandoCheckout !== null}
-                className="mt-2 px-3 py-1.5 rounded text-xs bg-admin-accent text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                className="mt-2 px-3 py-1.5 rounded-[3px] mono text-[9px] uppercase tracking-widest border border-admin-accent/30 bg-admin-accent/10 text-admin-accent hover:bg-admin-accent/20 disabled:opacity-50 inline-flex items-center justify-center gap-1.5 transition-colors"
               >
                 {creandoCheckout === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
                 {sub?.plan_id === p.id ? 'Renovar / cambiar' : 'Activar'}
@@ -173,7 +174,7 @@ export function TenantBilling() {
         </div>
       </div>
 
-      <div className="rounded border border-admin-warn/30 bg-admin-warn/10 p-4 text-xs text-admin-text flex items-start gap-2">
+      <div className="rounded border border-admin-warn/20 bg-admin-warn/10 p-4 text-xs text-admin-text flex items-start gap-2">
         <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-admin-warn" />
         <div>
           <span className="font-medium">Setup Stripe necesario:</span> el tenant tiene que cargar su Secret Key y Webhook Secret en
