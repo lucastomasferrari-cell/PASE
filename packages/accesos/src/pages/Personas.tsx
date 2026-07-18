@@ -357,7 +357,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       {/* Perfil — header + datos + credenciales, todo junto. */}
       <section className="border-t border-carbon-600">
         <div className="py-5 flex items-center gap-4 flex-wrap border-b border-carbon-600">
-          <div className="w-14 h-14 rounded-sm bg-carbon-700 border border-carbon-500 text-brand-300 grid place-items-center font-mono text-xl shrink-0">{inicial}</div>
+          <div className="w-14 h-14 rounded-sm bg-carbon-700 border-b border-carbon-600 text-brand-300 grid place-items-center font-mono text-xl shrink-0">{inicial}</div>
           <div className="flex-1 min-w-[160px]">
             <h2 className="text-xl font-medium text-dim-50">{esEdicion ? (usuario?.nombre || usuario?.email) : 'Nueva persona'}</h2>
             <div className="text-sm text-dim-300 mt-0.5">{esEdicion ? usuario?.email : 'Perfil de la persona'}</div>
@@ -368,11 +368,11 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-dim-200">Nombre *</label>
-              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
+              <input value={nombreT} onChange={(e) => setNombre(e.target.value)} className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-dim-200">Rol</label>
-              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm bg-carbon-800">
+              <select value={rolId ?? ''} onChange={(e) => elegirRol(e.target.value || null)} className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400">
                 <option value="">— Sin rol —</option>
                 {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
@@ -393,29 +393,29 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                 <label className="text-xs font-medium text-dim-200">Usuario (email)</label>
                 {esEdicion ? (
                   <div className="flex gap-2">
-                    <input value={email} disabled className="flex-1 rounded-sm border border-carbon-500 px-3 py-2 text-sm bg-carbon-700" />
+                    <input value={email} disabled className="flex-1 bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
                     <button type="button" onClick={() => { void navigator.clipboard.writeText(email); toast.success('Email copiado'); }}
-                            className="px-2.5 rounded-sm border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
+                            className="px-2 text-dim-300 hover:text-dim-50 transition-colors" title="Copiar"><Copy className="h-4 w-4" /></button>
                   </div>
                 ) : (
                   <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="persona@ejemplo.com"
-                         className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
+                         className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
                 )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-dim-200">Contraseña</label>
                 {!esEdicion ? (
                   <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" placeholder="Contraseña inicial (mín. 6)"
-                         className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
+                         className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
                 ) : tempPass ? (
                   <div className="flex gap-2">
                     <input value={tempPass} readOnly className="flex-1 rounded-sm border border-emerald-300 bg-live/10 px-3 py-2 text-sm font-mono" />
                     <button type="button" onClick={() => { void navigator.clipboard.writeText(tempPass); toast.success('Contraseña copiada'); }}
-                            className="px-2.5 rounded-sm border border-carbon-500 hover:bg-carbon-700" title="Copiar"><Copy className="h-4 w-4" /></button>
+                            className="px-2 text-dim-300 hover:text-dim-50 transition-colors" title="Copiar"><Copy className="h-4 w-4" /></button>
                   </div>
                 ) : (
                   <button type="button" onClick={() => void resetear()}
-                          className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm font-medium hover:bg-carbon-700 inline-flex items-center justify-center gap-1.5">
+                          className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400 font-medium hover:bg-carbon-700 inline-flex items-center justify-center gap-1.5">
                     <KeyRound className="h-4 w-4" /> Generar contraseña nueva
                   </button>
                 )}
@@ -442,8 +442,8 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
             abierto={abierto.has(a.key)} onToggle={() => toggleOpen(a.key)}
             right={
               <span onClick={(e) => { e.stopPropagation(); toggleApp(a.key); }}
-                    className={`text-[11px] px-2.5 py-1 rounded-full border font-medium cursor-pointer ${on ? 'bg-brand-400 text-white border-brand-400' : 'bg-carbon-800 border-carbon-500 text-dim-200'}`}>
-                {on ? 'Con acceso' : 'Sin acceso'}
+                    className={`font-mono text-[11px] uppercase tracking-widest2 cursor-pointer transition-colors ${on ? 'text-brand-300 hover:text-brand-200' : 'text-dim-400 hover:text-dim-200'}`}>
+                {on ? '● CON ACCESO' : '○ SIN ACCESO'}
               </span>
             }
             sub={on ? (
@@ -489,7 +489,7 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
       })}
 
       <div className="flex gap-2 pt-1 pb-2">
-        <button onClick={onClose} className="flex-1 rounded-sm border border-carbon-500 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
+        <button onClick={onClose} className="flex-1 rounded-sm border-b border-carbon-600 py-2.5 text-sm font-medium hover:bg-carbon-700">Cancelar</button>
         <button onClick={() => void guardar()} disabled={guardando}
                 className="flex-1 rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">
           {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear persona'}
@@ -564,7 +564,7 @@ function PermisosAccordion({ categorias, value, onToggle }: {
     }
   }
   return (
-    <div className="rounded-sm border border-carbon-600 overflow-hidden">
+    <div className="rounded-sm border-b border-carbon-700 overflow-hidden">
       {categorias.map((cat, i) => {
         const open = abiertas.has(cat.titulo);
         const n = activos(cat);
@@ -643,7 +643,7 @@ function PermisosPase({ value, onToggle, selectedRole, personalizado, onVolverAl
           <div className="flex items-center gap-2">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">Personalizado</span>
             <button type="button" onClick={onVolverAlRol}
-                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-sm border border-carbon-500 hover:bg-carbon-700 text-dim-200">
+                    className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-sm border-b border-carbon-600 hover:bg-carbon-700 text-dim-200">
               <RotateCcw className="h-3 w-3" /> Volver a los del rol
             </button>
           </div>
@@ -691,7 +691,7 @@ function LocalesPicker({ marcas, locales, value, onToggle, onToggleMarca }: {
     ...(sinMarca.length ? [{ nombre: 'Sin marca', ids: sinMarca.map((l) => l.id) }] : []),
   ];
   return (
-    <div className="rounded-sm border border-carbon-500 overflow-hidden">
+    <div className="rounded-sm border-b border-carbon-600 overflow-hidden">
       <button type="button" onClick={() => setOpen((o) => !o)}
               className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-ink/[0.02]">
         <MapPin className="h-4 w-4 text-dim-300 shrink-0" />

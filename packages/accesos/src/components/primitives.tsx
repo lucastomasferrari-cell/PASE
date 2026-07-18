@@ -91,15 +91,15 @@ type BtnSize = 'sm' | 'md' | 'lg';
 // Bordes rectos con radios chicos (rounded-sm = 2px).
 const BTN_VARIANT: Record<BtnVariant, string> = {
   // Outline celeste — es el CTA principal en Cocina.
-  primary: 'bg-transparent text-brand-300 border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 hover:text-brand-200',
+  primary: 'bg-transparent text-brand-300 border-0 hover:border-brand-400 hover:bg-brand-400/10 hover:text-brand-200',
   // Neutro con border sutil.
-  secondary: 'bg-transparent text-dim-100 border border-carbon-500 hover:border-carbon-500 hover:bg-carbon-700 hover:text-dim-50',
+  secondary: 'bg-transparent text-dim-100 border-b border-carbon-600 hover:border-carbon-500 hover:bg-carbon-700 hover:text-dim-50',
   // Sin borde ni fondo — solo texto.
   ghost: 'bg-transparent text-dim-200 hover:text-dim-50 hover:bg-carbon-700/60',
   // Crítica (borrar, revocar).
-  danger: 'bg-transparent text-crit border border-crit/50 hover:bg-crit/10 hover:border-crit',
+  danger: 'bg-transparent text-crit border-0 hover:bg-crit/10 hover:border-crit',
   // Estilo consola con label uppercase mono (para "Ejecutar ingreso"/"Ejecutar acción").
-  terminal: 'bg-transparent text-brand-300 font-mono uppercase tracking-widest2 text-xs border border-brand-400/50 hover:border-brand-400 hover:bg-brand-400/10',
+  terminal: 'bg-transparent text-brand-300 font-mono uppercase tracking-widest2 text-xs border-0 hover:border-brand-400 hover:bg-brand-400/10',
 };
 const BTN_SIZE: Record<BtnSize, string> = {
   sm: 'h-7 px-2.5 text-xs',
@@ -144,7 +144,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
       <input
         ref={ref}
         className={cn(
-          'w-full h-10 px-3 rounded-md bg-carbon-900 border border-carbon-500 text-dim-50 placeholder:text-dim-400',
+          'w-full h-10 px-3 rounded-md bg-carbon-900 border-b border-carbon-600 text-dim-50 placeholder:text-dim-400',
           'font-mono text-sm',
           'transition-colors focus:outline-none focus:border-brand-400 focus:bg-carbon-800',
           className,

@@ -158,7 +158,7 @@ export function Tablet({ localId, locales }: Props) {
                 <button
                   type="button"
                   onClick={() => copiar(`${local.login_email}@pase.local`)}
-                  className="h-7 w-7 rounded-sm border border-carbon-500 text-dim-300 hover:text-dim-50 hover:border-carbon-500 hover:bg-carbon-700 inline-flex items-center justify-center"
+                  className="h-7 w-7 rounded-sm border-b border-carbon-600 text-dim-300 hover:text-dim-50 hover:border-carbon-500 hover:bg-carbon-700 inline-flex items-center justify-center"
                   title="Copiar"
                 >
                   <Copy className="h-3.5 w-3.5" />
@@ -181,7 +181,7 @@ export function Tablet({ localId, locales }: Props) {
                   <button
                     type="button"
                     onClick={() => setPasswordVisible((v) => !v)}
-                    className="h-7 w-7 rounded-sm border border-carbon-500 text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center"
+                    className="h-7 w-7 rounded-sm border-b border-carbon-600 text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center"
                     title={passwordVisible ? 'Ocultar' : 'Mostrar'}
                   >
                     {passwordVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -189,7 +189,7 @@ export function Tablet({ localId, locales }: Props) {
                   <button
                     type="button"
                     onClick={() => copiar(creds.password)}
-                    className="h-7 w-7 rounded-sm border border-carbon-500 text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center"
+                    className="h-7 w-7 rounded-sm border-b border-carbon-600 text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center"
                     title="Copiar"
                   >
                     <Copy className="h-3.5 w-3.5" />

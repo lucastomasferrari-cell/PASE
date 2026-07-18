@@ -158,7 +158,7 @@ function PinDialog({ empleado, onClose, onSaved }: { empleado: EmpleadoPos; onCl
 
   return (
     <div className="fixed inset-0 z-50 bg-carbon-900/80 backdrop-blur flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="w-full sm:max-w-xs bg-carbon-800 border border-carbon-500 rounded-t-sm sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full sm:max-w-xs bg-carbon-800 border-b border-carbon-600 rounded-t-sm sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-2">
             <span className="font-mono text-[11px] text-brand-400 tracking-widest2">SET //</span>
@@ -171,20 +171,20 @@ function PinDialog({ empleado, onClose, onSaved }: { empleado: EmpleadoPos; onCl
           value={pin}
           onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
           inputMode="numeric" autoFocus maxLength={4}
-          className="w-full rounded-sm border border-carbon-500 bg-carbon-900 px-3 py-3 text-center font-mono text-2xl tracking-[0.4em] text-dim-50 focus:outline-none focus:border-brand-400"
+          className="w-full rounded-sm border-b border-carbon-600 bg-carbon-900 px-3 py-3 text-center font-mono text-2xl tracking-[0.4em] text-dim-50 focus:outline-none focus:border-brand-400"
           placeholder="••••"
         />
         <div className="flex gap-2 pt-1">
           <button
             onClick={onClose}
-            className="flex-1 h-9 rounded-sm border border-carbon-500 bg-transparent text-dim-200 font-mono uppercase tracking-widest2 text-xs hover:bg-carbon-700"
+            className="flex-1 h-9 rounded-sm border-b border-carbon-600 bg-transparent text-dim-200 font-mono uppercase tracking-widest2 text-xs hover:bg-carbon-700"
           >
             Cancelar
           </button>
           <button
             onClick={() => void submit()}
             disabled={guardando || pin.length !== 4}
-            className="flex-1 h-9 rounded-sm border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40"
+            className="flex-1 h-9 rounded-sm border-0 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40"
           >
             {guardando ? 'Guardando…' : 'Guardar PIN'}
           </button>

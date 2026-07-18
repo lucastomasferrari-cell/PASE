@@ -67,7 +67,7 @@ export function Roles() {
         </div>
         {familia === 'gestion' && (
           <button onClick={() => setCreando(true)}
-                  className="mb-2 rounded-sm bg-transparent border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 px-3 h-8 text-xs inline-flex items-center gap-1.5">
+                  className="mb-2 rounded-sm bg-transparent border-0 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 px-3 h-8 text-xs inline-flex items-center gap-1.5">
             <Plus className="h-3.5 w-3.5" /> Nuevo rol
           </button>
         )}
@@ -128,7 +128,7 @@ export function Roles() {
                 {!sel.sistema && (
                   <button
                     onClick={() => void borrar(sel)}
-                    className="h-8 px-2.5 rounded-sm border border-crit/50 hover:border-crit hover:bg-crit/10 text-crit font-mono uppercase tracking-widest2 text-[11px] inline-flex items-center gap-1.5"
+                    className="h-8 px-2.5 rounded-sm border-0 hover:border-crit hover:bg-crit/10 text-crit font-mono uppercase tracking-widest2 text-[11px] inline-flex items-center gap-1.5"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Borrar
                   </button>
@@ -293,7 +293,7 @@ function RolesPos() {
                   const { error } = await setRolPosPermisos(sel, nuevos);
                   if (error) { toast.error(error); void reload(); }
                 }}
-                className="h-7 px-2.5 rounded-sm border border-carbon-500 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-[10px]"
+                className="h-7 px-2.5 rounded-sm border-b border-carbon-600 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-[10px]"
               >
                 {slugs.length >= TODOS_SLUGS_ROL_POS.length ? 'Sacar todos' : 'Dar todos'}
               </button>
@@ -323,7 +323,7 @@ function FormRol({ onClose, onSaved }: { onClose: () => void; onSaved: () => voi
 
   return (
     <div className="fixed inset-0 z-50 bg-carbon-900/80 backdrop-blur flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="w-full sm:max-w-sm bg-carbon-800 border border-carbon-500 rounded-t-sm sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full sm:max-w-sm bg-carbon-800 border-b border-carbon-600 rounded-t-sm sm:rounded-sm shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-2">
             <span className="font-mono text-[11px] text-brand-400 tracking-widest2">NEW //</span>
@@ -334,25 +334,25 @@ function FormRol({ onClose, onSaved }: { onClose: () => void; onSaved: () => voi
         <div>
           <p className="label-sys mb-1.5">Nombre *</p>
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus
-                 className="w-full h-9 rounded-sm border border-carbon-500 bg-transparent px-3 text-sm font-mono text-dim-50 placeholder:text-dim-400 focus:outline-none focus:border-brand-400"
+                 className="w-full h-9 rounded-sm border-b border-carbon-600 bg-transparent px-3 text-sm font-mono text-dim-50 placeholder:text-dim-400 focus:outline-none focus:border-brand-400"
                  placeholder="Encargado de turno" />
         </div>
         <div>
           <p className="label-sys mb-1.5">Descripción</p>
           <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                 className="w-full h-9 rounded-sm border border-carbon-500 bg-transparent px-3 text-sm font-mono text-dim-50 placeholder:text-dim-400 focus:outline-none focus:border-brand-400"
+                 className="w-full h-9 rounded-sm border-b border-carbon-600 bg-transparent px-3 text-sm font-mono text-dim-50 placeholder:text-dim-400 focus:outline-none focus:border-brand-400"
                  placeholder="Para qué sirve este rol" />
         </div>
         <div className="flex gap-2 pt-1">
           <button
             onClick={onClose}
-            className="flex-1 h-9 rounded-sm border border-carbon-500 bg-transparent text-dim-200 font-mono uppercase tracking-widest2 text-xs hover:bg-carbon-700"
+            className="flex-1 h-9 rounded-sm border-b border-carbon-600 bg-transparent text-dim-200 font-mono uppercase tracking-widest2 text-xs hover:bg-carbon-700"
           >
             Cancelar
           </button>
           <button
             onClick={() => void submit()} disabled={guardando}
-            className="flex-1 h-9 rounded-sm border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40"
+            className="flex-1 h-9 rounded-sm border-0 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40"
           >
             {guardando ? 'Creando…' : 'Crear rol'}
           </button>

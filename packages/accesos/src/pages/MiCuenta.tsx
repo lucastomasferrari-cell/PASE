@@ -40,11 +40,11 @@ export function MiCuenta({ email }: { email: string }) {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-dim-200">Nueva contraseña</label>
-            <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
+            <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-dim-200">Repetir</label>
-            <input type="password" value={confirma} onChange={(e) => setConfirma(e.target.value)} className="w-full rounded-sm border border-carbon-500 px-3 py-2 text-sm" />
+            <input type="password" value={confirma} onChange={(e) => setConfirma(e.target.value)} className="w-full bg-transparent border-b border-carbon-600 px-1 py-1.5 text-sm font-mono focus:outline-none focus:border-brand-400" />
           </div>
           <button onClick={() => void submit()} disabled={guardando || !nueva || !confirma}
                   className="w-full rounded-sm bg-brand-400 hover:bg-brand-500 text-white py-2.5 text-sm font-medium disabled:opacity-60">

@@ -240,7 +240,7 @@ function LoginScreen({
           <span>ACCESOS.SYS</span>
         </div>
 
-        <div className="bg-carbon-800 border border-carbon-500 rounded-sm shadow-card overflow-hidden">
+        <div className="bg-carbon-800 border-b border-carbon-600 rounded-sm shadow-card overflow-hidden">
           {/* Header: logo. */}
           <div className="px-6 pt-6 pb-4 border-b border-carbon-600">
             <div className="text-3xl font-medium text-dim-50">
@@ -437,7 +437,7 @@ function LocalSwitcher({
     <div className="relative ml-auto sm:ml-4">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-sm border border-carbon-500 bg-carbon-700 px-3 py-1.5 text-sm text-dim-100 hover:border-brand-400 hover:text-dim-50 max-w-[220px] transition-colors"
+        className="flex items-center gap-2 rounded-sm border-b border-carbon-600 bg-carbon-700 px-3 py-1.5 text-sm text-dim-100 hover:border-brand-400 hover:text-dim-50 max-w-[220px] transition-colors"
       >
         <MapPin className="h-4 w-4 text-brand-400 shrink-0" />
         <span className="truncate font-mono text-xs">{actual?.nombre ?? 'ELEGÍ LOCAL'}</span>
@@ -446,7 +446,7 @@ function LocalSwitcher({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-40 w-56 rounded-sm border border-carbon-500 bg-carbon-800 shadow-card py-1">
+          <div className="absolute right-0 top-full mt-1.5 z-40 w-56 rounded-sm border-b border-carbon-600 bg-carbon-800 shadow-card py-1">
             {locales.map((l) => (
               <button
                 key={l.id}
