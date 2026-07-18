@@ -52,6 +52,50 @@
   }
 }
 
+/* ─── Reset global de form controls ───────────────────────────────────────
+   Chrome/Firefox aplican `background-color: field` a inputs y selects por
+   default. Ese fondo se "come" al `bg-transparent` de Tailwind y genera el
+   look de cajón grisáceo que Lucas rechazó. Este reset fuerza fondo
+   transparente + underline hairline en TODOS los inputs, sin salvedad
+   (checkbox/radio se excluyen). Sirve como piso — cualquier página puede
+   overridear con clases si necesita.
+   17-jul-2026. */
+input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),
+select,
+textarea {
+  background-color: transparent !important;
+  background-image: none;
+  border: 0;
+  border-bottom: 1px solid #1B2338; /* carbon-600 */
+  border-radius: 0;
+  color: #E6ECF5;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  transition: border-color 0.15s;
+  box-shadow: none;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-bottom-color: #75AADB; /* brand-400 */
+}
+/* Sacar el arrow default del select y poner uno custom (mono / dim). */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 22px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237683A0' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  cursor: pointer;
+}
+/* Autofill (Chrome): eliminar el fondo amarillo/celeste que rompe el look. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #060912 inset !important;
+  -webkit-text-fill-color: #E6ECF5 !important;
+  transition: background-color 9999s;
+}
+
 /* Scrollbar fina y oscura — armoniza con el fondo carbon. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: #060912; }

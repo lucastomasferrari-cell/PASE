@@ -207,8 +207,8 @@ export function Tablet({ localId, locales }: Props) {
               <input
                 value={passElegida}
                 onChange={(e) => setPassElegida(e.target.value)}
-                placeholder="CONTRASEÑA DE LA TABLET (MÍN. 8)…"
-                className="flex-1 h-8 bg-transparent border-b border-carbon-600 focus:border-brand-400 px-1 text-sm font-mono text-dim-50 placeholder:text-dim-400 placeholder:text-[11px] placeholder:uppercase placeholder:tracking-widest2 focus:outline-none transition-colors"
+                placeholder="Contraseña de la tablet (mín. 8)…"
+                className="flex-1 h-8 bg-transparent px-1 text-sm font-mono text-dim-50 placeholder:text-dim-400 focus:outline-none"
               />
               <button
                 type="button"
