@@ -189,7 +189,7 @@ function AppPerms({ label, categorias, activos, toggle }: {
                 <span className="font-mono text-[11px] uppercase tracking-widest2 text-dim-200">{cat.titulo}</span>
                 <span className="font-mono text-[10px] tracking-widest2 text-dim-400">{activosCat} / {cat.permisos.length}</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                 {cat.permisos.map((p) => {
                   const on = set.has(p.slug);
                   return (
@@ -197,12 +197,13 @@ function AppPerms({ label, categorias, activos, toggle }: {
                       key={p.slug}
                       onClick={() => void toggle(p.slug)}
                       title={p.descripcion}
-                      className={`h-[22px] px-2 rounded-sm border font-mono text-[10px] uppercase tracking-widest2 transition-colors ${
+                      className={`font-mono text-[11px] uppercase tracking-widest2 transition-colors inline-flex items-center gap-1.5 ${
                         on
-                          ? 'border-brand-400/60 text-brand-300 bg-brand-400/[0.08]'
-                          : 'border-carbon-500 text-dim-300 hover:border-dim-400 hover:text-dim-100'
+                          ? 'text-brand-300 hover:text-brand-200'
+                          : 'text-dim-400 hover:text-dim-200'
                       }`}
                     >
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full transition-colors ${on ? 'bg-brand-400' : 'bg-carbon-500'}`} />
                       {p.label}
                     </button>
                   );

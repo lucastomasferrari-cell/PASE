@@ -101,14 +101,21 @@ export function Personas() {
         <span className="font-mono text-xs text-brand-400 tracking-widest2">01 //</span>
         <h1 className="text-2xl font-semibold text-dim-50 tracking-tight">Personas</h1>
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-dim-300" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o email…"
-                 className="w-full rounded-sm border border-carbon-500 bg-transparent font-mono pl-9 pr-3 py-2 text-sm placeholder:text-dim-400 focus:outline-none focus:border-brand-400" />
+      {/* Buscador + Nueva persona — sin box, líneas de fondo tipo terminal. */}
+      <div className="flex items-center gap-3 flex-wrap border-b border-carbon-600 pb-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-dim-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="BUSCAR POR NOMBRE O EMAIL…"
+            className="w-full bg-transparent font-mono pl-7 pr-3 py-1.5 text-xs uppercase tracking-widest2 text-dim-100 placeholder:text-dim-400 focus:outline-none border-0"
+          />
         </div>
-        <button onClick={() => setEditando('nuevo')}
-                className="rounded-sm bg-transparent border border-brand-400/60 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 px-3 h-9 text-xs inline-flex items-center gap-1.5">
+        <button
+          onClick={() => setEditando('nuevo')}
+          className="text-brand-300 font-mono uppercase tracking-widest2 text-xs inline-flex items-center gap-1.5 hover:text-brand-200 transition-colors"
+        >
           <Plus className="h-3.5 w-3.5" /> Nueva persona
         </button>
       </div>
@@ -116,12 +123,12 @@ export function Personas() {
       {cargando ? (
         <div className="py-16 text-center text-dim-300 font-mono text-xs uppercase tracking-widest2">Cargando equipo…</div>
       ) : filtrados.length === 0 ? (
-        <div className="border-t border-b border-carbon-600 py-16 text-center">
+        <div className="py-16 text-center">
           <p className="font-medium text-dim-100">Sin resultados</p>
           <p className="text-sm text-dim-300 mt-1">Probá otra búsqueda o cargá una persona nueva.</p>
         </div>
       ) : (
-        <div className="border-t border-carbon-600">
+        <div>
           {filtrados.map((u) => (
             <UsuarioCard key={u.id} u={u} locales={locales} onEditar={() => setEditando(u)}
                          onToggleActivo={() => void toggleActivo(u)} onReset={() => void reset(u).then((p) => p && window.prompt('Contraseña temporal (la cambia al entrar):', p))} />
@@ -132,6 +139,9 @@ export function Personas() {
   );
 }
 
+// Fila de persona — patrón Cocina: SIN border, mucho aire vertical, elementos
+// internos casi invisibles hasta hover. Solo se pinta un tinte celeste ultra
+// sutil al hover y los botones aparecen con opacidad plena.
 function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   u: Usuario; locales: LocalSimple[]; onEditar: () => void; onToggleActivo: () => void; onReset: () => void;
 }) {
@@ -139,43 +149,66 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
   const locsAsignados = (u.locales ?? []).map((id) => locales.find((l) => l.id === id)?.nombre).filter(Boolean);
 
   return (
-    <div className={`border-b border-carbon-600 py-3 px-1 transition-colors hover:bg-brand-400/[0.04] ${u.activo ? '' : 'opacity-60'}`}>
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="w-9 h-9 rounded-sm bg-carbon-700 border border-carbon-500 text-brand-300 grid place-items-center font-mono text-sm shrink-0">
+    <div className={`group py-4 transition-colors hover:bg-brand-400/[0.025] ${u.activo ? '' : 'opacity-60'}`}>
+      <div className="flex items-center gap-4 flex-wrap">
+        {/* Avatar sin border, solo bg tenue. */}
+        <div className="w-9 h-9 bg-carbon-700/60 text-brand-300 grid place-items-center font-mono text-sm shrink-0 rounded-sm">
           {(nombre(u)[0] ?? '?').toUpperCase()}
         </div>
-        <div className="flex-1 min-w-[160px]">
-          <div className="flex items-center gap-2 flex-wrap">
+
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-medium text-dim-50">{nombre(u)}</span>
-            <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-brand-400/50 text-brand-300">{u.rol}</span>
+            {/* Chip rol — muy sutil, sin border, texto tinted. */}
+            <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">
+              {u.rol}
+            </span>
             {apps.map((k) => {
               const app = APPS.find((a) => a.key === (k as AppKey));
               const op = app?.tier === 'operativa';
               return (
-                <span key={k} className={`font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border ${op ? 'border-gold/50 text-gold' : 'border-carbon-500 text-dim-200'}`}>
-                  {app?.nombre ?? k}
+                <span key={k} className={`font-mono text-[10px] uppercase tracking-widest2 ${op ? 'text-gold/80' : 'text-brand-300/80'}`}>
+                  {(app?.nombre ?? k).toUpperCase()}
                 </span>
               );
             })}
-            {u.password_temporal && <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-warn/50 text-warn">Password temporal</span>}
-            {!u.activo && <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-carbon-600 text-dim-400">Inactivo</span>}
+            {u.password_temporal && <span className="font-mono text-[10px] uppercase tracking-widest2 text-warn">TEMP PWD</span>}
+            {!u.activo && <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">INACTIVO</span>}
           </div>
-          <div className="text-xs text-dim-300 mt-1 flex items-center gap-1.5 flex-wrap">
+          <div className="text-xs text-dim-400 mt-1 flex items-center gap-2 flex-wrap font-mono">
             <span>{u.email}</span>
             {locsAsignados.length > 0 && (
-              <span className="inline-flex items-center gap-1 min-w-0"><span className="opacity-40">·</span><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{locsAsignados.join(' · ')}</span></span>
+              <>
+                <span className="opacity-40">·</span>
+                <MapPin className="h-3 w-3 shrink-0 text-dim-400" />
+                <span className="truncate">{locsAsignados.join(' · ')}</span>
+              </>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={onEditar} className="text-xs font-mono uppercase tracking-widest2 px-2.5 h-7 rounded-sm border border-brand-400/50 bg-transparent hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 inline-flex items-center gap-1.5">
+
+        {/* Acciones — sin border por default, aparecen al hover. Solo texto/icono. */}
+        <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={onEditar}
+            className="text-brand-300 hover:text-brand-200 hover:bg-brand-400/10 font-mono uppercase tracking-widest2 px-2 h-7 text-[11px] inline-flex items-center gap-1.5 rounded-sm transition-colors"
+          >
             <ShieldCheck className="h-3 w-3" /> Editar
           </button>
-          <button onClick={onReset} className="h-7 w-7 rounded-sm border border-carbon-500 bg-transparent hover:border-carbon-500 hover:bg-carbon-700 text-dim-200 inline-flex items-center justify-center" title="Resetear contraseña">
+          <button
+            onClick={onReset}
+            className="h-7 w-7 rounded-sm text-dim-300 hover:text-dim-50 hover:bg-carbon-700 inline-flex items-center justify-center transition-colors"
+            title="Resetear contraseña"
+          >
             <KeyRound className="h-3.5 w-3.5" />
           </button>
-          <button onClick={onToggleActivo} title={u.activo ? 'Desactivar' : 'Activar'}
-                  className={`h-7 w-7 rounded-sm border inline-flex items-center justify-center ${u.activo ? 'border-warn/50 text-warn hover:bg-warn/10' : 'border-live/50 text-live hover:bg-live/10'}`}>
+          <button
+            onClick={onToggleActivo}
+            title={u.activo ? 'Desactivar' : 'Activar'}
+            className={`h-7 w-7 rounded-sm inline-flex items-center justify-center transition-colors ${
+              u.activo ? 'text-warn/70 hover:text-warn hover:bg-warn/10' : 'text-live/70 hover:text-live hover:bg-live/10'
+            }`}
+          >
             <Power className="h-3.5 w-3.5" />
           </button>
         </div>

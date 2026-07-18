@@ -80,49 +80,49 @@ export function PinPos({ localId, locales }: Props) {
             return (
               <div
                 key={e.id}
-                className={`border-b border-carbon-600 py-4 px-1 flex items-center gap-4 flex-wrap transition-colors hover:bg-brand-400/[0.03] ${e.pos_activo ? '' : 'opacity-60'}`}
+                className={`group py-4 flex items-center gap-4 flex-wrap transition-colors hover:bg-brand-400/[0.025] ${e.pos_activo ? '' : 'opacity-60'}`}
               >
-                <div className="w-10 h-10 rounded-sm border border-carbon-500 bg-carbon-800/40 text-brand-300 flex items-center justify-center font-mono text-sm shrink-0">
+                <div className="w-10 h-10 rounded-sm bg-carbon-700/60 text-brand-300 flex items-center justify-center font-mono text-sm shrink-0">
                   {(nombre[0] ?? '?').toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-[180px]">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="text-[15px] font-medium text-dim-50">{nombre}</span>
                     {!e.rol_pos && (
-                      <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-carbon-600 text-dim-400">
+                      <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">
                         SIN ROL
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] font-mono uppercase tracking-widest2 text-dim-300 mt-1">
+                  <div className="text-[11px] font-mono uppercase tracking-widest2 text-dim-400 mt-1">
                     {e.puesto ?? '—'}
                     {yaTienePin && (
                       <> · PIN {new Date(e.pin_actualizado_at as string).toLocaleDateString('es-AR')}</>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
                   <select
                     value={e.rol_pos ?? ''}
                     onChange={(ev) => void cambiarRol(e, (ev.target.value || null) as RolPos | null)}
-                    className="h-8 rounded-sm border border-carbon-500 bg-transparent text-dim-100 font-mono text-[11px] uppercase tracking-widest px-2 capitalize hover:border-brand-400 focus:outline-none focus:border-brand-400"
+                    className="h-7 bg-transparent text-dim-100 font-mono text-[10px] uppercase tracking-widest2 px-1.5 capitalize border-0 focus:outline-none focus:text-dim-50 hover:text-dim-50 cursor-pointer"
                   >
-                    <option value="">Sin rol</option>
-                    {ROLES_POS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    <option value="" style={{background:'#0B1220'}}>Sin rol</option>
+                    {ROLES_POS.map((r) => <option key={r} value={r} style={{background:'#0B1220'}}>{r}</option>)}
                   </select>
                   <button
                     onClick={() => setPinDe(e)}
-                    className="h-8 px-2.5 rounded-sm border border-brand-400/50 hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-[11px] inline-flex items-center gap-1.5"
+                    className="text-brand-300 hover:text-brand-200 hover:bg-brand-400/10 font-mono uppercase tracking-widest2 px-2 h-7 text-[11px] inline-flex items-center gap-1.5 rounded-sm transition-colors"
                   >
                     <KeyRound className="h-3 w-3" /> {yaTienePin ? 'Cambiar PIN' : 'Setear PIN'}
                   </button>
                   <button
                     onClick={() => void toggle(e)}
                     title={e.pos_activo ? 'Desactivar' : 'Activar'}
-                    className={`h-8 w-8 rounded-sm border inline-flex items-center justify-center transition-colors ${
+                    className={`h-7 w-7 rounded-sm inline-flex items-center justify-center transition-colors ${
                       e.pos_activo
-                        ? 'border-warn/50 text-warn hover:border-warn hover:bg-warn/10'
-                        : 'border-live/50 text-live hover:border-live hover:bg-live/10'
+                        ? 'text-warn/70 hover:text-warn hover:bg-warn/10'
+                        : 'text-live/70 hover:text-live hover:bg-live/10'
                     }`}
                   >
                     <Power className="h-3.5 w-3.5" />

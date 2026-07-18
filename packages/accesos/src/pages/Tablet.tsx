@@ -123,26 +123,22 @@ export function Tablet({ localId, locales }: Props) {
         </div>
       </MiniNote>
 
-      {/* Fila del dispositivo — sin caja, solo hairline abajo. */}
-      <div className="border-b border-carbon-600 py-4 px-1">
+      {/* Fila del dispositivo — sin caja, sin border interno. */}
+      <div className="py-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-sm border border-carbon-500 bg-carbon-800/40 flex items-center justify-center text-brand-300 shrink-0">
+          <div className="w-10 h-10 rounded-sm bg-carbon-700/60 flex items-center justify-center text-brand-300 shrink-0">
             <TabletIcon className="h-4 w-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-[15px] font-medium text-dim-50">{local.nombre}</h3>
               {yaExiste ? (
-                <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-live/50 text-live">
-                  ACTIVA
-                </span>
+                <span className="font-mono text-[10px] uppercase tracking-widest2 text-live">ACTIVA</span>
               ) : (
-                <span className="font-mono text-[10px] uppercase tracking-widest2 px-1.5 h-[20px] inline-flex items-center rounded-sm border border-carbon-600 text-dim-400">
-                  SIN CREDENCIAL
-                </span>
+                <span className="font-mono text-[10px] uppercase tracking-widest2 text-dim-400">SIN CREDENCIAL</span>
               )}
             </div>
-            <p className="text-xs text-dim-300 mt-1 font-mono">
+            <p className="text-xs text-dim-400 mt-1 font-mono">
               {yaExiste
                 ? `ROTADA ${local.login_password_rotated_at
                     ? new Date(local.login_password_rotated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).toUpperCase()
@@ -207,20 +203,20 @@ export function Tablet({ localId, locales }: Props) {
             <p className="label-sys mb-1.5">
               {yaExiste ? 'Cambiar contraseña' : 'Nueva contraseña'}
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-3 items-center">
               <input
                 value={passElegida}
                 onChange={(e) => setPassElegida(e.target.value)}
-                placeholder="Contraseña de la tablet (mín. 8)…"
-                className="flex-1 h-9 rounded-sm border border-carbon-500 bg-transparent px-3 text-sm font-mono text-dim-50 placeholder:text-dim-400 focus:outline-none focus:border-brand-400"
+                placeholder="CONTRASEÑA DE LA TABLET (MÍN. 8)…"
+                className="flex-1 h-8 bg-transparent border-b border-carbon-600 focus:border-brand-400 px-1 text-sm font-mono text-dim-50 placeholder:text-dim-400 placeholder:text-[11px] placeholder:uppercase placeholder:tracking-widest2 focus:outline-none transition-colors"
               />
               <button
                 type="button"
                 onClick={() => void usarElegida()}
                 disabled={rotando || passElegida.length < 8}
-                className="h-9 px-4 rounded-sm border border-brand-400/60 bg-transparent hover:border-brand-400 hover:bg-brand-400/10 text-brand-300 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                className="text-brand-300 hover:text-brand-200 font-mono uppercase tracking-widest2 text-xs disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-colors"
               >
-                {rotando ? 'GUARDANDO…' : yaExiste ? 'CAMBIAR' : 'GENERAR'}
+                {rotando ? 'GUARDANDO…' : yaExiste ? 'CAMBIAR →' : 'GENERAR →'}
               </button>
             </div>
             {yaExiste && (
