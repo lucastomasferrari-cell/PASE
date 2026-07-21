@@ -323,22 +323,26 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                           {i.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>({i.unidad})</span>
                         </button>
                       ))}
-                      {/* Botón crear insumo: siempre visible. Con nombre nuevo escrito,
-                          lo crea y matchea; vacío o con match exacto, enfoca el buscador. */}
-                      <button
-                        className="cruce-opt"
-                        style={{ color: "var(--acc)", fontWeight: 500, borderTop: "0.5px solid var(--bd)", marginTop: 4, paddingTop: 10 }}
-                        disabled={busy}
-                        onClick={() => {
-                          if (pickSearch.trim() && !hayExacto) crearInsumoYMatch(g, pickSearch, factorNum);
-                          else pickInputRef.current?.focus();
-                        }}
-                      >
-                        {pickSearch.trim() && !hayExacto
-                          ? `+ Crear insumo «${pickSearch.trim()}» y matchear`
-                          : "+ Crear insumo nuevo"}
-                      </button>
+                      {insFiltrados.length === 0 && (
+                        <div style={{ fontSize: 12, color: "var(--muted2)", padding: "6px 10px" }}>Ningún insumo coincide.</div>
+                      )}
                     </div>
+
+                    {/* Botón crear insumo: FIJO al pie (fuera del scroll), siempre a la vista.
+                        Con nombre nuevo escrito lo crea y matchea; vacío enfoca el buscador. */}
+                    <button
+                      className="cruce-opt"
+                      style={{ color: "var(--acc)", fontWeight: 500, borderTop: "0.5px solid var(--bd)", marginTop: 6, paddingTop: 10 }}
+                      disabled={busy}
+                      onClick={() => {
+                        if (pickSearch.trim() && !hayExacto) crearInsumoYMatch(g, pickSearch, factorNum);
+                        else pickInputRef.current?.focus();
+                      }}
+                    >
+                      {pickSearch.trim() && !hayExacto
+                        ? `+ Crear insumo «${pickSearch.trim()}» y matchear`
+                        : "+ Crear insumo nuevo"}
+                    </button>
                   </div>
                 )}
               </div>
