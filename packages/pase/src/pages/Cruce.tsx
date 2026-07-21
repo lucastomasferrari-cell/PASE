@@ -13,7 +13,7 @@
 // Reusa el backend de la bandeja: v_bandeja_conciliacion + fn_conciliar_producto
 // + fn_descartar_renglon. Sin RPC nueva.
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { useGuardedHandler } from "../lib/useGuardedHandler";
@@ -90,6 +90,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [pickSearch, setPickSearch] = useState("");
   const [pickFactor, setPickFactor] = useState("1");
+  const pickInputRef = useRef<HTMLInputElement>(null);
 
   const puede = tienePermiso(user, "compras") || user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
 
@@ -302,7 +303,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                     <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10 }}>
                       <div style={{ flex: 1 }}>
                         <label style={{ fontSize: 11, color: "var(--muted2)" }}>Buscar insumo</label>
-                        <input type="text" autoFocus value={pickSearch} onChange={e => setPickSearch(e.target.value)} className="search" style={{ width: "100%" }} placeholder="Escribí para filtrar…" />
+                        <input ref={pickInputRef} type="text" autoFocus value={pickSearch} onChange={e => setPickSearch(e.target.value)} className="search" style={{ width: "100%" }} placeholder="Escribí para filtrar o crear…" />
                       </div>
                       <div style={{ width: 150 }}>
                         <label style={{ fontSize: 11, color: "var(--muted2)" }}>1 {g.unidad} =</label>
@@ -322,16 +323,21 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                           {i.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>({i.unidad})</span>
                         </button>
                       ))}
-                      {pickSearch.trim() && !hayExacto && (
-                        <button className="cruce-opt" style={{ color: "var(--acc)", borderTop: "0.5px solid var(--bd)", marginTop: 4, paddingTop: 10 }} disabled={busy} onClick={() => crearInsumoYMatch(g, pickSearch, factorNum)}>
-                          + Crear insumo «{pickSearch.trim()}» y matchear
-                        </button>
-                      )}
-                      {!pickSearch.trim() && insFiltrados.length === 0 && (
-                        <div style={{ fontSize: 11, color: "var(--muted2)", padding: "6px 10px" }}>
-                          No hay insumos. Escribí un nombre para crear uno nuevo.
-                        </div>
-                      )}
+                      {/* Botón crear insumo: siempre visible. Con nombre nuevo escrito,
+                          lo crea y matchea; vacío o con match exacto, enfoca el buscador. */}
+                      <button
+                        className="cruce-opt"
+                        style={{ color: "var(--acc)", fontWeight: 500, borderTop: "0.5px solid var(--bd)", marginTop: 4, paddingTop: 10 }}
+                        disabled={busy}
+                        onClick={() => {
+                          if (pickSearch.trim() && !hayExacto) crearInsumoYMatch(g, pickSearch, factorNum);
+                          else pickInputRef.current?.focus();
+                        }}
+                      >
+                        {pickSearch.trim() && !hayExacto
+                          ? `+ Crear insumo «${pickSearch.trim()}» y matchear`
+                          : "+ Crear insumo nuevo"}
+                      </button>
                     </div>
                   </div>
                 )}
