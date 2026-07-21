@@ -247,6 +247,9 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
             const busy = matcheando || descartando || creandoInsumo;
             const insFiltrados = insumos.filter(i => !pickSearch || norm(i.nombre).includes(norm(pickSearch)));
             const factorNum = parseFloat(pickFactor) || 1;
+            // ¿Lo que escribió coincide EXACTO con un insumo? Si no, ofrecemos crear
+            // (aunque haya parecidos: "Aceite de oliva" no es "Aceite de sésamo").
+            const hayExacto = insumos.some(i => norm(i.nombre) === norm(pickSearch));
             return (
               <div key={g.key} className="panel" style={{ padding: 0, ...(open ? { borderColor: "var(--acc)" } : {}) }}>
                 {/* Fila principal */}
@@ -305,14 +308,14 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                           {i.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>({i.unidad})</span>
                         </button>
                       ))}
-                      {pickSearch.trim() && insFiltrados.length === 0 && (
-                        <button className="cruce-opt" style={{ color: "var(--acc)" }} disabled={busy} onClick={() => crearInsumoYMatch(g, pickSearch, factorNum)}>
+                      {pickSearch.trim() && !hayExacto && (
+                        <button className="cruce-opt" style={{ color: "var(--acc)", borderTop: "0.5px solid var(--bd)", marginTop: 4, paddingTop: 10 }} disabled={busy} onClick={() => crearInsumoYMatch(g, pickSearch, factorNum)}>
                           + Crear insumo «{pickSearch.trim()}» y matchear
                         </button>
                       )}
-                      {!pickSearch.trim() && (
+                      {!pickSearch.trim() && insFiltrados.length === 0 && (
                         <div style={{ fontSize: 11, color: "var(--muted2)", padding: "6px 10px" }}>
-                          Escribí un nombre que no exista para crear un insumo nuevo.
+                          No hay insumos. Escribí un nombre para crear uno nuevo.
                         </div>
                       )}
                     </div>
