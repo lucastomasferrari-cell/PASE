@@ -25,11 +25,10 @@ import { RightSubNav, type SubNavSection, PageHeader } from "../components/ui";
 const Insumos = lazy(() => import("./Insumos"));
 const Recetas = lazy(() => import("./Recetas"));
 const MateriasPrimas = lazy(() => import("./MateriasPrimas"));
-const Conciliacion = lazy(() => import("./Conciliacion"));
 const Cruce = lazy(() => import("./Cruce"));
 const Stock = lazy(() => import("./Stock"));
 
-type SubSection = "insumos" | "materias-primas" | "recetas" | "conciliacion" | "cruce" | "stock";
+type SubSection = "insumos" | "materias-primas" | "recetas" | "cruce" | "stock";
 
 interface RecetarioProps {
   user: Usuario;
@@ -39,7 +38,10 @@ interface RecetarioProps {
 
 export default function Recetario({ user, locales = [], localActivo }: RecetarioProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const subSection: SubSection = (searchParams.get("sec") as SubSection) || "insumos";
+  // "conciliacion" (la pantalla vieja, reemplazada por "cruce") → redirige a cruce
+  // para no romper bookmarks. Ambas leían la misma bandeja; Cruce es la nueva.
+  const rawSec = searchParams.get("sec");
+  const subSection: SubSection = rawSec === "conciliacion" ? "cruce" : ((rawSec as SubSection) || "insumos");
 
   // Contadores live para el RightSubNav
   const [counts, setCounts] = useState({ insumos: 0, recetas: 0, items: 0, sinReceta: 0, mps: 0, pendientes: 0 });
@@ -85,7 +87,6 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     insumos: "insumos",
     "materias-primas": "materias primas",
     recetas: "recetas",
-    conciliacion: "conciliación",
     cruce: "cruce",
     stock: "stock",
   };
@@ -95,7 +96,6 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     insumos: "Catálogo de materia prima usado por recetas, stock y mermas.",
     "materias-primas": "Catálogo de \"qué te vende cada proveedor\" — vincula proveedor → unidad de compra → insumo. Necesario para que las facturas sumen stock automático.",
     recetas: "Vinculá items vendibles con sus ingredientes para calcular CMV y descontar stock al vender.",
-    conciliacion: "Productos de facturas (manual + IA) sin vincular a una materia prima. Resolvelos una vez y el sistema lo recuerda.",
     cruce: "Asigná el insumo a cada producto de factura pendiente. Al cruzar se crea la materia prima con su insumo y el sistema lo recuerda.",
     stock: "Stock actual, conteos ciegos (cargás lo contado sin ver el teórico → diferencia real), y mermas.",
   };
@@ -148,9 +148,6 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
             {subSection === "recetas" && (
               <Recetas user={user} locales={locales} localActivo={localActivo} embedded />
             )}
-            {subSection === "conciliacion" && (
-              <Conciliacion user={user} locales={locales} localActivo={localActivo} embedded />
-            )}
             {subSection === "cruce" && (
               <Cruce user={user} locales={locales} localActivo={localActivo} embedded />
             )}
@@ -197,16 +194,6 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
                     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 2h6l2 2v8H3z" />
                       <path d="M5 5h4M5 7h4M5 9h3" />
-                    </svg>
-                  ),
-                },
-                {
-                  id: "conciliacion",
-                  label: "Conciliación",
-                  count: counts.pendientes,
-                  icon: (
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2 7h4l1.5 4 2-8L11 7h1" />
                     </svg>
                   ),
                 },
