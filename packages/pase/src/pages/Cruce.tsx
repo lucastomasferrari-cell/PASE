@@ -64,6 +64,20 @@ interface CruceProps {
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 
+// Las unidades de las facturas vienen escritas de cualquier forma ("u", "l",
+// "lts"…), pero insumos.unidad y materias_primas.unidad_compra tienen un CHECK
+// que solo acepta un set fijo. Mapeamos al set común válido para las dos tablas
+// (kg, g, L, ml, un, porcion); cualquier cosa rara cae en "un".
+const normUnidad = (u: string | null): string => {
+  const s = (u ?? "").trim().toLowerCase();
+  if (["kg", "kgs", "kilo", "kilos", "kilogramo", "kilogramos"].includes(s)) return "kg";
+  if (["g", "gr", "grs", "gramo", "gramos"].includes(s)) return "g";
+  if (["l", "lt", "lts", "litro", "litros"].includes(s)) return "L";
+  if (["ml", "cc", "cm3"].includes(s)) return "ml";
+  if (["porcion", "porción", "porciones"].includes(s)) return "porcion";
+  return "un"; // u, unid, unidad, caja, bolsa, docena, vacío, etc.
+};
+
 export default function Cruce({ user, embedded = false }: CruceProps) {
   const { toast, showError, showToast } = useToast();
   const [rows, setRows] = useState<BandejaRow[]>([]);
@@ -154,7 +168,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
       nombre: g.producto,
       proveedor_id: g.proveedor_id,
       insumo_id: insumoId,
-      unidad_compra: g.unidad,
+      unidad_compra: normUnidad(g.unidad),
       factor_conversion: factor > 0 ? factor : 1,
       precio_actual: g.ultimoPrecio,
       activa: true,
@@ -190,7 +204,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
   const { run: crearInsumoYMatch, isPending: creandoInsumo } = useGuardedHandler(async (g: Grupo, nombre: string, factor: number) => {
     const { data, error } = await db.from("insumos").insert([{
       tenant_id: user.tenant_id, created_by: user.id,
-      nombre: nombre.trim(), unidad: g.unidad || "un",
+      nombre: nombre.trim(), unidad: normUnidad(g.unidad),
       activo: true, es_comprado: true, stock_disponible: true,
     }]).select("id").single();
     if (error || !data) { showError("No se pudo crear el insumo: " + (error?.message ?? "vacío")); return; }
