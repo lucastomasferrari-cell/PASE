@@ -44,7 +44,7 @@ test.describe.serial("E2E Test 37 — Bandeja conciliadora", () => {
 
       const { data: ins } = await svc.from("insumos").insert({ nombre: `${SENT} Insumo`, unidad: "kg", tenant_id: T, activo: true, es_comprado: true, stock_disponible: true }).select("id").single();
       insumoId = ins!.id as number;
-      const { data: mp } = await svc.from("materias_primas").insert({ nombre: `${SENT} MP`, tenant_id: T, insumo_id: insumoId, proveedor_id: provId, unidad_compra: "caja", factor_conversion: 10, merma_pct: 0, activa: true }).select("id").single();
+      const { data: mp } = await svc.from("materias_primas").insert({ nombre: `${SENT} MP`, tenant_id: T, insumo_id: insumoId, proveedor_id: provId, unidad_compra: "caja", factor_conversion: 10, activa: true }).select("id").single();
       mpId = mp!.id as number;
 
       const nuevaFactura = async (suf: string, producto: string) => {

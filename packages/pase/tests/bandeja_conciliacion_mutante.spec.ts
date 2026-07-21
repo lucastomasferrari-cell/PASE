@@ -62,7 +62,7 @@ test.describe("Bandeja conciliadora — mutante", () => {
     // Insumo + materia prima de destino.
     const { data: ins } = await db.from("insumos").insert([{ nombre: `${SENT} Insumo`, unidad: "kg", tenant_id: tenantId, activo: true, es_comprado: true, stock_disponible: true }]).select("id").single();
     insumoId = ins!.id as number;
-    const { data: mp } = await db.from("materias_primas").insert([{ nombre: `${SENT} MP`, tenant_id: tenantId, insumo_id: insumoId, proveedor_id: provId, unidad_compra: "caja", factor_conversion: 10, merma_pct: 0, activa: true }]).select("id").single();
+    const { data: mp } = await db.from("materias_primas").insert([{ nombre: `${SENT} MP`, tenant_id: tenantId, insumo_id: insumoId, proveedor_id: provId, unidad_compra: "caja", factor_conversion: 10, activa: true }]).select("id").single();
     mpId = mp!.id as number;
 
     facturaIds.length = 0;

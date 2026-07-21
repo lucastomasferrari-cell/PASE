@@ -4,20 +4,17 @@ import { createDuenoClient } from "./helpers/supabaseClient";
 
 // CMV — materia prima → insumo unificado (mutante).
 //
-// ⚠️ Contrato ACTUALIZADO 2026-06-13 (migración 202606131100, "una casa por concepto"):
-//   El costo del insumo es **as-bought**: precio_actual / factor_conversion.
-//   La merma/rendimiento YA NO se aplica acá — vive SOLO en la línea de receta
-//   (receta_insumos.merma_pct). Antes el costo era precio/(factor×(1−merma/100)),
-//   lo que sumado a la merma de la línea de receta inflaba el costo del plato 2x.
+// ⚠️ Contrato: el costo del insumo es **as-bought** = precio_actual / factor_conversion.
+//   La merma/rendimiento NO vive en la materia prima — vive SOLO en la línea de
+//   receta (receta_insumos.merma_pct). La columna materias_primas.merma_pct fue
+//   eliminada (migración 202607210300); antes existía dormida sin efecto.
 //
 // Invariantes:
-//   1. Crear MP con precio + factor (+ merma, que se IGNORA) → trigger setea
-//      insumo.costo_actual = precio / factor.
+//   1. Crear MP con precio + factor → trigger setea insumo.costo_actual = precio / factor.
 //   2. Crear 2da MP del mismo insumo → costo_actual = promedio simple as-bought.
 //   3. Cargar factura_item con materia_prima_id → trigger actualiza precio_actual
 //      de la MP → cascada al insumo.
 //   4. Marcar MP inactiva → recalcula sin esa MP.
-//   5. Cambiar merma_pct → el costo NO cambia (la merma está deprecada acá).
 
 const SENTINEL = `Test-CMV-${Date.now()}`;
 const LOCAL = "Local Prueba 2";
@@ -77,11 +74,11 @@ test.describe("CMV — materia prima ↔ insumo unificado, costo as-bought (muta
     try { await db.auth.signOut(); } catch { /* idempotente */ }
   });
 
-  test("crear MP → costo as-bought · 2da MP → promedio · factura → cascada · merma IGNORADA", async () => {
+  test("crear MP → costo as-bought · 2da MP → promedio · factura → cascada · inactiva recalcula", async () => {
     if (insumoId === null) throw new Error("Pre: insumo no se creó");
 
-    // ── 1. Crear MP1: precio $10.000/kg, factor 1, merma 35% (DEBE ignorarse)
-    //     costo as-bought = 10.000 / 1 = 10.000 (NO 10.000/0.65)
+    // ── 1. Crear MP1: precio $10.000/kg, factor 1
+    //     costo as-bought = 10.000 / 1 = 10.000
     const { data: mp1, error: errMp1 } = await db.from("materias_primas").insert({
       tenant_id: tenantId,
       nombre: `${SENTINEL}-MP-Trucha-c-visceras`,
@@ -89,7 +86,6 @@ test.describe("CMV — materia prima ↔ insumo unificado, costo as-bought (muta
       insumo_id: insumoId,
       unidad_compra: "kg",
       factor_conversion: 1,
-      merma_pct: 35, // se carga pero NO debe afectar el costo
       precio_actual: 10000,
       activa: true,
     }).select("id").single();
@@ -101,7 +97,7 @@ test.describe("CMV — materia prima ↔ insumo unificado, costo as-bought (muta
     const costoEsperado1 = 10000 / 1;
     expect(Math.abs(Number(ins1?.costo_actual) - costoEsperado1)).toBeLessThan(0.5);
 
-    // ── 2. Crear MP2 del mismo insumo: $12.000/kg, factor 1, merma 5%
+    // ── 2. Crear MP2 del mismo insumo: $12.000/kg, factor 1
     //     costo as-bought = 12.000 / 1 = 12.000
     //     promedio simple = (10.000 + 12.000) / 2 = 11.000
     const { data: mp2, error: errMp2 } = await db.from("materias_primas").insert({
@@ -111,7 +107,6 @@ test.describe("CMV — materia prima ↔ insumo unificado, costo as-bought (muta
       insumo_id: insumoId,
       unidad_compra: "kg",
       factor_conversion: 1,
-      merma_pct: 5, // ignorada
       precio_actual: 12000,
       activa: true,
     }).select("id").single();
@@ -164,11 +159,5 @@ test.describe("CMV — materia prima ↔ insumo unificado, costo as-bought (muta
     const { data: ins4 } = await db.from("insumos").select("costo_actual").eq("id", insumoId).single();
     const costoEsperado4 = 15000; // solo MP1, as-bought
     expect(Math.abs(Number(ins4?.costo_actual) - costoEsperado4)).toBeLessThan(0.5);
-
-    // ── 5. Cambiar merma de MP1 de 35% a 50% → el costo NO cambia (merma deprecada)
-    await db.from("materias_primas").update({ merma_pct: 50 }).eq("id", mp1Id!);
-    const { data: ins5 } = await db.from("insumos").select("costo_actual").eq("id", insumoId).single();
-    const costoEsperado5 = 15000; // sigue as-bought, merma 50% IGNORADA
-    expect(Math.abs(Number(ins5?.costo_actual) - costoEsperado5)).toBeLessThan(0.5);
   });
 });

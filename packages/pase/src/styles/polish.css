@@ -434,3 +434,27 @@ tbody tr.clickable:hover {
      ancho SOLO en el header — los paneles de abajo siguen a ancho completo. */
   .ph-row { padding-right: 130px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+ * CRUCE — opciones del picker de insumo (Recetario → Cruce)
+ * ═══════════════════════════════════════════════════════════════════ */
+.cruce-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--txt);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--pase-radius-md);
+  cursor: pointer;
+  transition: background var(--pase-duration-fast) var(--pase-ease-out);
+}
+.cruce-opt:hover:not(:disabled) { background: var(--pase-celeste-100); }
+.cruce-opt:disabled { opacity: 0.5; cursor: default; }
+.cruce-opt-sug {
+  background: var(--pase-celeste-100);
+  border-color: var(--pase-celeste-300);
+  font-weight: 500;
+}

@@ -469,9 +469,27 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
         // con bucket=NULL → el EERR la trataba como CMV sin importar la categoría.
         bucket: form.cat ? (categoriaToBucket[form.cat] ?? null) : null,
       };
+      // Persistir los renglones que extrajo la IA (antes se descartaban con []).
+      // descripcion → producto (nombre de columna en factura_items). El trigger
+      // de automatch intenta vincularlos a una materia prima conocida; los que
+      // no matchean caen en la bandeja de Cruce para asignarles el insumo.
+      const itemsIA = (resultado?.items ?? [])
+        .map(it => {
+          const cantidad = Number(it.cantidad);
+          const precio = Number(it.precio_unitario);
+          const subtotal = Number(it.subtotal);
+          return {
+            producto: String(it.descripcion ?? "").trim(),
+            cantidad: Number.isFinite(cantidad) && cantidad !== 0 ? cantidad : null,
+            unidad: it.unidad ? String(it.unidad) : null,
+            precio_unitario: Number.isFinite(precio) ? precio : null,
+            subtotal: Number.isFinite(subtotal) ? subtotal : null,
+          };
+        })
+        .filter(it => it.producto.length > 0);
       const {error:insErr} = await db.rpc("crear_factura_completa", {
         p_factura: nueva,
-        p_items: [],
+        p_items: itemsIA,
         p_idempotency_key: crypto.randomUUID(),
       });
       if(insErr){

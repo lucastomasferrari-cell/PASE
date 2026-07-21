@@ -38,7 +38,6 @@ export function MateriaPrimaEditorDialog({ open, onOpenChange, tenantId, editing
   const [insumoId, setInsumoId] = useState<number | null>(null);
   const [unidad, setUnidad] = useState<string>('kg');
   const [factor, setFactor] = useState<number>(1);
-  const [merma, setMerma] = useState<number>(0);
   const [precio, setPrecio] = useState<number>(0);
   const [notas, setNotas] = useState('');
   const [activa, setActiva] = useState(true);
@@ -62,24 +61,23 @@ export function MateriaPrimaEditorDialog({ open, onOpenChange, tenantId, editing
       setInsumoId(editing.insumo_id);
       setUnidad(editing.unidad_compra);
       setFactor(Number(editing.factor_conversion));
-      setMerma(Number(editing.merma_pct));
       setPrecio(Number(editing.precio_actual ?? 0));
       setNotas(editing.notas ?? '');
       setActiva(editing.activa);
     } else {
       setNombre(''); setProveedorId(null); setInsumoId(null);
-      setUnidad('kg'); setFactor(1); setMerma(0); setPrecio(0); setNotas('');
+      setUnidad('kg'); setFactor(1); setPrecio(0); setNotas('');
       setActiva(true);
     }
     setSaving(false);
   }, [open, editing]);
 
-  const costoEfectivo = calcCostoEfectivo({ precio_actual: precio, factor_conversion: factor, merma_pct: merma });
-  const canSubmit = nombre.trim().length > 0 && insumoId !== null && factor > 0 && merma >= 0 && merma < 100;
+  const costoEfectivo = calcCostoEfectivo({ precio_actual: precio, factor_conversion: factor });
+  const canSubmit = nombre.trim().length > 0 && insumoId !== null && factor > 0;
 
   async function guardar() {
     if (!canSubmit || !insumoId) {
-      toast.error('Completá los datos requeridos (nombre + insumo + factor > 0 + merma < 100)');
+      toast.error('Completá los datos requeridos (nombre + insumo + factor > 0)');
       return;
     }
     // Validación bloqueante: precio = 0 al crear nueva MP es trampa — el
@@ -101,7 +99,6 @@ export function MateriaPrimaEditorDialog({ open, onOpenChange, tenantId, editing
       insumo_id: insumoId,
       unidad_compra: unidad,
       factor_conversion: factor,
-      merma_pct: merma,
       precio_actual: precio > 0 ? precio : null,
       notas: notas.trim() || null,
       activa,
@@ -192,22 +189,10 @@ export function MateriaPrimaEditorDialog({ open, onOpenChange, tenantId, editing
               onChange={(e) => setFactor(Number(e.target.value) || 0)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="merma">Merma %</Label>
-            <Input
-              id="merma"
-              type="number"
-              step="0.1"
-              min={0}
-              max={99}
-              value={merma}
-              onChange={(e) => setMerma(Number(e.target.value) || 0)}
-            />
-          </div>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
           Factor = unidades de insumo por cada unidad de compra (ej: 1 cajón de 12 unidades → factor 12).
-          Merma = % que se descarta procesando (vísceras, espinas, cáscaras).
+          La merma/rendimiento no va acá: vive en la línea de receta y se aplica al consumir.
         </p>
 
         {/* Precio */}
@@ -225,7 +210,7 @@ export function MateriaPrimaEditorDialog({ open, onOpenChange, tenantId, editing
             <div className="text-xs text-muted-foreground uppercase tracking-wide">Costo efectivo del insumo</div>
             <div className="text-2xl font-bold tabular-nums">{formatARS(costoEfectivo)}</div>
             <div className="text-xs text-muted-foreground">
-              {formatARS(precio)} ÷ ({factor} × {(1 - merma/100).toFixed(2)}) = {formatARS(costoEfectivo)} por unidad de insumo
+              {formatARS(precio)} ÷ {factor} = {formatARS(costoEfectivo)} por unidad de insumo
             </div>
           </div>
         )}

@@ -82,7 +82,7 @@ export function ModalCargarFactura({
   // abre mini-modal pre-llenado con nombre/unidad/precio del row.
   const [quickMpRowIdx, setQuickMpRowIdx] = useState<number | null>(null);
   const [quickMpForm, setQuickMpForm] = useState({
-    nombre: "", insumo_id: "", unidad_compra: "un", factor_conversion: "1", merma_pct: "0", precio_actual: "",
+    nombre: "", insumo_id: "", unidad_compra: "un", factor_conversion: "1", precio_actual: "",
   });
   // Quick-create insumo nested (desde el mini-modal de MP, si el insumo tampoco existe)
   const [quickInsumoOpen, setQuickInsumoOpen] = useState(false);
@@ -129,7 +129,6 @@ export function ModalCargarFactura({
       insumo_id: "",
       unidad_compra: it.unidad || "un",
       factor_conversion: "1",
-      merma_pct: "0",
       precio_actual: String(it.precio_unitario || ""),
     });
     setQuickMpRowIdx(rowIdx);
@@ -149,7 +148,6 @@ export function ModalCargarFactura({
       proveedor_id: form.prov_id ? parseInt(form.prov_id) : null,
       unidad_compra: quickMpForm.unidad_compra,
       factor_conversion: factor,
-      merma_pct: parseFloat(quickMpForm.merma_pct) || 0,
       precio_actual: quickMpForm.precio_actual ? parseFloat(quickMpForm.precio_actual) : null,
       activa: true,
     };
@@ -524,7 +522,7 @@ export function ModalCargarFactura({
                   {insumosOpts.map(i => <option key={i.id} value={String(i.id)}>{i.nombre} ({i.unidad})</option>)}
                 </select>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div>
                   <label style={{ fontSize: 11, color: "var(--muted2)" }}>Unidad compra *</label>
                   <input type="text" value={quickMpForm.unidad_compra} onChange={e => setQuickMpForm({ ...quickMpForm, unidad_compra: e.target.value })}
@@ -541,12 +539,6 @@ export function ModalCargarFactura({
                       return ins ? `${ins.unidad} por ${quickMpForm.unidad_compra || "unidad"}` : "Cantidad por unidad de compra";
                     })()}
                   </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: "var(--muted2)" }}>Merma %</label>
-                  <input type="number" step="0.01" min="0" value={quickMpForm.merma_pct}
-                    onChange={e => setQuickMpForm({ ...quickMpForm, merma_pct: e.target.value })}
-                    className="search" style={{ width: "100%" }} />
                 </div>
               </div>
               <div>

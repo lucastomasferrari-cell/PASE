@@ -9,7 +9,6 @@ export interface MateriaPrima {
   insumo_id: number;
   unidad_compra: string;
   factor_conversion: number;
-  merma_pct: number;
   precio_actual: number | null;
   precio_actualizado_at: string | null;
   notas: string | null;
@@ -29,7 +28,6 @@ export interface MateriaPrimaInput {
   insumo_id: number;
   unidad_compra: string;
   factor_conversion: number;
-  merma_pct: number;
   precio_actual?: number | null;
   notas?: string | null;
   activa?: boolean;
@@ -88,12 +86,12 @@ export async function softDeleteMateriaPrima(id: number): Promise<{ error: strin
   return { error: null };
 }
 
-// Costo efectivo de una MP en términos del insumo unificado.
-// precio_actual / (factor_conversion * (1 - merma_pct/100))
-export function calcCostoEfectivo(mp: { precio_actual: number | null; factor_conversion: number; merma_pct: number }): number | null {
+// Costo "as-bought" de una MP en términos del insumo unificado.
+// precio_actual / factor_conversion. La merma/rendimiento NO se aplica acá —
+// vive en la línea de receta (receta_insumos.merma_pct), al consumir.
+export function calcCostoEfectivo(mp: { precio_actual: number | null; factor_conversion: number }): number | null {
   if (!mp.precio_actual || mp.precio_actual <= 0) return null;
   const factor = Number(mp.factor_conversion) || 1;
-  const mermaFactor = 1 - (Number(mp.merma_pct) || 0) / 100;
-  if (factor <= 0 || mermaFactor <= 0) return null;
-  return mp.precio_actual / (factor * mermaFactor);
+  if (factor <= 0) return null;
+  return mp.precio_actual / factor;
 }

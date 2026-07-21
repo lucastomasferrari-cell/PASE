@@ -50,7 +50,7 @@ interface SidebarProps {
   onClearOverride: () => void;
 }
 
-export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
+export function Sidebar({ user, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('pase_sb_collapsed') === '1'; } catch { return false; }

@@ -85,7 +85,7 @@ export default function Conciliacion({ user, embedded = false }: ConciliacionPro
   const [mpSel, setMpSel] = useState<string>("");
   const [global, setGlobal] = useState(false);
   const [nueva, setNueva] = useState({
-    nombre: "", insumo_id: "", unidad_compra: "caja", factor_conversion: "1", merma_pct: "0", precio_actual: "",
+    nombre: "", insumo_id: "", unidad_compra: "caja", factor_conversion: "1", precio_actual: "",
   });
   // Quick create insumo
   const [quickInsumoOpen, setQuickInsumoOpen] = useState(false);
@@ -160,7 +160,7 @@ export default function Conciliacion({ user, embedded = false }: ConciliacionPro
     else { setModo("nueva"); setMpSel(""); }
     setNueva({
       nombre: g.producto, insumo_id: insumos[0] ? String(insumos[0].id) : "",
-      unidad_compra: "caja", factor_conversion: "1", merma_pct: "0",
+      unidad_compra: "caja", factor_conversion: "1",
       precio_actual: g.ultimoPrecio != null ? String(g.ultimoPrecio) : "",
     });
   };
@@ -191,7 +191,6 @@ export default function Conciliacion({ user, embedded = false }: ConciliacionPro
         insumo_id: parseInt(nueva.insumo_id),
         unidad_compra: nueva.unidad_compra,
         factor_conversion: factor,
-        merma_pct: parseFloat(nueva.merma_pct) || 0,
         precio_actual: nueva.precio_actual ? parseFloat(nueva.precio_actual) : null,
         activa: true,
         ...(nueva.precio_actual ? { precio_actualizado_at: new Date().toISOString() } : {}),

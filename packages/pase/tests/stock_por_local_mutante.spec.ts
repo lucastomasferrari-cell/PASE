@@ -183,7 +183,6 @@ test.describe("Stock por local + fecha de compra (mutante)", () => {
         insumo_id: insumoId,
         unidad_compra: "kg",
         factor_conversion: 1,
-        merma_pct: 0,
         precio_actual: PRECIO_KG,
         activa: true,
       })

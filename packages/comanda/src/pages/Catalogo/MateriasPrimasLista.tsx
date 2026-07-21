@@ -16,7 +16,7 @@ import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { MateriaPrimaEditorDialog } from '@/components/dialogs/MateriaPrimaEditorDialog';
 
 // Catálogo de materias primas: lo que se compra del proveedor.
-// Vincula a un insumo unificado. Su costo_efectivo (precio / (factor*(1-merma)))
+// Vincula a un insumo unificado. Su costo_efectivo (precio / factor, as-bought)
 // alimenta el costo_actual del insumo via trigger SQL.
 
 export function MateriasPrimasLista() {
@@ -118,7 +118,6 @@ export function MateriasPrimasLista() {
                     <th className="text-left px-4 py-2.5">Proveedor</th>
                     <th className="text-right px-4 py-2.5">Precio compra</th>
                     <th className="text-right px-4 py-2.5">Factor</th>
-                    <th className="text-right px-4 py-2.5">Merma</th>
                     <th className="text-right px-4 py-2.5">Costo efectivo</th>
                     <th className="text-center px-4 py-2.5">Estado</th>
                     <th className="px-4 py-2.5"></th>
@@ -153,9 +152,6 @@ export function MateriasPrimasLista() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-xs">
                           {Number(mp.factor_conversion).toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-xs">
-                          {Number(mp.merma_pct).toFixed(1)}%
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">
                           {costoEf ? formatARS(costoEf) : (
@@ -192,8 +188,8 @@ export function MateriasPrimasLista() {
       <div className="mt-4 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground flex items-start gap-2">
         <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
         <div>
-          <strong>Cómo funciona:</strong> el <em>costo efectivo</em> = precio compra ÷ (factor × (1 − merma)).
-          Ej: 1kg de trucha c/vísceras a $10.000 con merma 35% → costo efectivo = $10.000 / 0.65 = $15.385/kg.
+          <strong>Cómo funciona:</strong> el <em>costo efectivo</em> = precio compra ÷ factor (as-bought).
+          La merma/rendimiento no va acá: vive en la línea de receta y se aplica al consumir en la venta.
           El insumo unificado promedia los costos efectivos de sus materias primas activas.
         </div>
       </div>

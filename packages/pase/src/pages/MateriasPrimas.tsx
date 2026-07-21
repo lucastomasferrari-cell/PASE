@@ -39,7 +39,6 @@ interface MateriaPrima {
   insumo_id: number;
   unidad_compra: string;
   factor_conversion: number;
-  merma_pct: number;
   precio_actual: number | null;
   precio_actualizado_at: string | null;
   notas: string | null;
@@ -115,7 +114,7 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
     setLoading(true);
     const [mpRes, provRes, insRes] = await Promise.all([
       db.from("materias_primas")
-        .select("id, nombre, proveedor_id, insumo_id, unidad_compra, factor_conversion, merma_pct, precio_actual, precio_actualizado_at, notas, activa")
+        .select("id, nombre, proveedor_id, insumo_id, unidad_compra, factor_conversion, precio_actual, precio_actualizado_at, notas, activa")
         .is("deleted_at", null)
         .order("nombre"),
       db.from("proveedores")
@@ -218,9 +217,8 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
     insumo_id: parseInt(form.insumo_id),
     unidad_compra: form.unidad_compra,
     factor_conversion: parseFloat(form.factor_conversion),
-    // merma_pct DEPRECADO: la merma/rendimiento vive en la línea de receta.
-    // Se manda 0 fijo para filas nuevas (la columna sigue existiendo).
-    merma_pct: 0,
+    // La merma/rendimiento vive en la línea de receta (receta_insumos.merma_pct),
+    // no en la materia prima. La columna materias_primas.merma_pct fue eliminada.
     precio_actual: form.precio_actual ? parseFloat(form.precio_actual) : null,
     notas: form.notas.trim() || null,
     activa: form.activa,

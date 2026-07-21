@@ -26,9 +26,10 @@ const Insumos = lazy(() => import("./Insumos"));
 const Recetas = lazy(() => import("./Recetas"));
 const MateriasPrimas = lazy(() => import("./MateriasPrimas"));
 const Conciliacion = lazy(() => import("./Conciliacion"));
+const Cruce = lazy(() => import("./Cruce"));
 const Stock = lazy(() => import("./Stock"));
 
-type SubSection = "insumos" | "materias-primas" | "recetas" | "conciliacion" | "stock";
+type SubSection = "insumos" | "materias-primas" | "recetas" | "conciliacion" | "cruce" | "stock";
 
 interface RecetarioProps {
   user: Usuario;
@@ -85,6 +86,7 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     "materias-primas": "materias primas",
     recetas: "recetas",
     conciliacion: "conciliación",
+    cruce: "cruce",
     stock: "stock",
   };
   const sub = subTitle[subSection];
@@ -94,6 +96,7 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     "materias-primas": "Catálogo de \"qué te vende cada proveedor\" — vincula proveedor → unidad de compra → insumo. Necesario para que las facturas sumen stock automático.",
     recetas: "Vinculá items vendibles con sus ingredientes para calcular CMV y descontar stock al vender.",
     conciliacion: "Productos de facturas (manual + IA) sin vincular a una materia prima. Resolvelos una vez y el sistema lo recuerda.",
+    cruce: "Asigná el insumo a cada producto de factura pendiente. Al cruzar se crea la materia prima con su insumo y el sistema lo recuerda.",
     stock: "Stock actual, conteos ciegos (cargás lo contado sin ver el teórico → diferencia real), y mermas.",
   };
 
@@ -148,6 +151,9 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
             {subSection === "conciliacion" && (
               <Conciliacion user={user} locales={locales} localActivo={localActivo} embedded />
             )}
+            {subSection === "cruce" && (
+              <Cruce user={user} locales={locales} localActivo={localActivo} embedded />
+            )}
             {subSection === "stock" && (
               <Stock user={user} locales={locales} localActivo={localActivo} embedded />
             )}
@@ -201,6 +207,16 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
                   icon: (
                     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M2 7h4l1.5 4 2-8L11 7h1" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "cruce",
+                  label: "Cruce",
+                  count: counts.pendientes,
+                  icon: (
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 3l8 8M11 3l-8 8" />
                     </svg>
                   ),
                 },

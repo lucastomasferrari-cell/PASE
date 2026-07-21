@@ -23,6 +23,7 @@ import { createDuenoClient } from "./helpers/supabaseClient";
 
 const SENTINEL = 234567.89;
 const SENTINEL_REVISION = 345678.91;
+const SENTINEL_ITEMS = 456789.12;
 const LOCAL = "Local Prueba 2";
 const PROVEEDOR = "Proveedor Prueba";
 
@@ -78,6 +79,10 @@ test.describe("Lector IA — RPC crear_factura_completa (cobertura bugs 2026-05-
       } catch (e) {
         console.error(`[cleanup] anular_factura threw:`, e);
       }
+    }
+    if (facturaId) {
+      // Renglones primero (el test de items los crea; los demás no tienen).
+      await db.from("factura_items").delete().eq("factura_id", facturaId).then(() => {}, () => {});
     }
     if (facturaId) {
       try {
@@ -208,5 +213,55 @@ test.describe("Lector IA — RPC crear_factura_completa (cobertura bugs 2026-05-
       .maybeSingle();
     expect(provFinalErr).toBeNull();
     expect(provFinal?.saldo).toBe(saldoProvInicial + SENTINEL_REVISION);
+  });
+
+  test("Path items: la RPC persiste p_items y un renglón CMV cae en la bandeja de Cruce", async () => {
+    // Regresión Request B (21-jul): el Lector IA extraía los renglones pero
+    // guardaba p_items: [] → los descartaba. Ahora los pasa. Verificamos que
+    // crear_factura_completa persiste los factura_items y que un renglón de
+    // mercadería (categoría grupo CMV) aparece en v_bandeja_conciliacion para
+    // cruzarlo con su insumo (pantalla Cruce del Recetario).
+    const { data: cats } = await db
+      .from("config_categorias").select("nombre").eq("grupo", "CMV").limit(1);
+    const catCMV = (cats?.[0]?.nombre as string) ?? "";
+    expect(catCMV.length).toBeGreaterThan(0); // el tenant debe tener alguna CMV
+
+    const id = `LECTOR-IA-ITEMS-${Date.now()}`;
+    const nro = `E2E-LECTOR-IA-ITEMS-${Date.now()}`;
+    const producto = `ZZITEMS Producto ${Date.now()}`;
+    const payload = {
+      id, prov_id: provId, local_id: localId, nro,
+      fecha: new Date().toISOString().slice(0, 10), venc: null,
+      neto: SENTINEL_ITEMS, iva21: 0, iva105: 0, iibb: 0, total: SENTINEL_ITEMS,
+      cat: catCMV, estado: "pendiente", pagos: [], imagen_url: null, tipo: "factura",
+    };
+
+    const { error } = await db.rpc("crear_factura_completa", {
+      p_factura: payload,
+      p_items: [{ producto, cantidad: 2, unidad: "kg", precio_unitario: 100, subtotal: 200 }],
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    expect(error).toBeNull();
+    facturaId = id;
+
+    // ── Assert 1: el renglón se PERSISTIÓ (antes se tiraba con []) ──────
+    const { data: items, error: itErr } = await db
+      .from("factura_items")
+      .select("producto, cantidad, materia_prima_id")
+      .eq("factura_id", id);
+    expect(itErr).toBeNull();
+    expect(items?.length).toBe(1);
+    expect(items![0]!.producto).toBe(producto);
+    expect(Number(items![0]!.cantidad)).toBe(2);
+    expect(items![0]!.materia_prima_id).toBeNull(); // sin cruzar todavía
+
+    // ── Assert 2: aparece en la bandeja de Cruce (grupo CMV) ───────────
+    const { data: bandeja, error: bErr } = await db
+      .from("v_bandeja_conciliacion")
+      .select("factura_item_id, grupo_categoria")
+      .eq("factura_id", id);
+    expect(bErr).toBeNull();
+    expect(bandeja?.length).toBe(1);
+    expect(bandeja![0]!.grupo_categoria).toBe("CMV");
   });
 });
