@@ -537,25 +537,11 @@ function PermisosAccordion({ categorias, value, onToggle }: {
   function toggleSec(t: string) {
     setAbiertas((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; });
   }
-  // Bulk toggle: si N < M activa todos los apagados; si N === M apaga todos.
-  // Llama onToggle una por slug — es idempotente cuando el estado ya coincide,
-  // así que activar de nuevo lo ya activo es no-op efectivo.
-  function bulkToggle(cat: CategoriaPermisos) {
-    const n = activos(cat);
-    const todosActivos = n === cat.permisos.length;
-    for (const p of cat.permisos) {
-      const on = set.has(p.slug);
-      // Prender apagados si no están todos activos; apagar todos si sí.
-      if (todosActivos && on) onToggle(p.slug);
-      else if (!todosActivos && !on) onToggle(p.slug);
-    }
-  }
   return (
     <div className="rounded-sm border-b border-carbon-700 overflow-hidden">
       {categorias.map((cat, i) => {
         const open = abiertas.has(cat.titulo);
         const n = activos(cat);
-        const todosActivos = n === cat.permisos.length;
         return (
           <div key={cat.titulo} className={i > 0 ? 'border-t border-carbon-600' : ''}>
             <button type="button" onClick={() => toggleSec(cat.titulo)}
@@ -565,21 +551,7 @@ function PermisosAccordion({ categorias, value, onToggle }: {
               <ChevronDown className={`h-4 w-4 text-dim-300 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
-              <div className="border-t border-carbon-600 bg-ink/[0.015]">
-                {/* Barra de acción con bulk toggle de la sección. */}
-                <div className="flex items-center justify-end px-3.5 py-2 border-b border-carbon-600 bg-carbon-800/40">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); bulkToggle(cat); }}
-                    className={`text-[11px] px-2.5 py-1 rounded-sm border transition-colors ${
-                      todosActivos
-                        ? 'border-carbon-500 text-dim-200 hover:bg-carbon-700'
-                        : 'border-brand-400/30 text-brand-400 hover:bg-brand-400/20 bg-brand-400/10'
-                    }`}
-                  >
-                    {todosActivos ? 'Quitar todos' : `Activar todos (${cat.permisos.length - n})`}
-                  </button>
-                </div>
+              <div className="border-t border-carbon-600 bg-ink/[0.04]">
                 {cat.permisos.map((p, j) => {
                   const on = set.has(p.slug);
                   const wip = p.enDesarrollo === true;
