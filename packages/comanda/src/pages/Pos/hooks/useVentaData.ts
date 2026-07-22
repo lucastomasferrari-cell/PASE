@@ -26,6 +26,41 @@ export interface UseVentaDataResult {
   reconcileAdd: (tempId: number, realId: number | null) => void;
 }
 
+// Filtra y precia el catálogo según el CANAL de la venta (salón, mostrador,
+// delivery…). item_precios_canal define `vendible` (si el item se ofrece en ese
+// canal) y `precio` (precio del canal). Antes el POS mostraba TODOS los items al
+// precio_madre → en salón aparecían productos solo-delivery. El cobro ya usa el
+// precio del canal (fn_agregar_item_comanda); esto alinea la PANTALLA.
+// Degradación segura: si el canal no tiene precios cargados, no se filtra nada
+// (mismo fallback a precio_madre que hace el RPC).
+async function filtrarCatalogoPorCanal(
+  catalogo: ItemConGrupo[],
+  canalId: number | null,
+  localId: number | null,
+): Promise<ItemConGrupo[]> {
+  if (!canalId) return catalogo;
+  let q = db.from('item_precios_canal')
+    .select('item_id, precio, vendible, local_id')
+    .eq('canal_id', canalId)
+    .is('deleted_at', null);
+  q = localId != null ? q.or(`local_id.eq.${localId},local_id.is.null`) : q.is('local_id', null);
+  const { data: precios, error } = await q;
+  if (error || !precios || precios.length === 0) return catalogo;
+  // Mapa item_id → precio/vendible del canal, prefiriendo la fila por-local
+  // sobre la global (local_id null).
+  const map = new Map<number, { precio: number; vendible: boolean; esLocal: boolean }>();
+  for (const p of precios as Array<{ item_id: number; precio: number | string; vendible: boolean; local_id: number | null }>) {
+    const esLocal = localId != null && p.local_id === localId;
+    const prev = map.get(p.item_id);
+    if (!prev || (esLocal && !prev.esLocal)) {
+      map.set(p.item_id, { precio: Number(p.precio), vendible: !!p.vendible, esLocal });
+    }
+  }
+  return catalogo
+    .filter((it) => { const m = map.get(it.id); return !m || m.vendible; })
+    .map((it) => { const m = map.get(it.id); return m ? { ...it, precio_madre: m.precio } : it; });
+}
+
 export function useVentaData(ventaId: number): UseVentaDataResult {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -74,13 +109,14 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
       // 3) Resto en paralelo. Modelo maestro+import: el POS lee el menú de ESTA
       //    sucursal (local_id = localId) — sus copias importadas/editadas. Si no
       //    hay local (offline), cae al filtro por marca (fallback previo).
+      const canalId = (vRes.data as { canal_id?: number | null } | null)?.canal_id ?? null;
       const [iRes, cRes, gRes] = await Promise.all([
         listVentasItems(ventaId),
         listItems({ tenantId: user?.tenant_id ?? null, localId, marcaId }),
         listGrupos(user?.tenant_id ?? null, marcaId, { localId }),
       ]);
       setItems(iRes.data);
-      setCatalogo(cRes.data);
+      setCatalogo(await filtrarCatalogoPorCanal(cRes.data, canalId, localId));
       setGrupos(gRes.data);
     } catch (err) {
       toast.error('Error cargando datos: ' + (err instanceof Error ? err.message : 'desconocido'));
