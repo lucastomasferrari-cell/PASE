@@ -332,11 +332,14 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                         <label style={{ fontSize: 11, color: "var(--muted2)" }}>Buscar insumo</label>
                         <input ref={pickInputRef} type="text" autoFocus value={pickSearch} onChange={e => setPickSearch(e.target.value)} className="search" style={{ width: "100%" }} placeholder="Escribí para filtrar o crear…" />
                       </div>
-                      <div style={{ width: 150 }}>
-                        <label style={{ fontSize: 11, color: "var(--muted2)" }}>1 {g.unidad} =</label>
+                      <div style={{ width: 130 }}>
+                        <label style={{ fontSize: 11, color: "var(--muted2)" }}>Rinde (1 {g.unidad} =)</label>
                         <input type="number" step="0.01" min="0.01" value={pickFactor} onChange={e => setPickFactor(e.target.value)} className="search" style={{ width: "100%" }} />
                       </div>
                       <button className="btn btn-ghost btn-sm" onClick={() => setOpenKey(null)}>Cancelar</button>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 10, lineHeight: 1.4 }}>
+                      <b>Rinde</b> = cuánto del insumo trae 1 {g.unidad}. Dejá <b>1</b> si es 1 a 1 (ej: 1 botella = 1). Si el insumo se mide en ml/g, poné el contenido (ej: 750cc → <b>750</b>).
                     </div>
 
                     <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
