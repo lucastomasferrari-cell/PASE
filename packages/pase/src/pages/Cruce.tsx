@@ -91,6 +91,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [pickSearch, setPickSearch] = useState("");
   const [pickFactor, setPickFactor] = useState("1");
+  const [insumoSel, setInsumoSel] = useState<Insumo | null>(null); // elegido, esperando confirmar el rinde
   const pickInputRef = useRef<HTMLInputElement>(null);
 
   const puede = tienePermiso(user, "compras") || user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
@@ -191,6 +192,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
     const ins = insById.get(insumoId);
     showToast(`${g.producto} → ${ins?.nombre ?? "insumo"} · ${n} renglón${n === 1 ? "" : "es"} vinculado${n === 1 ? "" : "s"}`);
     setOpenKey(null);
+    setInsumoSel(null);
     await load();
   });
 
@@ -213,20 +215,27 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
     await load();
   });
 
-  const { run: crearInsumoYMatch, isPending: creandoInsumo } = useGuardedHandler(async (g: Grupo, nombre: string, factor: number) => {
+  // Crea el insumo y lo DEJA SELECCIONADO (no matchea todavía) → pasa por el
+  // paso del rinde, igual que elegir uno existente.
+  const { run: crearInsumoYSeleccionar, isPending: creandoInsumo } = useGuardedHandler(async (g: Grupo, nombre: string) => {
+    const unidad = normUnidad(g.unidad);
     const { data, error } = await db.from("insumos").insert([{
       tenant_id: user.tenant_id, created_by: user.id,
-      nombre: nombre.trim(), unidad: normUnidad(g.unidad),
+      nombre: nombre.trim(), unidad,
       activo: true, es_comprado: true, stock_disponible: true,
     }]).select("id").single();
     if (error || !data) { showError("No se pudo crear el insumo: " + (error?.message ?? "vacío")); return; }
-    await matchear(g, data.id as number, factor);
+    const nuevo: Insumo = { id: data.id as number, nombre: nombre.trim(), unidad };
+    setInsumos(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    setInsumoSel(nuevo);
+    setPickFactor("1");
   });
 
   const abrirPicker = (g: Grupo) => {
     setOpenKey(g.key);
     setPickSearch("");
     setPickFactor("1");
+    setInsumoSel(null);
   };
 
   const total = grupos.length;
@@ -327,52 +336,67 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                 {/* Picker de insumo (expandido) */}
                 {open && (
                   <div style={{ borderTop: "0.5px solid var(--bd)", padding: "12px 14px", background: "var(--s2)" }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10 }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: 11, color: "var(--muted2)" }}>Buscar insumo</label>
-                        <input ref={pickInputRef} type="text" autoFocus value={pickSearch} onChange={e => setPickSearch(e.target.value)} className="search" style={{ width: "100%" }} placeholder="Escribí para filtrar o crear…" />
-                      </div>
-                      <div style={{ width: 130 }}>
-                        <label style={{ fontSize: 11, color: "var(--muted2)" }}>Rinde (1 {g.unidad} =)</label>
-                        <input type="number" step="0.01" min="0.01" value={pickFactor} onChange={e => setPickFactor(e.target.value)} className="search" style={{ width: "100%" }} />
-                      </div>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setOpenKey(null)}>Cancelar</button>
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 10, lineHeight: 1.4 }}>
-                      <b>Rinde</b> = cuánto del insumo trae 1 {g.unidad}. Dejá <b>1</b> si es 1 a 1 (ej: 1 botella = 1). Si el insumo se mide en ml/g, poné el contenido (ej: 750cc → <b>750</b>).
-                    </div>
+                    {!insumoSel ? (
+                      /* ── Paso 1: elegir (o crear) el insumo ── */
+                      <>
+                        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: 11, color: "var(--muted2)" }}>Elegí (o creá) el insumo para «{g.producto}»</label>
+                            <input ref={pickInputRef} type="text" autoFocus value={pickSearch} onChange={e => setPickSearch(e.target.value)} className="search" style={{ width: "100%" }} placeholder="Escribí para filtrar o crear…" />
+                          </div>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setOpenKey(null)}>Cancelar</button>
+                        </div>
 
-                    <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
-                      {sug && !pickSearch && (
-                        <button className="cruce-opt cruce-opt-sug" disabled={busy} onClick={() => matchear(g, sug.id, factorNum)}>
-                          ★ {sug.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>· sugerido ({sug.unidad})</span>
-                        </button>
-                      )}
-                      {insFiltrados.filter(i => !sug || pickSearch || i.id !== sug.id).map(i => (
-                        <button key={i.id} className="cruce-opt" disabled={busy} onClick={() => matchear(g, i.id, factorNum)}>
-                          {i.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>({i.unidad})</span>
-                        </button>
-                      ))}
-                      {insFiltrados.length === 0 && (
-                        <div style={{ fontSize: 12, color: "var(--muted2)", padding: "6px 10px" }}>Ningún insumo coincide.</div>
-                      )}
-                    </div>
+                        <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                          {sug && !pickSearch && (
+                            <button className="cruce-opt cruce-opt-sug" disabled={busy} onClick={() => { setInsumoSel(sug); setPickFactor("1"); }}>
+                              ★ {sug.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>· sugerido ({sug.unidad})</span>
+                            </button>
+                          )}
+                          {insFiltrados.filter(i => !sug || pickSearch || i.id !== sug.id).map(i => (
+                            <button key={i.id} className="cruce-opt" disabled={busy} onClick={() => { setInsumoSel(i); setPickFactor("1"); }}>
+                              {i.nombre} <span style={{ color: "var(--muted2)", fontSize: 11 }}>({i.unidad})</span>
+                            </button>
+                          ))}
+                          {insFiltrados.length === 0 && (
+                            <div style={{ fontSize: 12, color: "var(--muted2)", padding: "6px 10px" }}>Ningún insumo coincide.</div>
+                          )}
+                        </div>
 
-                    {/* Botón crear insumo: FIJO al pie (fuera del scroll), siempre a la vista.
-                        Con nombre nuevo escrito lo crea y matchea; vacío enfoca el buscador. */}
-                    <button
-                      className="cruce-opt"
-                      style={{ color: "var(--acc)", fontWeight: 500, borderTop: "0.5px solid var(--bd)", marginTop: 6, paddingTop: 10 }}
-                      disabled={busy}
-                      onClick={() => {
-                        if (pickSearch.trim() && !hayExacto) crearInsumoYMatch(g, pickSearch, factorNum);
-                        else pickInputRef.current?.focus();
-                      }}
-                    >
-                      {pickSearch.trim() && !hayExacto
-                        ? `+ Crear insumo «${pickSearch.trim()}» y matchear`
-                        : "+ Crear insumo nuevo"}
-                    </button>
+                        <button
+                          className="cruce-opt"
+                          style={{ color: "var(--acc)", fontWeight: 500, borderTop: "0.5px solid var(--bd)", marginTop: 6, paddingTop: 10 }}
+                          disabled={busy}
+                          onClick={() => {
+                            if (pickSearch.trim() && !hayExacto) crearInsumoYSeleccionar(g, pickSearch);
+                            else pickInputRef.current?.focus();
+                          }}
+                        >
+                          {pickSearch.trim() && !hayExacto ? `+ Crear insumo «${pickSearch.trim()}»` : "+ Crear insumo nuevo"}
+                        </button>
+                      </>
+                    ) : (
+                      /* ── Paso 2: confirmar el rinde, ya con la unidad del insumo a la vista ── */
+                      <div>
+                        <div style={{ fontSize: 13, color: "var(--txt)", marginBottom: 2 }}>
+                          <b>{g.producto}</b> → insumo <b style={{ color: "var(--acc)" }}>{insumoSel.nombre}</b> <span style={{ color: "var(--muted2)" }}>(se mide en {insumoSel.unidad})</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "12px 0 8px" }}>
+                          <span style={{ fontSize: 14, color: "var(--txt)" }}>1 {g.unidad} de compra =</span>
+                          <input type="number" step="0.01" min="0.01" autoFocus value={pickFactor} onChange={e => setPickFactor(e.target.value)} className="search" style={{ width: 100 }} />
+                          <span style={{ fontSize: 14, color: "var(--txt)" }}>{insumoSel.unidad} de {insumoSel.nombre}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 12, lineHeight: 1.4 }}>
+                          {normUnidad(g.unidad) === insumoSel.unidad
+                            ? <>Comprás y medís en <b>{insumoSel.unidad}</b> → dejá <b>1</b> (es 1 a 1).</>
+                            : <>Comprás por <b>{g.unidad}</b> pero el insumo se mide en <b>{insumoSel.unidad}</b>: poné cuántos {insumoSel.unidad} trae 1 {g.unidad} (ej: 1 botella de 750cc → <b>750</b>; 1 caja de 10&nbsp;kg → <b>10000</b> g).</>}
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="btn btn-acc btn-sm" disabled={busy} onClick={() => matchear(g, insumoSel.id, factorNum)}>Confirmar match</button>
+                          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setInsumoSel(null)}>← Elegir otro insumo</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
