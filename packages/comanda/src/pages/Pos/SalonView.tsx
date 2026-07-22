@@ -73,7 +73,7 @@ import { useLocalActivo } from '../../lib/localActivo';
 import { usePermiso } from '../../lib/usePermiso';
 import { listMesasConVentas, type MesaConVenta } from '../../services/mesasService';
 import { abrirVenta } from '../../services/ventasService';
-import { listCanales } from '../../services/canalesService';
+import { resolveCanalPorModo } from '../../services/canalesService';
 import { Stepper } from '../../components/Stepper';
 import { formatARS } from '../../lib/format';
 
@@ -325,6 +325,7 @@ export function SalonView() {
           mesa={abrirDialog}
           empleadoId={empleado.id}
           localId={localId!}
+          tenantId={user?.tenant_id ?? null}
           onClose={() => setAbrirDialog(null)}
           onAbierta={(ventaId) => {
             setAbrirDialog(null);
@@ -522,20 +523,20 @@ interface AbrirDialogProps {
   mesa: MesaConVenta;
   empleadoId: string;
   localId: number;
+  tenantId: string | null;
   onClose: () => void;
   onAbierta: (ventaId: number) => void;
   onError: (msg: string) => void;
 }
 
-function AbrirMesaDialog({ mesa, empleadoId, localId, onClose, onAbierta, onError }: AbrirDialogProps) {
+function AbrirMesaDialog({ mesa, empleadoId, localId, tenantId, onClose, onAbierta, onError }: AbrirDialogProps) {
   const [covers, setCovers] = useState(mesa.capacidad ?? 2);
   const [saving, setSaving] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const { data: canales } = await listCanales(null, true);
-    const canal = canales.find((c) => c.slug === 'salon');
+    const canal = await resolveCanalPorModo(tenantId, 'salon', localId, 'salon');
     if (!canal) { onError('No hay canal "salon" configurado'); setSaving(false); return; }
     const { ventaId, error } = await abrirVenta({
       localId, modo: 'salon', canalId: canal.id,

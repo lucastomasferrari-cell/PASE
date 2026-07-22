@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
 import { listVentas, abrirVenta, updateVentaMeta } from '../../services/ventasService';
-import { listCanales } from '../../services/canalesService';
+import { resolveCanalPorModo } from '../../services/canalesService';
 import type { VentaPos } from '../../types/database';
 import { formatARS, relativoCorto } from '../../lib/format';
 import { Badge } from '../../components/Badge';
@@ -109,8 +109,7 @@ export function MostradorView() {
   async function nuevaOrden() {
     if (!empleado || localId === null) return;
     setCreando(true);
-    const { data: canales } = await listCanales(null, true);
-    const canal = canales.find((c) => c.slug === 'mostrador');
+    const canal = await resolveCanalPorModo(user?.tenant_id ?? null, 'mostrador', localId, 'mostrador');
     if (!canal) { setError('No hay canal "mostrador" configurado'); setCreando(false); return; }
     const { ventaId, error: err } = await abrirVenta({
       localId, modo: 'mostrador', canalId: canal.id, cajeroId: empleado.id,
@@ -125,8 +124,7 @@ export function MostradorView() {
     const nombre = tabNombre.trim();
     if (nombre.length < 2) { toast.error('Nombre muy corto'); return; }
     setCreando(true);
-    const { data: canales } = await listCanales(null, true);
-    const canal = canales.find((c) => c.slug === 'mostrador');
+    const canal = await resolveCanalPorModo(user?.tenant_id ?? null, 'mostrador', localId, 'mostrador');
     if (!canal) { setError('No hay canal "mostrador"'); setCreando(false); return; }
     const { ventaId, error: err } = await abrirVenta({
       localId, modo: 'mostrador', canalId: canal.id, cajeroId: empleado.id,
