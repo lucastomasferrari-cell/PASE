@@ -179,6 +179,32 @@ test.describe.serial("E2E Sprint 4 — Invariantes financieras (SQL)", () => {
       }
     }
 
+    // ── INV5 (bug canal_id 21-jul): ninguna venta_pos VIVA puede tener un ──
+    // canal_id incoherente. Mismo predicado que el guard de fn_abrir_venta_comanda:
+    // el canal debe existir, ser del MISMO tenant que la venta, aplicar al local
+    // (global o del local) y tener modo_pos == venta.modo. Caza el leak de canal
+    // ajeno/incoherente que producía precio/menú equivocados.
+    const { data: ventasVivas } = await svc.from("ventas_pos")
+      .select("id, local_id, modo, canal_id")
+      .eq("tenant_id", seed.tenantId)
+      .is("deleted_at", null);
+    if (ventasVivas && ventasVivas.length) {
+      const { data: canalesTenant } = await svc.from("canales")
+        .select("id, local_id, modo_pos")
+        .eq("tenant_id", seed.tenantId)
+        .is("deleted_at", null);
+      const canalById = new Map((canalesTenant ?? []).map(c => [c.id, c]));
+      for (const v of ventasVivas) {
+        const c = canalById.get(v.canal_id);
+        const ok = !!c && c.modo_pos === v.modo && (c.local_id === null || c.local_id === v.local_id);
+        expect(
+          ok,
+          `INV5: venta ${v.id} (modo=${v.modo}, local=${v.local_id}) tiene canal_id=${v.canal_id} inválido ` +
+          `(${c ? `modo_pos=${c.modo_pos}, local=${c.local_id}` : "no existe / otro tenant"})`,
+        ).toBe(true);
+      }
+    }
+
     await duenoDb.auth.signOut();
   });
 });

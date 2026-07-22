@@ -1,5 +1,5 @@
 import { db } from '../lib/supabase';
-import type { Canal } from '../types/database';
+import type { Canal, ModoVenta } from '../types/database';
 import { translateError } from '../lib/errors';
 import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
@@ -32,6 +32,42 @@ export async function listCanales(tenantId: string | null, soloActivos = false):
     }
     throw err;
   }
+}
+
+/**
+ * Resuelve el canal correcto para abrir una venta en un `modo` dado.
+ *
+ * Blinda el bug de 2026-07-21: SalonView/MostradorView resolvían el canal con
+ * `listCanales(null)` (sin tenant) + `.find(c => c.slug === ...)`. En sesión
+ * SUPERADMIN la RLS de `canales` devuelve canales de TODOS los tenants, así que
+ * el `.find` podía agarrar un canal ajeno o incoherente → venta con canal malo
+ * → precio/menú equivocados.
+ *
+ * Reglas:
+ * - Scopea SIEMPRE por tenant (si `tenantId` es null devuelve null: preferimos
+ *   fallar visible antes que adivinar un canal de otro tenant).
+ * - Matchea por `modo_pos === modo` (dominio compartido salon|mostrador|pedidos).
+ * - Prefiere el canal específico del local sobre el global (`local_id IS NULL`).
+ * - Entre varios del mismo modo, prefiere el `preferSlug` canónico (p.ej. 'salon').
+ *
+ * Devuelve el canal elegido o null si no hay ninguno válido.
+ */
+export async function resolveCanalPorModo(
+  tenantId: string | null,
+  modo: ModoVenta,
+  localId: number | null,
+  preferSlug?: string,
+): Promise<Canal | null> {
+  if (!tenantId) return null;
+  const { data } = await listCanales(tenantId, true);
+  const candidatos = data.filter(
+    (c) => c.modo_pos === modo && (c.local_id === localId || c.local_id === null),
+  );
+  if (candidatos.length === 0) return null;
+  const score = (c: Canal) =>
+    (localId !== null && c.local_id === localId ? 2 : 0) +
+    (preferSlug && c.slug === preferSlug ? 1 : 0);
+  return [...candidatos].sort((a, b) => score(b) - score(a))[0] ?? null;
 }
 
 export type CanalDraft = Pick<

@@ -7,7 +7,7 @@ import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listMesasConVentas, type MesaConVenta } from '@/services/mesasService';
 import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta } from '@/services/ventasService';
-import { listCanales } from '@/services/canalesService';
+import { resolveCanalPorModo } from '@/services/canalesService';
 import { listItems, type ItemConGrupo } from '@/services/itemsService';
 import { listGrupos } from '@/services/gruposService';
 import type { VentaPosItem, ItemGrupo } from '@/types/database';
@@ -170,8 +170,7 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
       return;
     }
     // Mesa libre — abrimos venta nueva con covers default
-    const { data: canales } = await listCanales(tenantId || null, true);
-    const canal = canales.find((c) => c.slug === 'salon');
+    const canal = await resolveCanalPorModo(tenantId || null, 'salon', localId, 'salon');
     if (!canal) {
       toast.error('No hay canal "salon" configurado');
       return;

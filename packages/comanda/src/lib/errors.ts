@@ -53,6 +53,7 @@ const TRADUCCIONES: Record<string, string> = {
   VENTA_NO_REOPEN: 'La venta no se puede reabrir desde este estado.',
   VENTAS_CROSS_LOCAL: 'Las ventas pertenecen a locales distintos.',
   VENTAS_IGUALES: 'No podés unir una venta consigo misma.',
+  CANAL_INVALIDO: 'El canal de venta no es válido para este local o modo. Recargá y reintentá.',
   NO_SE_PUEDE_UNIR_VENTA_COBRADA: 'No se pueden unir ventas ya cobradas.',
   RECALL_VENTANA_60S_VENCIDA: 'Pasaron más de 60 segundos, no se puede deshacer.',
 
