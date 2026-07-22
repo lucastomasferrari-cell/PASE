@@ -28,6 +28,18 @@
 -- (online) y su variante _offline, sin otros cambios de comportamiento.
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- ─── limpieza: overload viejo sin guard ─────────────────────────────────────
+-- Al agregar params (p_metodo_pago_previsto en 202607060100) con CREATE OR
+-- REPLACE se creó un NUEVO overload y el anterior de 15 params quedó colgado
+-- SIN el guard (y generando ambigüedad PGRST203 en llamadas que omiten el
+-- último param). El frontend siempre manda los 16, así que ese overload no
+-- tiene caller vivo en prod (el único uso de 15 params es test-only). Lo
+-- dropeamos para que exista UNA sola definición, con el guard.
+DROP FUNCTION IF EXISTS public.fn_abrir_venta_comanda(
+  integer, text, integer, bigint, uuid, uuid, text, text, text, integer,
+  text, text, text, timestamptz, bigint
+);
+
 -- ─── online ────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION fn_abrir_venta_comanda(
   p_local_id integer,
