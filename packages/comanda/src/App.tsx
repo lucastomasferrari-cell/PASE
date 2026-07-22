@@ -27,7 +27,8 @@ import { useAuth } from './lib/auth';
 // LoginPage queda eager — entry point sin sesión, no queremos latencia (regla C8).
 import { LoginPage } from './pages/Login/LoginPage';
 // WelcomePage — selector Admin/POS, es la puerta de entrada cuando no hay
-// sesión. También eager por la misma razón que LoginPage.
+// sesión. También eager por la misma razón que LoginPage (entry point).
+// eslint-disable-next-line pase-local/no-eager-page-import-app -- gate de entrada sin sesión, eager por diseño igual que Login
 import { WelcomePage } from './pages/Welcome/WelcomePage';
 
 // ─── Componentes core compartidos (no son páginas, no van a lazy) ──────────
