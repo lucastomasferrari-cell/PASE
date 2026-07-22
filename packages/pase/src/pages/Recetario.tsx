@@ -64,10 +64,13 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     });
   });
 
+  // Recarga los contadores del sidebar al entrar y cada vez que cambiás de
+  // sub-sección (ej. después de crear materias primas en el Cruce, al pasar a
+  // Materias primas el número queda fresco en vez de mostrar el viejo).
   useEffect(() => {
     void loadCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [subSection]);
 
   const setSubSection = (sec: SubSection) => {
     const next = new URLSearchParams(searchParams);
