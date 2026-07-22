@@ -85,6 +85,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [verDescartados, setVerDescartados] = useState(false);
 
   // Fila con el picker de insumo abierto + su búsqueda + factor.
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -100,6 +101,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
       db.from("v_bandeja_conciliacion")
         .select("factura_item_id, factura_id, producto, cantidad, unidad, precio_unitario, proveedor_id, proveedor_nombre, factura_fecha, texto_norm, sugerencia_mp_id")
         .eq("grupo_categoria", "CMV")
+        .eq("descartado_conciliacion", verDescartados)
         .order("factura_fecha", { ascending: false })
         .limit(2000),
       db.from("materias_primas").select("id, nombre, proveedor_id, insumo_id").is("deleted_at", null).eq("activa", true),
@@ -112,7 +114,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [verDescartados]);
 
   const insById = useMemo(() => { const m = new Map<number, Insumo>(); insumos.forEach(i => m.set(i.id, i)); return m; }, [insumos]);
   const mpById = useMemo(() => { const m = new Map<number, MateriaPrima>(); mps.forEach(p => m.set(p.id, p)); return m; }, [mps]);
@@ -202,6 +204,15 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
     await load();
   });
 
+  const { run: reactivar, isPending: reactivando } = useGuardedHandler(async (g: Grupo) => {
+    for (const id of g.facturaItemIds) {
+      const { error } = await db.rpc("fn_descartar_renglon", { p_factura_item_id: id, p_descartar: false });
+      if (error) { showError("No se pudo reactivar: " + translateRpcError(error)); return; }
+    }
+    showToast(`"${g.producto}" volvió a la bandeja`);
+    await load();
+  });
+
   const { run: crearInsumoYMatch, isPending: creandoInsumo } = useGuardedHandler(async (g: Grupo, nombre: string, factor: number) => {
     const { data, error } = await db.from("insumos").insert([{
       tenant_id: user.tenant_id, created_by: user.id,
@@ -228,30 +239,43 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
           <div>
             <div className="ph-title">Cruce materia prima → insumo</div>
             <div style={{ color: "var(--muted2)", fontSize: 12, marginTop: 2 }}>
-              Asigná el insumo a cada producto de factura pendiente · {total} sin matchear
+              {verDescartados
+                ? "Productos marcados “no va a receta”. Podés traerlos de vuelta a la bandeja."
+                : "Asigná el insumo a cada producto de factura pendiente."}
             </div>
           </div>
         </div>
       )}
 
       {/* Toolbar */}
-      {rows.length > 0 && (
-        <div className="panel" style={{ marginBottom: 8 }}>
-          <div style={{ padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+      <div className="panel" style={{ marginBottom: 8 }}>
+        <div style={{ padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          {!verDescartados && (
             <input type="text" placeholder="Buscar producto…" value={search} onChange={e => setSearch(e.target.value)} className="search" style={{ flex: 1, minWidth: 180 }} />
-            <span className="badge b-warn" style={{ fontSize: 11 }}>{total} sin matchear</span>
-          </div>
+          )}
+          <span className="badge b-warn" style={{ fontSize: 11 }}>
+            {total} {verDescartados ? (total === 1 ? "descartado" : "descartados") : "sin matchear"}
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ marginLeft: "auto" }}
+            onClick={() => { setSearch(""); setOpenKey(null); setVerDescartados(v => !v); }}
+          >
+            {verDescartados ? "← Ver pendientes" : "Ver descartados"}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Lista */}
       {loading ? (
         <div className="panel"><div className="loading" style={{ padding: 40 }}>Cargando bandeja…</div></div>
       ) : grupos.length === 0 ? (
         <div className="panel" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--txt)" }}>Bandeja vacía</div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--txt)" }}>{verDescartados ? "No hay descartados" : "Bandeja vacía"}</div>
           <div style={{ fontSize: 12, color: "var(--muted2)", marginTop: 4 }}>
-            Todas las materias primas tienen insumo. Cuando cargues facturas, los productos nuevos aparecen acá para cruzarlos una vez.
+            {verDescartados
+              ? "No marcaste ningún producto como “no va a receta”."
+              : "Todas las materias primas tienen insumo. Cuando cargues facturas, los productos nuevos aparecen acá para cruzarlos una vez."}
           </div>
         </div>
       ) : (
@@ -259,7 +283,7 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
           {grupos.map(g => {
             const sug = sugerirInsumo(g);
             const open = openKey === g.key;
-            const busy = matcheando || descartando || creandoInsumo;
+            const busy = matcheando || descartando || creandoInsumo || reactivando;
             const insFiltrados = insumos.filter(i => !pickSearch || norm(i.nombre).includes(norm(pickSearch)));
             const factorNum = parseFloat(pickFactor) || 1;
             // ¿Lo que escribió coincide EXACTO con un insumo? Si no, ofrecemos crear
@@ -278,7 +302,10 @@ export default function Cruce({ user, embedded = false }: CruceProps) {
                     </div>
                   </div>
 
-                  {puede && !open && (
+                  {puede && !open && verDescartados && (
+                    <button className="btn btn-acc btn-sm" disabled={busy} onClick={() => reactivar(g)}>↩ Volver a la bandeja</button>
+                  )}
+                  {puede && !open && !verDescartados && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {sug && (
                         <button

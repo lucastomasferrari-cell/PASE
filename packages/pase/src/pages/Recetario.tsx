@@ -52,7 +52,7 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
       db.from("recetas").select("id", { count: "exact", head: true }).eq("activa", true).is("deleted_at", null),
       db.from("items").select("id", { count: "exact", head: true }).eq("estado", "disponible").eq("es_open_item", false).is("deleted_at", null),
       db.from("materias_primas").select("id", { count: "exact", head: true }).eq("activa", true).is("deleted_at", null),
-      db.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("grupo_categoria", "CMV"),
+      db.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("grupo_categoria", "CMV").eq("descartado_conciliacion", false),
     ]);
     setCounts({
       insumos: iRes.count ?? 0,

@@ -88,7 +88,7 @@ test.describe.serial("E2E Test 37 — Bandeja conciliadora", () => {
       expect(b3?.length).toBe(1);
       const { error: dErr } = await duenoDb.rpc("fn_descartar_renglon", { p_factura_item_id: b3![0]!.factura_item_id, p_descartar: true });
       if (dErr) throw new Error("fn_descartar_renglon: " + dErr.message);
-      const { count: enB3 } = await svc.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("factura_id", f3);
+      const { count: enB3 } = await svc.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("factura_id", f3).eq("descartado_conciliacion", false);
       expect(enB3).toBe(0);
     } finally {
       // ── Cleanup ──

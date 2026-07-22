@@ -133,7 +133,7 @@ test.describe("Bandeja conciliadora — mutante", () => {
     expect(b3?.length).toBe(1);
     const { error: dErr } = await db.rpc("fn_descartar_renglon", { p_factura_item_id: b3![0]!.factura_item_id, p_descartar: true });
     expect(dErr).toBeNull();
-    const { count: enBandeja3 } = await db.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("factura_id", f3);
+    const { count: enBandeja3 } = await db.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("factura_id", f3).eq("descartado_conciliacion", false);
     expect(enBandeja3).toBe(0);
   });
 });
