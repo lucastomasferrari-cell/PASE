@@ -43,12 +43,18 @@ const POS_OPERATION_SLUGS = new Set<string>([
 // POS pura. Ejemplos: comanda.catalogo.editar, comanda.precios.editar,
 // comanda.empleados.editar_pos, comanda.audit.ver, etc.
 //
-// Reporte Lucas 17-jul: nekodevoto (rol_pos='admin') podía entrar al panel
-// Admin porque el bypass POS le daba todo. Fix: separar operación POS de
-// acceso Admin. El bypass rol_pos='admin' sigue funcionando en backend para
-// operaciones POS (crear mesa, cobrar). Este gate está en el frontend.
+// rol_pos='admin' = acceso total (dueño/admin del local), igual que el backend
+// (comanda_auth_tiene_permiso) y que tienePermiso() acá arriba. Un usuario con
+// permisos SUELTOS entra si tiene al menos 1 slug que no sea de operación POS.
+//
+// Historia: el 17-jul se sacó este bypass porque nekodevoto tenía rol_pos='admin'
+// sin corresponder → entraba al panel. Pero la causa real era el rol_pos mal
+// asignado (nekodevoto pasó a 'cajero'), no el bypass. Sacarlo dejó al dueño real
+// (rol_pos='admin') afuera de su propio panel. Restaurado: si no debe entrar al
+// panel, la persona no debe ser rol_pos='admin' (dato), no se toca el bypass.
 export function puedeAccederAdmin(user: Usuario | null): boolean {
   if (!user) return false;
+  if (user.rol_pos === 'admin') return true;
   return user.permisos.some((p) => p.startsWith('comanda.') && !POS_OPERATION_SLUGS.has(p));
 }
 
