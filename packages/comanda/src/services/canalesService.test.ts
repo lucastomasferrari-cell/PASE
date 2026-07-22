@@ -10,7 +10,7 @@ function mk(p: Partial<Canal> & { id: number; slug: string; modo_pos: Canal['mod
     tenant_id: 'T', local_id: null, created_at: '', updated_at: '', deleted_at: null,
     created_by: null, updated_by: null, nombre: p.slug, emoji: null, color: null,
     atado_madre: true, ajuste_madre_pct: 0, comision_externa_pct: 0, redondeo_a: 1,
-    activo: true, grupo: null, ...p,
+    activo: true, grupo: null, lista_precio_id: null, ...p,
   };
 }
 
