@@ -53,7 +53,7 @@ export function TiendaOnlineHub() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 container py-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
