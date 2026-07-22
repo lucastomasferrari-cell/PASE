@@ -161,24 +161,41 @@
 }
 
 .itemAccion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
   background: transparent;
-  border: none;
+  border: 0.5px solid var(--pase-border);
   color: var(--pase-text-muted);
   cursor: pointer;
-  font-size: 11px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  transition: background 0.12s, color 0.12s;
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 7px;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
   font-family: var(--pase-font);
 }
 
 .itemAccion:hover {
   background: var(--pase-bg-soft);
   color: var(--pase-text);
+  border-color: var(--pase-text-muted);
+}
+
+/* El borrar (×) es soft-delete (activo=false). Rojo SIEMPRE, no solo al hover,
+   para que se distinga claro de editar y no se clickee por error (bug 22-jul:
+   los botones salían a 11px muted y no se veían → se apagaron 13 medios). */
+.itemAccionDanger {
+  color: var(--danger, #e5484d);
+  border-color: color-mix(in srgb, var(--danger, #e5484d) 32%, transparent);
 }
 
 .itemAccionDanger:hover {
-  color: var(--pase-text);
+  background: color-mix(in srgb, var(--danger, #e5484d) 12%, transparent);
+  color: var(--danger, #e5484d);
+  border-color: var(--danger, #e5484d);
 }
 
 /* Pill tipo Fijo/Variable/Publicidad/etc. Implementado como <select>

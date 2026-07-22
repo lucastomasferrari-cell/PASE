@@ -383,7 +383,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
     await load();
   };
   const eliminarMedio = async (row: MedioCobroRow) => {
-    if (!confirm(`¿Eliminar el medio de cobro "${row.nombre}"?\n\nNo se borra del historial, solo deja de aparecer en los dropdowns.`)) return;
+    if (!confirm(`¿Eliminar el medio de cobro "${row.nombre}"?\n\nDeja de aparecer para cobrar y en los dropdowns (no se borra del historial).\n\n⚠️ Si un cierre o importación usa este nombre, ese import va a FALLAR hasta reactivarlo desde Supabase.`)) return;
     const { error } = await db.from("medios_cobro").update({ activo: false }).eq("id", row.id);
     if (error) { showError("No se pudo eliminar: " + error.message); return; }
     await load();
