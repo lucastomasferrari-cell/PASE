@@ -104,6 +104,23 @@ export interface Canal {
   redondeo_a: number;
   activo: boolean;
   grupo: string | null;
+  /** Fase 1 listas de precios (22-jul): qué lista de precios usa este canal.
+   *  NULL = todavía no migrado. Compartir = dos canales con el mismo id. */
+  lista_precio_id: number | null;
+}
+
+export interface ListaPrecio {
+  id: number;
+  tenant_id: string;
+  local_id: number | null;
+  nombre: string;
+  atado_madre: boolean;
+  ajuste_madre_pct: number;
+  redondeo_a: number | null;
+  activa: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface ItemPrecioCanal {

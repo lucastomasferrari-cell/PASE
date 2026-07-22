@@ -42,6 +42,7 @@ const ItemsRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m
 const GruposRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.GruposRoute })));
 const CanalesRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.CanalesRoute })));
 const ListaPreciosRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ListaPreciosRoute })));
+const ListasPreciosRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ListasPreciosRoute })));
 const ModificadoresRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ModificadoresRoute })));
 const EmpleadosListaRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.EmpleadosListaRoute })));
 // Menú Marca — wrappers con forceScope='maestro' para las rutas dueño-only.
@@ -282,6 +283,7 @@ export default function App() {
                   <Route path="/menu/grupos" element={<GruposRoute />} />
                   <Route path="/menu/canales" element={<CanalesRoute />} />
                   <Route path="/menu/lista-precios" element={<ListaPreciosRoute />} />
+                  <Route path="/menu/listas-precios" element={<ListasPreciosRoute />} />
                   <Route path="/menu/modificadores" element={<ModificadoresRoute />} />
                   <Route path="/menu/combos" element={<StubRoute />} />
                   <Route path="/menu/disponibilidad" element={<DisponibilidadLista />} />

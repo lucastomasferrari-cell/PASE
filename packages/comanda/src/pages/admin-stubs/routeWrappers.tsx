@@ -3,6 +3,7 @@ import { ItemsTab } from '@/pages/Catalogo/ItemsTab';
 import { GruposTab } from '@/pages/Catalogo/GruposTab';
 import { CanalesTab } from '@/pages/Catalogo/CanalesTab';
 import { ListaPreciosTab } from '@/pages/Catalogo/ListaPreciosTab';
+import { ListasPreciosTab } from '@/pages/Catalogo/ListasPreciosTab';
 import { ModificadoresTab } from '@/pages/Catalogo/ModificadoresTab';
 import { SettingsEmpleados } from '@/pages/Settings/SettingsEmpleados';
 
@@ -30,6 +31,7 @@ export const ItemsRoute       = withUser(ItemsTab);
 export const GruposRoute      = withUser(GruposTab);
 export const CanalesRoute     = withUser(CanalesTab);
 export const ListaPreciosRoute = withUser(ListaPreciosTab);
+export const ListasPreciosRoute = withUser(ListasPreciosTab);
 export const ModificadoresRoute = withUser(ModificadoresTab);
 export const EmpleadosListaRoute = withUser(SettingsEmpleados);
 

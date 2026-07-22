@@ -84,7 +84,8 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
       { slug: 'modificadores',  label: 'Modificadores',   href: '/menu/modificadores' },
       { slug: 'combos',         label: 'Combos',          href: '/menu/combos' },
       { slug: 'canales',        label: 'Canales',         href: '/menu/canales' },
-      { slug: 'lista-precios',  label: 'Lista de precios', href: '/menu/lista-precios' },
+      { slug: 'listas-precios', label: 'Listas de precios', href: '/menu/listas-precios' },
+      { slug: 'lista-precios',  label: 'Planilla de precios', href: '/menu/lista-precios' },
       { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad' },
       // Mudanza 07-jun (Pieza E): insumos / materias primas / recetas se crean
       // y administran en PASE (Recetario), COMANDA solo consume. Sacados del nav
