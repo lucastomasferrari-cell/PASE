@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAvatarMenu } from '@/components/UserAvatarMenu';
+import { AdminUserMenu } from './AdminUserMenu';
 import { AdminBreadcrumb } from './AdminBreadcrumb';
 
 interface Props {
@@ -66,6 +67,7 @@ export function AdminHeader({ onOpenSidebar }: Props) {
       </Button>
 
       <UserAvatarMenu />
+      <AdminUserMenu />
     </header>
   );
 }
