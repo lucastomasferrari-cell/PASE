@@ -27,6 +27,7 @@ import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialo
 import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
 import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
 import { EmitirFacturaDialog } from '@/components/dialogs/EmitirFacturaDialog';
+import { CambiarMedioPagoDialog } from '@/components/dialogs/CambiarMedioPagoDialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -51,6 +52,7 @@ export function PedidoDetalle() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
   const [reabrirOpen, setReabrirOpen] = useState(false);
+  const [cambiarMedioOpen, setCambiarMedioOpen] = useState(false);
   const [cobroOpen, setCobroOpen] = useState(false);
   const [facturaOpen, setFacturaOpen] = useState(false);
   // Data que necesita PaymentDialog. Se carga lazy cuando el cajero apreta
@@ -286,6 +288,12 @@ export function PedidoDetalle() {
                 <DropdownMenuItem onClick={() => setReabrirOpen(true)}>
                   <Unlock className="h-4 w-4 mr-2" />
                   Reabrir venta
+                </DropdownMenuItem>
+              )}
+              {venta.estado === 'cobrada' && pagos.length > 0 && (
+                <DropdownMenuItem onClick={() => setCambiarMedioOpen(true)}>
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Corregir medio de pago
                 </DropdownMenuItem>
               )}
               {puedeAnular && (
@@ -609,6 +617,16 @@ export function PedidoDetalle() {
         onAuthorized={async ({ managerId, motivo }) => {
           await handleReabrirConfirmado(managerId, motivo);
         }}
+      />
+
+      {/* DIALOG: Corregir medio de pago de una venta cobrada (turno abierto + PIN manager). */}
+      <CambiarMedioPagoDialog
+        open={cambiarMedioOpen}
+        onOpenChange={setCambiarMedioOpen}
+        ventaNumero={venta.numero_local ?? venta.id}
+        localId={venta.local_id}
+        pagos={pagos.map((p) => ({ id: p.id, metodo: p.metodo, monto: Number(p.monto) }))}
+        onDone={() => reload()}
       />
 
       {/* DIALOG: Aplicar descuento. Puede pedir PIN manager según monto/pct. */}

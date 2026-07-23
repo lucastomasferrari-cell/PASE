@@ -617,6 +617,42 @@ export async function reabrirVenta(ventaId: number, managerId: string, motivo: s
   return { error: error?.message ?? null };
 }
 
+// D: corregir el medio de pago de una venta ya cobrada (turno abierto + manager).
+// Atómico en la DB: actualiza el pago Y reclasifica el movimiento de caja.
+export async function cambiarMedioPago(
+  pagoId: number, nuevoMetodo: string, managerId: string, motivo?: string,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_cambiar_medio_pago_comanda', {
+    p_pago_id: pagoId, p_nuevo_metodo: nuevoMetodo, p_manager_id: managerId, p_motivo: motivo ?? null,
+  });
+  if (!error) return { error: null };
+  const msg = error.message ?? '';
+  const amistoso =
+    msg.includes('TURNO_CERRADO') ? 'El turno ya se cerró: no se puede cambiar el medio de una caja cerrada.'
+    : msg.includes('PAGO_NO_ENCONTRADO') ? 'No se encontró el pago (¿ya fue modificado o reembolsado?).'
+    : msg.includes('METODO_INVALIDO') ? 'El medio de pago elegido no existe en el catálogo.'
+    : msg.includes('MANAGER_REQUERIDO') ? 'Se requiere autorización de un manager.'
+    : msg.includes('NO_HAY_TURNO') ? 'La venta no tiene turno de caja asociado.'
+    : msg;
+  return { error: amistoso };
+}
+
+// Pagos confirmados de una venta (para corregir el medio desde Caja).
+export async function getPagosConfirmados(
+  ventaId: number,
+): Promise<Array<{ id: number; metodo: string; monto: number }>> {
+  const { data } = await db
+    .from('ventas_pos_pagos')
+    .select('id, metodo, monto')
+    .eq('venta_id', ventaId)
+    .eq('estado', 'confirmado')
+    .is('deleted_at', null);
+  return (data ?? []).map((p) => {
+    const r = p as { id: number; metodo: string; monto: number | string };
+    return { id: r.id, metodo: r.metodo, monto: Number(r.monto) };
+  });
+}
+
 export async function transferirMesa(
   ventaId: number, mesaDestino: number, managerId: string, motivo: string,
 ): Promise<{ error: string | null }> {

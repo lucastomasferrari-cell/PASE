@@ -14,6 +14,8 @@ import { Badge } from '../../components/Badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
+import { CambiarMedioPagoDialog, type PagoEditable } from '../../components/dialogs/CambiarMedioPagoDialog';
+import { getPagosConfirmados } from '../../services/ventasService';
 
 export function CajaEstado() {
   const { user } = useAuth();
@@ -25,6 +27,15 @@ export function CajaEstado() {
   const [totales, setTotales] = useState<TotalesPorMetodo[]>([]);
   const [loading, setLoading] = useState(true);
   const [movDialog, setMovDialog] = useState<TipoMovimiento | null>(null);
+  // Corregir medio de una venta desde su movimiento de caja (cubre mesas de salón,
+  // mostrador y pedidos por igual). null = cerrado.
+  const [corregir, setCorregir] = useState<{ ventaId: number; localId: number; pagos: PagoEditable[] } | null>(null);
+
+  async function abrirCorregirMedio(ventaId: number, movLocalId: number) {
+    const pagos = await getPagosConfirmados(ventaId);
+    if (pagos.length === 0) return;
+    setCorregir({ ventaId, localId: movLocalId, pagos });
+  }
 
   const reload = useCallback(async () => {
     if (localId === null) return;
@@ -182,20 +193,25 @@ export function CajaEstado() {
             <div className="text-right">Monto</div>
             <div>Motivo</div>
           </div>
-          {movs.map((m, idx) => (
-            <div
-              key={m.id}
-              className={`grid grid-cols-[100px_120px_140px_140px_1fr] gap-4 px-6 py-3 items-center text-sm ${
-                idx !== movs.length - 1 ? 'border-b border-border' : ''
-              }`}
-            >
-              <div className="text-muted-foreground">{formatHoraAR(m.created_at)}</div>
-              <div><Badge variant={tipoBadgeVariant(m.tipo)}>{m.tipo}</Badge></div>
-              <div>{m.metodo}</div>
-              <div className="text-right tabular-nums font-medium">{formatARS(m.monto)}</div>
-              <div className="text-muted-foreground truncate">{m.motivo ?? '—'}</div>
-            </div>
-          ))}
+          {movs.map((m, idx) => {
+            const corregible = m.tipo === 'venta' && m.venta_id !== null;
+            return (
+              <div
+                key={m.id}
+                onClick={corregible ? () => void abrirCorregirMedio(m.venta_id!, m.local_id) : undefined}
+                className={`grid grid-cols-[100px_120px_140px_140px_1fr] gap-4 px-6 py-3 items-center text-sm ${
+                  idx !== movs.length - 1 ? 'border-b border-border' : ''
+                } ${corregible ? 'cursor-pointer hover:bg-muted/40' : ''}`}
+                title={corregible ? 'Clic para corregir el medio de pago' : undefined}
+              >
+                <div className="text-muted-foreground">{formatHoraAR(m.created_at)}</div>
+                <div><Badge variant={tipoBadgeVariant(m.tipo)}>{m.tipo}</Badge></div>
+                <div>{m.metodo}</div>
+                <div className="text-right tabular-nums font-medium">{formatARS(m.monto)}</div>
+                <div className="text-muted-foreground truncate">{m.motivo ?? '—'}</div>
+              </div>
+            );
+          })}
         </Card>
       )}
 
@@ -205,6 +221,17 @@ export function CajaEstado() {
           onOpenChange={(o) => { if (!o) setMovDialog(null); }}
           tipo={movDialog}
           onConfirmado={() => { setMovDialog(null); reload(); }}
+        />
+      )}
+
+      {corregir && (
+        <CambiarMedioPagoDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setCorregir(null); }}
+          ventaNumero={corregir.ventaId}
+          localId={corregir.localId}
+          pagos={corregir.pagos}
+          onDone={() => { setCorregir(null); reload(); }}
         />
       )}
     </div>
