@@ -117,7 +117,7 @@ export function ItemsTab({ user, forceScope }: Props) {
                 el selector — el usuario está en la sección de marca dedicada y
                 el alcance está fijo en 'maestro'. En rutas /menu/* (sucursal),
                 el selector no muestra la opción 'maestro' (hideMaestro). */}
-            {!forceScope && <CatalogoScopeSelector hideMaestro />}
+            {!forceScope && <CatalogoScopeSelector hideMaestro={!puedeImportar} />}
             {/* Importar: visible con permiso de importar (aunque NO pueda editar
                 el maestro). Es la acción que un manager necesita. */}
             {scope === 'maestro' && puedeImportar && (

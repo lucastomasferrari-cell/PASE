@@ -54,6 +54,8 @@ export function ListaPreciosTab({ user, forceScope }: Props) {
   const puedeAumento = scope === 'maestro'
     ? tienePermiso(user, 'comanda.catalogo.maestro.editar')
     : tienePermiso(user, 'comanda.precios.aumento_masivo');
+  // Ver el maestro en el selector: quien tenga importar (o editar, que lo incluye).
+  const puedeVerMaestro = tienePermiso(user, 'comanda.catalogo.maestro.importar') || tienePermiso(user, 'comanda.catalogo.maestro.editar');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -126,7 +128,7 @@ export function ListaPreciosTab({ user, forceScope }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {!forceScope && <CatalogoScopeSelector hideMaestro />}
+          {!forceScope && <CatalogoScopeSelector hideMaestro={!puedeVerMaestro} />}
         {puedeAumento && (
           <div className="flex items-center gap-2">
             {canalFilter !== 'todos' && (

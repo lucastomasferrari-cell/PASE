@@ -47,6 +47,8 @@ export function GruposTab({ user, forceScope }: Props) {
 
   // Editar el MAESTRO requiere maestro.editar (solo dueño); en sucursal, el genérico.
   const puedeEditar = tienePermiso(user, scope === 'maestro' ? 'comanda.catalogo.maestro.editar' : 'comanda.catalogo.editar');
+  // Ver el maestro en el selector: quien tenga importar (o editar, que lo incluye).
+  const puedeVerMaestro = tienePermiso(user, 'comanda.catalogo.maestro.importar') || tienePermiso(user, 'comanda.catalogo.maestro.editar');
   const marcaIdFiltro = marcaFilter === 'todas' ? null : Number(marcaFilter);
 
   const reload = useCallback(async () => {
@@ -85,7 +87,7 @@ export function GruposTab({ user, forceScope }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {!forceScope && <CatalogoScopeSelector hideMaestro />}
+          {!forceScope && <CatalogoScopeSelector hideMaestro={!puedeVerMaestro} />}
           {marcas.length > 0 && (
             <Select value={marcaFilter} onValueChange={setMarcaFilter}>
               <SelectTrigger className="w-[180px] h-11"><SelectValue /></SelectTrigger>

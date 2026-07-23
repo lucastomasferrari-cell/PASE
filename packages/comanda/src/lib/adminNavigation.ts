@@ -1,7 +1,6 @@
 import {
   BarChart3, BookOpen, Utensils, Clock, DollarSign,
   Globe, Printer, Plug, Settings, CreditCard, Package, Store,
-  Layers,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -56,23 +55,13 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
     ],
   },
   {
-    // Menú Marca (maestro). Es la plantilla que se replica a cada sucursal
-    // vía "Importar a sucursal". Acceso: quien tenga IMPORTAR (o EDITAR, que lo
-    // incluye) — típicamente un manager con importar ve el maestro en lectura y
-    // lo importa a su local, pero NO puede editarlo (editar = solo dueño, se
-    // gatea adentro de cada tab). Ver ItemsTab/GruposTab/ListaPreciosTab.
-    slug: 'menu-marca',
-    label: 'Menú Marca',
-    icon: Layers,
-    href: '/menu/maestro/items',
-    requiredPermission: 'comanda.catalogo.maestro.importar',
-    subItems: [
-      { slug: 'items',         label: 'Items',           href: '/menu/maestro/items' },
-      { slug: 'grupos',        label: 'Grupos',          href: '/menu/maestro/grupos' },
-      { slug: 'lista-precios', label: 'Lista de precios', href: '/menu/maestro/lista-precios' },
-    ],
-  },
-  {
+    // Menú unificado (30-jul): antes había DOS secciones — "Menú Marca" (maestro,
+    // rutas /menu/maestro/*) y "Menú" (sucursal) — con Items/Grupos/Precios
+    // repetidos. Ahora una sola sección: el maestro se alcanza con el selector
+    // de alcance (CatalogoScopeSelector) arriba de Items/Grupos/Precios, visible
+    // solo para quien tenga el permiso maestro.importar/editar (mismo gateo que
+    // tenía la sección aparte). Las rutas /menu/maestro/* siguen existiendo por
+    // compatibilidad, sin link en el nav.
     slug: 'menu',
     label: 'Menú',
     icon: BookOpen,
@@ -84,8 +73,8 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
       { slug: 'modificadores',  label: 'Modificadores',   href: '/menu/modificadores' },
       { slug: 'combos',         label: 'Combos',          href: '/menu/combos' },
       { slug: 'canales',        label: 'Canales',         href: '/menu/canales' },
+      { slug: 'lista-precios',  label: 'Precios',         href: '/menu/lista-precios' },
       { slug: 'listas-precios', label: 'Listas de precios', href: '/menu/listas-precios' },
-      { slug: 'lista-precios',  label: 'Planilla de precios', href: '/menu/lista-precios' },
       { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad' },
       // Mudanza 07-jun (Pieza E): insumos / materias primas / recetas se crean
       // y administran en PASE (Recetario), COMANDA solo consume. Sacados del nav
