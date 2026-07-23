@@ -443,6 +443,10 @@ export interface MetodoCobro {
   activo: boolean;
   orden: number;
   sectores_visibles: string[] | null;
+  /** Plata física: cuenta como efectivo en la caja/arqueo del turno (ej.
+   *  efectivo, efectivo_delivery, peya_efectivo). Los no-efectivo van a
+   *  banco/MP. Ver migración 202607220400. */
+  es_efectivo: boolean;
 }
 
 export interface HorariosLocal {

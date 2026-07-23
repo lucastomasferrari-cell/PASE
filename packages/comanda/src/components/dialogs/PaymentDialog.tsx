@@ -202,18 +202,25 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
       void (async () => {
         try {
           const { imprimirTicket } = await import('@/services/printerService');
-          const { listVentasItems } = await import('@/services/ventasService');
-          const itemsR = await listVentasItems(venta.id);
-          await imprimirTicket({
-            titulo: 'COMANDA',
-            items: itemsR.data.map((it) => ({
-              nombre: 'Item ' + it.item_id,
+          const { getLocalNombre } = await import('@/services/localSettingsService');
+          // Título = nombre real del local/marca (no el literal "COMANDA").
+          const tituloTicket = (await getLocalNombre(venta.local_id)) ?? 'Ticket';
+          // Items con su NOMBRE real (igual que la pre-cuenta / "el control"),
+          // no "Item <id>". Resuelve nombre_display → catálogo → fallback.
+          const itemsTicket = items
+            .filter((it) => it.estado !== 'anulado')
+            .map((it) => ({
+              nombre: it.nombre_display ?? catalogo.find((c) => c.id === it.item_id)?.nombre ?? `Item #${it.item_id}`,
               cantidad: Number(it.cantidad),
-              subtotal: Number(it.subtotal),
-            })),
+              subtotal: it.es_cortesia ? 0 : Number(it.subtotal),
+            }));
+          await imprimirTicket({
+            titulo: tituloTicket,
+            items: itemsTicket,
             total: Number(venta.total),
+            // Medio de pago con su NOMBRE legible (no el slug "rappi_online").
             pagos: pagosAEnviar.map((p) => ({
-              metodo: p.metodo,
+              metodo: allMetodos.find((m) => m.slug === p.metodo)?.nombre ?? p.metodo,
               monto: p.monto,
               cuotas: p.cuotas ?? null,
             })),

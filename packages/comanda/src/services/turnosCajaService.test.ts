@@ -70,27 +70,48 @@ describe('registrarMovimiento', () => {
 });
 
 describe('totalesPorMetodo', () => {
-  it('agrupa por método y suma con signos', async () => {
-    // Builder encadenable: from().select().eq() resuelve a {data, error}
-    const eq = vi.fn().mockResolvedValue({
-      data: [
-        { metodo: 'efectivo', monto: 1000, tipo: 'venta' },
-        { metodo: 'efectivo', monto: 500, tipo: 'venta' },
-        { metodo: 'efectivo', monto: 200, tipo: 'retiro' },
-        { metodo: 'tarjeta_debito', monto: 800, tipo: 'venta' },
-        { metodo: 'efectivo', monto: 5000, tipo: 'cierre' },  // ignorado
-      ],
-      error: null,
+  it('agrupa por método, suma con signos y marca esEfectivo por medio', async () => {
+    // Dos consultas: movimientos_caja (select().eq()) y medios_cobro (select().is()).
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'movimientos_caja') {
+        const eq = vi.fn().mockResolvedValue({
+          data: [
+            { metodo: 'efectivo', monto: 1000, tipo: 'venta' },
+            { metodo: 'efectivo', monto: 500, tipo: 'venta' },
+            { metodo: 'efectivo', monto: 200, tipo: 'retiro' },
+            { metodo: 'peya_efectivo', monto: 300, tipo: 'venta' },
+            { metodo: 'tarjeta_debito', monto: 800, tipo: 'venta' },
+            { metodo: 'efectivo', monto: 5000, tipo: 'cierre' },  // ignorado
+          ],
+          error: null,
+        });
+        return { select: vi.fn().mockReturnValue({ eq }) };
+      }
+      // medios_cobro: select().is() resuelve a {data, error}
+      const is = vi.fn().mockResolvedValue({
+        data: [
+          { slug: 'efectivo', es_efectivo: true },
+          { slug: 'peya_efectivo', es_efectivo: true },
+          { slug: 'tarjeta_debito', es_efectivo: false },
+        ],
+        error: null,
+      });
+      return { select: vi.fn().mockReturnValue({ is }) };
     });
-    const select = vi.fn().mockReturnValue({ eq });
-    mockFrom.mockReturnValue({ select });
 
     const res = await totalesPorMetodo(1);
     expect(res.error).toBeNull();
     const efectivo = res.data.find((t) => t.metodo === 'efectivo');
     expect(efectivo?.total).toBe(1000 + 500 - 200);
     expect(efectivo?.cantidad).toBe(3);
+    expect(efectivo?.esEfectivo).toBe(true);
+    // peya_efectivo también es plata física → esEfectivo true (el fix de B).
+    const peya = res.data.find((t) => t.metodo === 'peya_efectivo');
+    expect(peya?.total).toBe(300);
+    expect(peya?.esEfectivo).toBe(true);
+    // tarjeta NO es efectivo.
     const tarjeta = res.data.find((t) => t.metodo === 'tarjeta_debito');
     expect(tarjeta?.total).toBe(800);
+    expect(tarjeta?.esEfectivo).toBe(false);
   });
 });

@@ -85,9 +85,13 @@ export function CajaEstado() {
   // a la caja del local. Se muestran aparte como info.
   // `totalesPorMetodo` ya incluye la apertura (tipo='apertura') con signo +,
   // por eso NO sumamos turno.monto_inicial otra vez.
-  const efectivoEnCaja = Number(totales.find((t) => t.metodo === 'efectivo')?.total ?? 0);
+  // Efectivo físico = todos los medios marcados es_efectivo (efectivo,
+  // peya_efectivo, efectivo_delivery, …), no solo el slug literal 'efectivo'.
+  const efectivoEnCaja = totales
+    .filter((t) => t.esEfectivo)
+    .reduce((s, t) => s + Number(t.total), 0);
   const totalNoEfectivo = totales
-    .filter((t) => t.metodo !== 'efectivo')
+    .filter((t) => !t.esEfectivo)
     .reduce((s, t) => s + Number(t.total), 0);
 
   return (

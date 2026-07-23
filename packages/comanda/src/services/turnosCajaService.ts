@@ -93,6 +93,9 @@ export interface TotalesPorMetodo {
   metodo: string;
   total: number;
   cantidad: number;
+  /** true si el medio es plata física (medios_cobro.es_efectivo) → entra a la
+   *  caja/arqueo. Los no-efectivo van a banco/MP. */
+  esEfectivo: boolean;
 }
 
 export async function totalesPorMetodo(turnoId: number): Promise<{ data: TotalesPorMetodo[]; error: string | null }> {
@@ -101,6 +104,13 @@ export async function totalesPorMetodo(turnoId: number): Promise<{ data: Totales
     .select('metodo, monto, tipo')
     .eq('turno_caja_id', turnoId);
   if (error) return { data: [], error: translateError(error) };
+  // Qué slugs son efectivo físico (misma fuente que usa el arqueo SQL).
+  const { data: medios } = await db.from('medios_cobro').select('slug, es_efectivo').is('deleted_at', null);
+  const efSet = new Set(
+    (medios ?? [])
+      .filter((m) => (m as { es_efectivo: boolean }).es_efectivo)
+      .map((m) => (m as { slug: string }).slug),
+  );
   const map = new Map<string, { total: number; cantidad: number }>();
   for (const row of data ?? []) {
     const r = row as { metodo: string; monto: number; tipo: string };
@@ -112,7 +122,7 @@ export async function totalesPorMetodo(turnoId: number): Promise<{ data: Totales
     map.set(r.metodo, cur);
   }
   const out: TotalesPorMetodo[] = Array.from(map.entries()).map(([metodo, v]) => ({
-    metodo, total: v.total, cantidad: v.cantidad,
+    metodo, total: v.total, cantidad: v.cantidad, esEfectivo: efSet.has(metodo),
   }));
   return { data: out, error: null };
 }

@@ -16,7 +16,7 @@ export async function listMetodos(tenantId: string): Promise<{ data: MetodoCobro
 
 export type MetodoDraft = Pick<
   MetodoCobro,
-  'nombre' | 'slug' | 'emoji' | 'pide_vuelto' | 'activo' | 'orden'
+  'nombre' | 'slug' | 'emoji' | 'pide_vuelto' | 'activo' | 'orden' | 'es_efectivo'
 > & { tenant_id: string; local_id: number | null };
 
 export async function createMetodo(draft: MetodoDraft): Promise<{ id: number | null; error: string | null }> {

@@ -113,12 +113,20 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
   useEffect(() => { setClienteIdExistente(null); }, [telefono]);
 
   const isDelivery = tipoEntrega === 'delivery';
+  // App externa (Rappi/PedidosYa) = las que cobran comisión: la app ya tiene los
+  // datos del cliente y hace la logística de entrega, así que NO le pedimos
+  // teléfono/nombre/dirección al cajero. Los canales directos (WhatsApp/teléfono,
+  // comisión 0) sí los necesitan para poder contactar y entregar.
+  const canalActual = useMemo(() => canales.find((c) => c.id === canalId) ?? null, [canales, canalId]);
+  const esAppExterna = (canalActual?.comision_externa_pct ?? 0) > 0;
   const canSubmit = useMemo(() => {
-    if (!telefono.trim() || !nombre.trim()) return false;
     if (!canalId) return false;
-    if (isDelivery && !direccion.trim()) return false;
+    if (!esAppExterna) {
+      if (!telefono.trim() || !nombre.trim()) return false;
+      if (isDelivery && !direccion.trim()) return false;
+    }
     return true;
-  }, [telefono, nombre, canalId, isDelivery, direccion]);
+  }, [telefono, nombre, canalId, isDelivery, direccion, esAppExterna]);
 
   async function crear() {
     if (!canSubmit) {
@@ -135,7 +143,9 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
     // Captura el id del nuevo cliente para vincularlo a la venta (activa
     // trigger de contadores total_pedidos/total_gastado).
     let clienteIdFinal = clienteIdExistente;
-    if (!clienteIdExistente && user?.tenant_id) {
+    // Solo damos de alta un cliente en el CRM si hay datos reales (los pedidos
+    // de apps externas pueden venir sin teléfono/nombre).
+    if (!clienteIdExistente && user?.tenant_id && telefono.trim() && nombre.trim()) {
       const partes = nombre.trim().split(/\s+/);
       const nombrePrim = partes[0] ?? nombre.trim();
       const apellido = partes.length > 1 ? partes.slice(1).join(' ') : null;
@@ -163,8 +173,8 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       localId,
       modo: 'pedidos',
       canalId: canalId!,
-      clienteNombre: nombre.trim(),
-      clienteTelefono: telefono.trim(),
+      clienteNombre: nombre.trim() || null,
+      clienteTelefono: telefono.trim() || null,
       clienteDireccion: dirCompleta,
       tipoEntrega,
       origen: 'pos',
@@ -252,6 +262,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
         <div className="space-y-2 relative">
           <Label htmlFor="tel" className="flex items-center gap-1.5">
             <Phone className="h-3.5 w-3.5" /> Teléfono
+            {esAppExterna && <span className="text-muted-foreground font-normal">(opcional)</span>}
           </Label>
           <Input
             id="tel"
@@ -286,7 +297,10 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
 
         {/* Nombre */}
         <div className="space-y-2">
-          <Label htmlFor="nom">Nombre del cliente</Label>
+          <Label htmlFor="nom" className="flex items-center gap-1.5">
+            Nombre del cliente
+            {esAppExterna && <span className="text-muted-foreground font-normal">(opcional)</span>}
+          </Label>
           <Input
             id="nom"
             value={nombre}
@@ -302,6 +316,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
             <div className="space-y-2">
               <Label htmlFor="dir" className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" /> Dirección de entrega
+                {esAppExterna && <span className="text-muted-foreground font-normal">(opcional)</span>}
               </Label>
               <Input
                 id="dir"

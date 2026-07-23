@@ -20,6 +20,7 @@ const draftBase: MetodoDraft = {
   slug: 'mercadopago',
   emoji: '💸',
   pide_vuelto: false,
+  es_efectivo: false,
   activo: true,
   orden: 1,
   tenant_id: 'tenant-uuid',

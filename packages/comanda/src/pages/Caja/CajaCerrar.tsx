@@ -79,7 +79,11 @@ export function CajaCerrar() {
   // `totalesPorMetodo` YA incluye la apertura (tipo='apertura', signo +)
   // sumada al monto efectivo. NO sumar turno.monto_inicial otra vez (bug
   // detectado 2026-05-15 — daba doble inicial al cerrar).
-  const calculadoEfectivo = Number(totales.find((t) => t.metodo === 'efectivo')?.total ?? 0);
+  // Efectivo esperado = suma de TODOS los medios es_efectivo (mismo criterio
+  // que el arqueo SQL: efectivo, peya_efectivo, efectivo_delivery, …).
+  const calculadoEfectivo = totales
+    .filter((t) => t.esEfectivo)
+    .reduce((s, t) => s + Number(t.total), 0);
   // Movimientos del turno NETOS (sin la apertura) — solo para display.
   const movimientosEfectivoNetos = calculadoEfectivo - Number(turno.monto_inicial);
   // En modo denominaciones, el total declarado viene del breakdown.
@@ -145,7 +149,7 @@ export function CajaCerrar() {
                 valor={(movimientosEfectivoNetos >= 0 ? '+ ' : '− ') + formatARS(Math.abs(movimientosEfectivoNetos))}
               />
               {totales
-                .filter((t) => t.metodo !== 'efectivo')
+                .filter((t) => !t.esEfectivo)
                 .map((t) => (
                   <Row key={t.metodo} label={`${t.metodo} (${t.cantidad} mov., no en caja)`} valor={formatARS(t.total)} />
                 ))}

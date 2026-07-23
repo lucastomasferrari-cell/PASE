@@ -120,6 +120,7 @@ function MetodoDialog({ metodo, tenantId, onClose, onSaved }: {
   const [slug, setSlug] = useState(metodo?.slug ?? '');
   const [emoji, setEmoji] = useState(metodo?.emoji ?? '💵');
   const [pideVuelto, setPideVuelto] = useState(metodo?.pide_vuelto ?? false);
+  const [esEfectivo, setEsEfectivo] = useState(metodo?.es_efectivo ?? false);
   const [activo, setActivo] = useState(metodo?.activo ?? true);
   const [orden, setOrden] = useState(metodo?.orden ?? 99);
   const [saving, setSaving] = useState(false);
@@ -130,7 +131,7 @@ function MetodoDialog({ metodo, tenantId, onClose, onSaved }: {
     setSaving(true);
     const draft: MetodoDraft = {
       tenant_id: tenantId, local_id: null,
-      nombre: nombre.trim(), slug: slug.trim(), emoji, pide_vuelto: pideVuelto, activo, orden,
+      nombre: nombre.trim(), slug: slug.trim(), emoji, pide_vuelto: pideVuelto, es_efectivo: esEfectivo, activo, orden,
     };
     const { error } = metodo ? await updateMetodo(metodo.id, draft) : await createMetodo(draft);
     setSaving(false);
@@ -167,6 +168,15 @@ function MetodoDialog({ metodo, tenantId, onClose, onSaved }: {
           <div className="flex items-center justify-between rounded-md border border-border p-3">
             <Label>Pide vuelto</Label>
             <Switch checked={pideVuelto} onCheckedChange={setPideVuelto} />
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div>
+              <Label>Es efectivo (plata física)</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Cuenta como efectivo en la caja y el arqueo del turno (ej. efectivo, PeYa efectivo).
+              </p>
+            </div>
+            <Switch checked={esEfectivo} onCheckedChange={setEsEfectivo} />
           </div>
           <div className="flex items-center justify-between rounded-md border border-border p-3">
             <Label>Activo</Label>
