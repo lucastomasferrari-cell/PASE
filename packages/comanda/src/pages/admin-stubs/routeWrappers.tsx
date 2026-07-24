@@ -3,7 +3,7 @@ import { ItemsTab } from '@/pages/Catalogo/ItemsTab';
 import { GruposTab } from '@/pages/Catalogo/GruposTab';
 import { CanalesTab } from '@/pages/Catalogo/CanalesTab';
 import { ListaPreciosTab } from '@/pages/Catalogo/ListaPreciosTab';
-import { ListasPreciosTab } from '@/pages/Catalogo/ListasPreciosTab';
+import { PreciosPage } from '@/pages/Catalogo/PreciosPage';
 import { ModificadoresTab } from '@/pages/Catalogo/ModificadoresTab';
 import { SettingsEmpleados } from '@/pages/Settings/SettingsEmpleados';
 
@@ -30,8 +30,14 @@ function withUser<P extends { user: import('@/types/auth').Usuario }>(
 export const ItemsRoute       = withUser(ItemsTab);
 export const GruposRoute      = withUser(GruposTab);
 export const CanalesRoute     = withUser(CanalesTab);
-export const ListaPreciosRoute = withUser(ListaPreciosTab);
-export const ListasPreciosRoute = withUser(ListasPreciosTab);
+// Precios unificado: una sección con pestañas Planilla / Listas.
+// /menu/lista-precios abre en Planilla; /menu/listas-precios en Listas.
+export const PreciosRoute = withUser(PreciosPage);
+export const PreciosRouteListas = () => {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <PreciosPage user={user} defaultTab="listas" />;
+};
 export const ModificadoresRoute = withUser(ModificadoresTab);
 export const EmpleadosListaRoute = withUser(SettingsEmpleados);
 

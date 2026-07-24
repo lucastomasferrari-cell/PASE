@@ -73,8 +73,10 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
       { slug: 'modificadores',  label: 'Modificadores',   href: '/menu/modificadores' },
       { slug: 'combos',         label: 'Combos',          href: '/menu/combos' },
       { slug: 'canales',        label: 'Canales',         href: '/menu/canales' },
+      // "Precios" = pantalla única con pestañas Planilla / Listas (PreciosPage).
+      // Antes eran dos entradas sueltas ("Planilla de precios" y "Listas de
+      // precios"); /menu/listas-precios sigue andando y abre en la pestaña Listas.
       { slug: 'lista-precios',  label: 'Precios',         href: '/menu/lista-precios' },
-      { slug: 'listas-precios', label: 'Listas de precios', href: '/menu/listas-precios' },
       { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad' },
       // Mudanza 07-jun (Pieza E): insumos / materias primas / recetas se crean
       // y administran en PASE (Recetario), COMANDA solo consume. Sacados del nav
