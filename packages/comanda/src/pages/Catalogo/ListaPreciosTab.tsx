@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Link2, Pencil, TrendingUp } from 'lucide-react';
+import { Link2, Pencil, TrendingUp, Eye, EyeOff } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { Canal, ItemGrupo, ItemPrecioCanal, Item } from '../../types/database';
 import { listItems } from '../../services/itemsService';
 import { listGrupos } from '../../services/gruposService';
 import { listCanales } from '../../services/canalesService';
-import { listPreciosPorTenant, setPrecioCelda } from '../../services/preciosService';
+import { listPreciosPorTenant, setPrecioCelda, setVendibleCelda } from '../../services/preciosService';
 import { tienePermiso } from '../../lib/auth';
 import { formatARS, parseARS, relativoCorto } from '../../lib/format';
 import { SearchInput } from '../../components/SearchInput';
@@ -107,12 +107,13 @@ export function ListaPreciosTab({ user, forceScope }: Props) {
     return m;
   }, [precios]);
 
-  function precioEfectivo(item: Item, canal: Canal): { valor: number; manual: boolean; existe: boolean } {
+  function precioEfectivo(item: Item, canal: Canal): { valor: number; manual: boolean; existe: boolean; vendible: boolean } {
     const ipc = precioMap.get(`${item.id}-${canal.id}`);
-    if (ipc) return { valor: Number(ipc.precio), manual: ipc.edicion_manual, existe: true };
+    // Sin fila = se vende (default): el POS no filtra items sin precio de canal.
+    if (ipc) return { valor: Number(ipc.precio), manual: ipc.edicion_manual, existe: true, vendible: ipc.vendible !== false };
     const ajustado = Number(item.precio_madre) * (1 + Number(canal.ajuste_madre_pct) / 100);
     const redondeado = Math.round(ajustado / canal.redondeo_a) * canal.redondeo_a;
-    return { valor: redondeado, manual: false, existe: false };
+    return { valor: redondeado, manual: false, existe: false, vendible: true };
   }
 
   return (
@@ -255,6 +256,7 @@ export function ListaPreciosTab({ user, forceScope }: Props) {
                       canal={c}
                       precio={ef.valor}
                       manual={ef.manual}
+                      vendible={ef.vendible}
                       editable={puedeEditar}
                       onSaved={() => { setLastChange(new Date().toISOString()); reload(); }}
                       tenantId={user.tenant_id}
@@ -305,15 +307,26 @@ interface CellProps {
   canal: Canal;
   precio: number;
   manual: boolean;
+  vendible: boolean;
   editable: boolean;
   tenantId: string | null;
   onSaved: () => void;
 }
 
-function PrecioCell({ item, canal, precio, manual, editable, tenantId, onSaved }: CellProps) {
+function PrecioCell({ item, canal, precio, manual, vendible, editable, tenantId, onSaved }: CellProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(formatARS(precio));
   const [saving, setSaving] = useState(false);
+
+  async function toggleVendible(e: React.MouseEvent) {
+    e.stopPropagation(); // no abrir el editor de precio
+    if (!tenantId || saving) return;
+    setSaving(true);
+    const { error: err } = await setVendibleCelda(item.id, canal.id, !vendible, tenantId, item.local_id, precio);
+    setSaving(false);
+    if (err) { alert(err); return; }
+    onSaved();
+  }
 
   async function commit() {
     const n = parseARS(text);
@@ -359,28 +372,49 @@ function PrecioCell({ item, canal, precio, manual, editable, tenantId, onSaved }
     <td
       className={cn(
         'px-3 py-2 text-right tabular-nums text-sm',
-        isEdited ? 'bg-success/10 border border-success/30' : 'bg-muted/30',
+        !vendible ? 'bg-muted/20' : isEdited ? 'bg-success/10 border border-success/30' : 'bg-muted/30',
         editable ? 'cursor-pointer' : 'cursor-default',
       )}
       onClick={() => editable && setEditing(true)}
-      title={isEdited
-        ? `${formatARS(precio)} · ${deltaLabel} vs madre · manual`
-        : `${formatARS(precio)} · ${deltaLabel} vs madre · atado`}
+      title={!vendible
+        ? 'No se vende en este canal — oculto en el POS. Tocá el ojo para venderlo.'
+        : isEdited
+          ? `${formatARS(precio)} · ${deltaLabel} vs madre · manual`
+          : `${formatARS(precio)} · ${deltaLabel} vs madre · atado`}
     >
-      {saving ? '…' : formatARS(precio)}
+      <span className={cn(!vendible && 'line-through text-muted-foreground')}>
+        {saving ? '…' : formatARS(precio)}
+      </span>
       <div className="text-[9px] mt-0.5 flex items-center justify-end w-full gap-1.5">
-        <span className={cn('font-mono', deltaColor)}>{deltaLabel}</span>
-        <span className="text-muted-foreground">·</span>
-        {isEdited ? (
-          <span className="inline-flex items-center gap-0.5">
-            <Pencil className="h-2.5 w-2.5 text-success" />
-            <span className="text-success">manual</span>
-          </span>
+        {vendible ? (
+          <>
+            <span className={cn('font-mono', deltaColor)}>{deltaLabel}</span>
+            <span className="text-muted-foreground">·</span>
+            {isEdited ? (
+              <span className="inline-flex items-center gap-0.5">
+                <Pencil className="h-2.5 w-2.5 text-success" />
+                <span className="text-success">manual</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-0.5">
+                <Link2 className="h-2.5 w-2.5 text-muted-foreground" />
+                <span className="text-muted-foreground">atado</span>
+              </span>
+            )}
+          </>
         ) : (
-          <span className="inline-flex items-center gap-0.5">
-            <Link2 className="h-2.5 w-2.5 text-muted-foreground" />
-            <span className="text-muted-foreground">atado</span>
-          </span>
+          <span className="text-muted-foreground">no se vende</span>
+        )}
+        {editable && (
+          <button
+            type="button"
+            onClick={toggleVendible}
+            className="ml-0.5 text-muted-foreground hover:text-foreground"
+            title={vendible ? 'Dejar de vender en este canal' : 'Vender en este canal'}
+            aria-label={vendible ? 'Dejar de vender en este canal' : 'Vender en este canal'}
+          >
+            {vendible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
         )}
       </div>
     </td>

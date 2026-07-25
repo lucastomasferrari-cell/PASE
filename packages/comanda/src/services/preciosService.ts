@@ -57,6 +57,44 @@ export async function setVendible(
   return { error: error?.message ?? null };
 }
 
+// Prender/apagar "se vende en este canal" desde la planilla. Upsert como
+// setPrecioCelda: si hay fila la actualiza; si no, la crea al precio actual
+// (derivado del madre) con el vendible pedido. `vendible=false` oculta el item
+// del POS en ese canal (filtro de useVentaData); true lo vuelve a mostrar.
+export async function setVendibleCelda(
+  itemId: number,
+  canalId: number,
+  vendible: boolean,
+  tenantId: string,
+  localId: number | null,
+  precioSiCrea: number,
+): Promise<{ error: string | null }> {
+  const { data: existing, error: selErr } = await db
+    .from('item_precios_canal')
+    .select('id')
+    .eq('item_id', itemId)
+    .eq('canal_id', canalId)
+    .is('deleted_at', null)
+    .limit(1);
+  if (selErr) return { error: selErr.message };
+
+  if (existing && existing.length > 0 && existing[0]) {
+    const { error } = await db.from('item_precios_canal').update({ vendible }).eq('id', existing[0].id);
+    return { error: error?.message ?? null };
+  }
+
+  const { error } = await db.from('item_precios_canal').insert({
+    item_id: itemId,
+    canal_id: canalId,
+    precio: precioSiCrea,
+    edicion_manual: false,
+    vendible,
+    tenant_id: tenantId,
+    local_id: localId,
+  });
+  return { error: error?.message ?? null };
+}
+
 export interface AumentoMasivoArgs {
   tenantId: string;
   localId: number | null;
