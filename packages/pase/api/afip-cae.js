@@ -111,6 +111,9 @@ export default async function handler(req, res) {
       cert: cred.cert_pem,
       key: cred.key_pem,
       production: cred.ambiente === 'produccion',
+      // AfipSDK cloud requiere access_token (si no, 401). Temporal hasta migrar
+      // a conexión directa a ARCA. Es global (env var), no per-tenant por ahora.
+      access_token: process.env.AFIPSDK_ACCESS_TOKEN,
       // Token cache: AFIPSDK cachea WSAA tokens 12h por default. Cuando
       // corremos en serverless cold-start, el cache no persiste — c/ invocación
       // saca nuevo token. Aceptable para volúmenes <10/min. Si después escala,

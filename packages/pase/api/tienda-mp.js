@@ -695,6 +695,7 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
     afipSdk = new Afip({
       CUIT: cred.cuit, cert: cred.cert_pem, key: cred.key_pem,
       production: cred.ambiente === 'produccion',
+      access_token: process.env.AFIPSDK_ACCESS_TOKEN,
     });
   } catch (e) {
     return { ok: false, error: 'afip_sdk_init_failed: ' + e.message };
@@ -2160,6 +2161,7 @@ async function handleAfipTestConnection(req, res) {
       cert: cred.cert_pem,
       key: cred.key_pem,
       production: cred.ambiente === 'produccion',
+      access_token: process.env.AFIPSDK_ACCESS_TOKEN,
     });
 
     // 1) WSAA login — saca token para WSFEv1. Si falla acá, el cert/key
