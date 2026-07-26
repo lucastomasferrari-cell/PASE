@@ -5,9 +5,9 @@
 //   2. Idempotency: si vino p_request_uuid y ya hay factura con ese uuid,
 //      devuelve el CAE cacheado (sin pegarle de nuevo a AFIP).
 //   3. Lee credenciales del tenant (cert + key, solo accesible vía service_role).
-//   4. Inicializa @afipsdk/afip.js con cert/key/ambiente.
-//   5. getLastVoucher → numero = ultimo + 1.
-//   6. createVoucher → CAE.
+//   4. Conexión DIRECTA a ARCA vía _afip-direct.js (WSAA + WSFEv1, sin terceros).
+//   5. feUltimoAutorizado → numero = ultimo + 1.
+//   6. feCAESolicitar → CAE.
 //   7. Genera QR fiscal AR (Res. Gral. 4892/2020).
 //   8. INSERT afip_facturas con estado 'aprobada'.
 //   9. Devuelve { cae, numero, qr_fiscal_url, factura_id }.
@@ -35,12 +35,9 @@
 //     es válido fiscalmente.
 
 import { createClient } from '@supabase/supabase-js';
-import afipPkg from '@afipsdk/afip.js';
+import { feUltimoAutorizado, feCAESolicitar, buildQrUrl } from './_afip-direct.js';
 import { checkUserAuth } from './_user-auth.js';
 import { setCorsHeaders } from './_cors.js';
-// @afipsdk/afip.js es CommonJS: import default + desestructurar (el named
-// import { Afip } falla en el runtime ESM de Vercel y crashea al init).
-const Afip = afipPkg.Afip ?? afipPkg;
 
 export default async function handler(req, res) {
   // Fix auditoría 2026-05-21 ALTO-5: CORS allow-list explícito.
@@ -103,26 +100,11 @@ export default async function handler(req, res) {
   if (!cred.activa) return res.status(400).json({ error: 'AFIP_NO_ACTIVA' });
   if (!cred.cert_pem || !cred.key_pem) return res.status(400).json({ error: 'AFIP_SIN_CERT_KEY' });
 
-  // ── Inicializar SDK ───────────────────────────────────────────────────
-  let afip;
-  try {
-    afip = new Afip({
-      CUIT: cred.cuit,
-      cert: cred.cert_pem,
-      key: cred.key_pem,
-      production: cred.ambiente === 'produccion',
-      // AfipSDK cloud requiere access_token (si no, 401). Temporal hasta migrar
-      // a conexión directa a ARCA. Es global (env var), no per-tenant por ahora.
-      access_token: process.env.AFIPSDK_ACCESS_TOKEN,
-      // Token cache: AFIPSDK cachea WSAA tokens 12h por default. Cuando
-      // corremos en serverless cold-start, el cache no persiste — c/ invocación
-      // saca nuevo token. Aceptable para volúmenes <10/min. Si después escala,
-      // moverse a cache en Supabase Storage o env-var rotativa.
-    });
-  } catch (err) {
-    console.error('[afip-cae] SDK init failed', err.message);
-    return res.status(500).json({ error: 'AFIP_SDK_INIT_FAILED', detail: err.message });
-  }
+  // Credenciales para el módulo DIRECTO a ARCA (WSAA + WSFEv1, sin terceros).
+  const credD = {
+    certPem: cred.cert_pem, keyPem: cred.key_pem,
+    cuit: cred.cuit, ambiente: cred.ambiente,
+  };
 
   // ── Punto de venta del LOCAL de la venta ──────────────────────────────
   // Multi-sucursal: cada local tiene su propio PV bajo el mismo CUIT
@@ -145,10 +127,9 @@ export default async function handler(req, res) {
   const cbteTipo = Number(body.tipo_comprobante);
   let numero;
   try {
-    const ultimo = await afip.ElectronicBilling.getLastVoucher(ptoVta, cbteTipo);
-    numero = (ultimo || 0) + 1;
+    numero = (await feUltimoAutorizado(credD, ptoVta, cbteTipo)) + 1;
   } catch (err) {
-    console.error('[afip-cae] getLastVoucher failed', err.message);
+    console.error('[afip-cae] feUltimoAutorizado failed', err.message);
     return res.status(502).json({ error: 'AFIP_GET_LAST_VOUCHER_FAILED', detail: err.message });
   }
 
@@ -159,22 +140,16 @@ export default async function handler(req, res) {
   const importeIva = Number(body.importe_iva);
   const importeTotal = Number(body.importe_total);
 
-  const ivaArray = importeIva > 0 ? [{
-    Id: 5, // 21% — para Monotributo + RI con tasa estándar
-    BaseImp: importeNeto,
-    Importe: importeIva,
-  }] : undefined;
-
   // Notas de crédito (tipos 3, 8, 13) requieren referencia a la factura
   // original via CbtesAsoc. El frontend pasa { cbtes_asoc: [{ tipo, pto_vta,
-  // nro, cuit }] } y nosotros lo convertimos al shape que espera AFIPSDK.
+  // nro, cuit }] }.
   const cbteTipoEsNC = [3, 8, 13].includes(cbteTipo);
   const cbtesAsoc = (body.cbtes_asoc && Array.isArray(body.cbtes_asoc) && body.cbtes_asoc.length > 0)
     ? body.cbtes_asoc.map((c) => ({
-        Tipo: Number(c.tipo),
-        PtoVta: Number(c.pto_vta || c.punto_venta || ptoVta),
-        Nro: Number(c.nro || c.numero),
-        Cuit: c.cuit ? String(c.cuit) : cred.cuit,
+        tipo: Number(c.tipo),
+        ptoVta: Number(c.pto_vta || c.punto_venta || ptoVta),
+        nro: Number(c.nro || c.numero),
+        cuit: c.cuit ? String(c.cuit) : cred.cuit,
       }))
     : undefined;
   if (cbteTipoEsNC && !cbtesAsoc) {
@@ -183,29 +158,21 @@ export default async function handler(req, res) {
 
   let caeResult;
   try {
-    caeResult = await afip.ElectronicBilling.createVoucher({
-      CantReg: 1,
-      PtoVta: ptoVta,
-      CbteTipo: cbteTipo,
-      Concepto: Number(body.concepto),
-      DocTipo: Number(body.doc_tipo || 99), // 99 = consumidor final
-      DocNro: Number(body.doc_nro || 0),
-      CbteDesde: numero,
-      CbteHasta: numero,
-      CbteFch: yyyymmdd,
-      ImpTotal: importeTotal,
-      ImpTotConc: 0,
-      ImpNeto: importeNeto,
-      ImpOpEx: 0,
-      ImpIVA: importeIva,
-      ImpTrib: 0,
-      MonId: 'PES',
-      MonCotiz: 1,
-      ...(ivaArray ? { Iva: ivaArray } : {}),
-      ...(cbtesAsoc ? { CbtesAsoc: cbtesAsoc } : {}),
+    caeResult = await feCAESolicitar(credD, {
+      ptoVta, cbteTipo,
+      concepto: Number(body.concepto),
+      docTipo: Number(body.doc_tipo || 99), // 99 = consumidor final
+      docNro: Number(body.doc_nro || 0),
+      cbteNro: numero,
+      fecha: yyyymmdd,
+      impTotal: importeTotal, impNeto: importeNeto, impIVA: importeIva, ivaId: 5,
+      // Condición IVA del receptor (obligatorio desde 01/09/2026, RG 5616).
+      // 5 = Consumidor Final (default POS). El frontend puede overridear.
+      condicionIvaReceptorId: Number(body.condicion_iva_receptor || 5),
+      cbtesAsoc,
     });
   } catch (err) {
-    console.error('[afip-cae] createVoucher failed', err.message);
+    console.error('[afip-cae] feCAESolicitar failed', err.message);
     // Guardar factura con estado 'rechazada' para auditoría
     await supabase.from('afip_facturas').insert({
       tenant_id: tenantId,
@@ -229,22 +196,12 @@ export default async function handler(req, res) {
   }
 
   // ── QR fiscal AR ──────────────────────────────────────────────────────
-  const qrPayload = Buffer.from(JSON.stringify({
-    ver: 1,
-    fecha: today.toISOString().slice(0, 10),
-    cuit: parseInt(cred.cuit),
-    ptoVta,
-    tipoCmp: cbteTipo,
-    nroCmp: numero,
-    importe: importeTotal,
-    moneda: 'PES',
-    ctz: 1,
-    tipoDocRec: Number(body.doc_tipo || 99),
-    nroDocRec: parseInt(body.doc_nro || '0'),
-    tipoCodAut: 'E',
-    codAut: parseInt(caeResult.CAE),
-  })).toString('base64');
-  const qrFiscalUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrPayload}`;
+  const qrFiscalUrl = buildQrUrl({
+    fechaISO: today.toISOString().slice(0, 10),
+    cuit: cred.cuit, ptoVta, tipoCmp: cbteTipo, nroCmp: numero,
+    importe: importeTotal, docTipo: Number(body.doc_tipo || 99), docNro: body.doc_nro || '0',
+    cae: caeResult.cae,
+  });
 
   // ── INSERT afip_facturas ──────────────────────────────────────────────
   const { data: factura, error: facErr } = await supabase
@@ -262,8 +219,8 @@ export default async function handler(req, res) {
       doc_tipo: body.doc_tipo || 99,
       doc_nro: body.doc_nro || null,
       cliente_razon_social: body.cliente_razon_social || null,
-      cae: caeResult.CAE,
-      cae_vence_at: caeResult.CAEFchVto,
+      cae: caeResult.cae,
+      cae_vence_at: caeResult.caeVto,
       qr_fiscal_url: qrFiscalUrl,
       estado: 'aprobada',
       request_uuid: body.request_uuid,
@@ -274,7 +231,7 @@ export default async function handler(req, res) {
     .single();
 
   if (facErr) {
-    console.error('[afip-cae] INSERT factura failed (CAE ya obtenido)', facErr.message, { numero, cae: caeResult.CAE });
+    console.error('[afip-cae] INSERT factura failed (CAE ya obtenido)', facErr.message, { numero, cae: caeResult.cae });
     // CAE ya fue emitido en AFIP — devolvemos el CAE al cliente igual.
     // Si el INSERT falla, la próxima retry con el mismo request_uuid va a
     // pegarle de nuevo a AFIP (otro numero distinto). Para evitar eso,
@@ -282,8 +239,8 @@ export default async function handler(req, res) {
     // factura_id como "necesita reconciliar manualmente".
     return res.status(200).json({
       factura_id: null,
-      cae: caeResult.CAE,
-      cae_vence_at: caeResult.CAEFchVto,
+      cae: caeResult.cae,
+      cae_vence_at: caeResult.caeVto,
       numero,
       qr_fiscal_url: qrFiscalUrl,
       estado: 'aprobada',

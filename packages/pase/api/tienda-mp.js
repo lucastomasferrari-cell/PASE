@@ -23,11 +23,9 @@ import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } f
 import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
 import { findMatchingMpSecret } from './_mp-webhook.js';
 import { checkUserAuth } from './_user-auth.js';
-// @afipsdk/afip.js es CommonJS: el named import { Afip } falla en el runtime
-// ESM de Vercel y crashea la función al init (FUNCTION_INVOCATION_FAILED).
-// Se importa el default y se desestructura.
-import afipPkg from '@afipsdk/afip.js';
-const Afip = afipPkg.Afip ?? afipPkg;
+// Conexión DIRECTA a ARCA (WSAA + WSFEv1, sin terceros). Reemplaza a
+// @afipsdk/afip.js (que ruteaba por app.afipsdk.com, de pago/401).
+import { feUltimoAutorizado, feCAESolicitar, buildQrUrl } from './_afip-direct.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -689,17 +687,11 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
     importeIva = 0;
   }
 
-  // 5. SDK AFIP
-  let afipSdk;
-  try {
-    afipSdk = new Afip({
-      CUIT: cred.cuit, cert: cred.cert_pem, key: cred.key_pem,
-      production: cred.ambiente === 'produccion',
-      access_token: process.env.AFIPSDK_ACCESS_TOKEN,
-    });
-  } catch (e) {
-    return { ok: false, error: 'afip_sdk_init_failed: ' + e.message };
-  }
+  // 5. Credenciales para conexión DIRECTA a ARCA (_afip-direct.js, sin terceros).
+  const credD = {
+    certPem: cred.cert_pem, keyPem: cred.key_pem,
+    cuit: cred.cuit, ambiente: cred.ambiente,
+  };
 
   // Punto de venta del LOCAL de la venta (multi-sucursal, mismo CUIT). Si el
   // local no tiene PV configurado, no auto-emitimos (se marca pendiente). Ver
@@ -715,8 +707,7 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
   }
   let numero;
   try {
-    const ultimo = await afipSdk.ElectronicBilling.getLastVoucher(ptoVta, cbteTipo);
-    numero = (ultimo || 0) + 1;
+    numero = (await feUltimoAutorizado(credD, ptoVta, cbteTipo)) + 1;
   } catch (e) {
     return { ok: false, error: 'afip_get_last_voucher_failed: ' + e.message };
   }
@@ -726,14 +717,12 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
 
   let caeResult;
   try {
-    caeResult = await afipSdk.ElectronicBilling.createVoucher({
-      CantReg: 1, PtoVta: ptoVta, CbteTipo: cbteTipo, Concepto: 1,
-      DocTipo: 99, DocNro: 0,
-      CbteDesde: numero, CbteHasta: numero, CbteFch: yyyymmdd,
-      ImpTotal: importeTotal, ImpTotConc: 0,
-      ImpNeto: importeNeto, ImpOpEx: 0, ImpIVA: importeIva, ImpTrib: 0,
-      MonId: 'PES', MonCotiz: 1,
-      ...(importeIva > 0 ? { Iva: [{ Id: 5, BaseImp: importeNeto, Importe: importeIva }] } : {}),
+    caeResult = await feCAESolicitar(credD, {
+      ptoVta, cbteTipo, concepto: 1, docTipo: 99, docNro: 0,
+      cbteNro: numero, fecha: yyyymmdd,
+      impTotal: importeTotal, impNeto: importeNeto, impIVA: importeIva, ivaId: 5,
+      // Condición IVA receptor (obligatorio 01/09/2026): 5 = Consumidor Final.
+      condicionIvaReceptorId: 5,
     });
   } catch (e) {
     // Registrar rechazo para auditoría y reintento manual desde POS
@@ -750,13 +739,11 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
   }
 
   // QR fiscal AR (Res. Gral. 4892/2020)
-  const qrPayload = Buffer.from(JSON.stringify({
-    ver: 1, fecha: today.toISOString().slice(0, 10),
-    cuit: parseInt(cred.cuit), ptoVta, tipoCmp: cbteTipo, nroCmp: numero,
-    importe: importeTotal, moneda: 'PES', ctz: 1,
-    tipoDocRec: 99, nroDocRec: 0, tipoCodAut: 'E', codAut: parseInt(caeResult.CAE),
-  })).toString('base64');
-  const qrFiscalUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrPayload}`;
+  const qrFiscalUrl = buildQrUrl({
+    fechaISO: today.toISOString().slice(0, 10),
+    cuit: cred.cuit, ptoVta, tipoCmp: cbteTipo, nroCmp: numero,
+    importe: importeTotal, docTipo: 99, docNro: 0, cae: caeResult.cae,
+  });
 
   const { data: factura } = await supabase
     .from('afip_facturas')
@@ -766,14 +753,14 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
       importe_neto: importeNeto, importe_iva: importeIva, importe_total: importeTotal,
       concepto: 1, doc_tipo: 99, doc_nro: null,
       cliente_razon_social: venta.cliente_nombre || null,
-      cae: caeResult.CAE, cae_vence_at: caeResult.CAEFchVto, qr_fiscal_url: qrFiscalUrl,
+      cae: caeResult.cae, cae_vence_at: caeResult.caeVto, qr_fiscal_url: qrFiscalUrl,
       estado: 'aprobada', request_uuid: requestUuid,
       emitida_at: new Date().toISOString(), emitida_por: null,
     })
     .select('id, cae, numero, qr_fiscal_url')
     .single();
 
-  return { ok: true, factura_id: factura?.id, cae: caeResult.CAE, numero, qr_fiscal_url: qrFiscalUrl };
+  return { ok: true, factura_id: factura?.id, cae: caeResult.cae, numero, qr_fiscal_url: qrFiscalUrl };
 }
 
 // ─── PARTNER WEBHOOKS (Rappi / PedidosYa) ───────────────────────────────
@@ -2156,20 +2143,18 @@ async function handleAfipTestConnection(req, res) {
   }
 
   try {
-    const afip = new Afip({
-      CUIT: cred.cuit,
-      cert: cred.cert_pem,
-      key: cred.key_pem,
-      production: cred.ambiente === 'produccion',
-      access_token: process.env.AFIPSDK_ACCESS_TOKEN,
-    });
+    const credD = {
+      certPem: cred.cert_pem, keyPem: cred.key_pem,
+      cuit: cred.cuit, ambiente: cred.ambiente,
+    };
 
+    // Conexión DIRECTA a ARCA (_afip-direct.js):
     // 1) WSAA login — saca token para WSFEv1. Si falla acá, el cert/key
     //    es inválido o el servicio no está adherido.
-    // 2) getLastVoucher — confirma que el punto de venta + tipo está
-    //    habilitado. Tipo 11 = Factura C (más común para monotributo).
+    // 2) FECompUltimoAutorizado — confirma que el punto de venta + tipo está
+    //    habilitado. Tipo 11 = Factura C (monotributo), 6 = Factura B (RI).
     const tipoChequeo = cred.tipo_contribuyente === 'responsable_inscripto' ? 6 : 11;
-    const ultimoNumero = await afip.ElectronicBilling.getLastVoucher(cred.punto_venta, tipoChequeo);
+    const ultimoNumero = await feUltimoAutorizado(credD, cred.punto_venta, tipoChequeo);
 
     // Marcar last token success
     await supabase.from('afip_credenciales')
