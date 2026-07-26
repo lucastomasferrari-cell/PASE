@@ -710,12 +710,12 @@ export function VentaScreen() {
           onEditNotas={() => { setNotasDraft(venta.notas ?? ''); setEditandoNotas(true); }}
           onCancelNotas={() => setEditandoNotas(false)}
           onGuardarNotas={guardarNotasVenta}
-          onDescuento={() => setShowDescuento(true)}
+          onDescuento={() => { if (pedirNcSiFacturada()) return; setShowDescuento(true); }}
           onTransfer={() => setShowTransfer(true)}
-          onMerge={() => setShowMerge(true)}
-          onSplit={() => setShowSplit(true)}
-          onDividirComensal={() => setShowComensalSplit(true)}
-          onAnular={() => setShowAnular(true)}
+          onMerge={() => { if (pedirNcSiFacturada()) return; setShowMerge(true); }}
+          onSplit={() => { if (pedirNcSiFacturada()) return; setShowSplit(true); }}
+          onDividirComensal={() => { if (pedirNcSiFacturada()) return; setShowComensalSplit(true); }}
+          onAnular={() => { if (pedirNcSiFacturada()) return; setShowAnular(true); }}
           onOpenHistorial={() => setHistorialOpen(true)}
           onReimprimir={async () => {
             const { reimprimirComanda } = await import('@/services/ventasService');
@@ -728,7 +728,7 @@ export function VentaScreen() {
           coursingAuto={venta.coursing_auto ?? false}
           onToggleCoursingAuto={toggleCoursingAuto}
           descuentoEfectivoPct={descuentoEfectivoPct}
-          onDescuentoEfectivo={() => void handleDescuentoEfectivo()}
+          onDescuentoEfectivo={() => { if (pedirNcSiFacturada()) return; void handleDescuentoEfectivo(); }}
         />
 
         <VentaListaPanel
