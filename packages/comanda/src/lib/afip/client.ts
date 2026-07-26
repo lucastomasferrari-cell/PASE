@@ -131,6 +131,48 @@ export async function anularFacturaConNC(args: {
   });
 }
 
+/** Fila de afip_facturas con lo necesario para congelar la mesa + emitir NC. */
+export interface FacturaVentaRow {
+  id: number;
+  tipo_comprobante: AfipTipoComprobante;
+  numero: number;
+  punto_venta: number;
+  importe_neto: number;
+  importe_iva: number;
+  importe_total: number;
+  doc_tipo: number | null;
+  doc_nro: string | null;
+  cliente_razon_social: string | null;
+  cae: string | null;
+  cae_vence_at: string | null;
+  qr_fiscal_url: string | null;
+  estado: string;
+  emitida_at: string | null;
+}
+
+/**
+ * Devuelve la factura ACTIVA (viva, sin anular por NC) de una venta, o null.
+ *
+ * Una venta puede tener varios comprobantes encadenados: factura → NC (la
+ * cancela) → factura nueva → … El flujo es lineal, así que la factura activa
+ * existe si hay más facturas aprobadas (1/6/11) que NC aprobadas (3/8/13); en
+ * ese caso la activa es la última factura emitida. Es el mismo criterio que
+ * usa el trigger fn_venta_tiene_factura_activa en el servidor.
+ */
+export async function getFacturaActivaDeVenta(ventaId: number): Promise<FacturaVentaRow | null> {
+  const { data, error } = await db
+    .from('afip_facturas')
+    .select('id, tipo_comprobante, numero, punto_venta, importe_neto, importe_iva, importe_total, doc_tipo, doc_nro, cliente_razon_social, cae, cae_vence_at, qr_fiscal_url, estado, emitida_at, created_at')
+    .eq('venta_pos_id', ventaId)
+    .eq('estado', 'aprobada')
+    .order('created_at', { ascending: true });
+  if (error || !data) return null;
+  const facturas = (data as Array<FacturaVentaRow & { created_at: string }>).filter((f) => [1, 6, 11].includes(f.tipo_comprobante));
+  const ncs = data.filter((f) => [3, 8, 13].includes(f.tipo_comprobante));
+  if (facturas.length <= ncs.length) return null; // sin factura viva
+  return facturas[facturas.length - 1] ?? null;
+}
+
 /**
  * Lista las últimas facturas emitidas del tenant (para historial UI).
  * Incluye los campos necesarios para emitir NC (importe_neto/iva, doc_*,

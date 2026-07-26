@@ -1,19 +1,19 @@
 import React from 'react';
-import { Send, PauseCircle, LayoutGrid, Wallet, CheckCircle2 } from 'lucide-react';
+import { Send, Receipt, LayoutGrid, Wallet, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatARS } from '../../../lib/format';
-import { cn } from '@/lib/utils';
 import type { VentaPos } from '../../../types/database';
 
 export interface VentaFooterProps {
   venta: VentaPos;
   editable: boolean;
   totalHold: number;
-  todosEnStay: boolean;
+  /** True si la venta ya tiene factura activa (cambia el botón a "Factura ✓"). */
+  facturada: boolean;
   onMarchar: () => void;
-  onHold: () => void;
   onMesa: () => void;
   onCobrar: () => void;
+  onFactura: () => void;
   /** Solo se usa en modo 'pedidos'. Si se pasa, el footer muestra Marchar + Listo. */
   onListo?: () => void;
 }
@@ -22,11 +22,11 @@ export const VentaFooter = React.memo(function VentaFooter({
   venta,
   editable,
   totalHold,
-  todosEnStay,
+  facturada,
   onMarchar,
-  onHold,
   onMesa,
   onCobrar,
+  onFactura,
   onListo,
 }: VentaFooterProps) {
   const esModoPedidos = venta.modo === 'pedidos';
@@ -100,17 +100,14 @@ export const VentaFooter = React.memo(function VentaFooter({
             )}
           </Button>
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
-            onClick={onHold}
-            disabled={!editable || totalHold === 0}
-            className={cn(
-              'gap-1.5',
-              todosEnStay && 'bg-accent text-foreground',
-            )}
+            onClick={onCobrar}
+            disabled={!editable || venta.total <= 0}
+            className="gap-1.5"
           >
-            <PauseCircle className="h-3.5 w-3.5" />
-            {todosEnStay ? 'Liberar' : 'Hold'}
+            <Wallet className="h-3.5 w-3.5" />
+            Cobrar
           </Button>
           <Button
             variant="outline"
@@ -122,14 +119,14 @@ export const VentaFooter = React.memo(function VentaFooter({
             Control mesa
           </Button>
           <Button
-            variant="default"
+            variant={facturada ? 'outline' : 'default'}
             size="sm"
-            onClick={onCobrar}
-            disabled={!editable || venta.total <= 0}
+            onClick={onFactura}
+            disabled={venta.total <= 0}
             className="gap-1.5"
           >
-            <Wallet className="h-3.5 w-3.5" />
-            Cobrar
+            <Receipt className="h-3.5 w-3.5" />
+            {facturada ? 'Factura ✓' : 'Factura'}
           </Button>
         </div>
       )}

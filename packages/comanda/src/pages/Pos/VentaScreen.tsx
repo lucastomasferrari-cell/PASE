@@ -15,6 +15,8 @@ import { ModifiersDialog } from '@/components/dialogs/ModifiersDialog';
 import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
 import { EmitirFacturaDialog } from '@/components/dialogs/EmitirFacturaDialog';
 import { getCredencialesAFIP } from '@/lib/afip/service';
+import { getFacturaActivaDeVenta, anularFacturaConNC, type FacturaVentaRow } from '@/lib/afip/client';
+import type { AfipDocTipo } from '@/lib/afip/types';
 import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
 import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
@@ -102,6 +104,11 @@ export function VentaScreen() {
   // Dialogs
   const [showCobro, setShowCobro] = useState(false);
   const [showEmitirFactura, setShowEmitirFactura] = useState(false);
+  // Factura electrónica activa de esta venta (null = mesa NO facturada).
+  // Si está seteada, la mesa está "congelada": para editarla hay que hacer NC.
+  const [facturaActiva, setFacturaActiva] = useState<FacturaVentaRow | null>(null);
+  const [showNcConfirm, setShowNcConfirm] = useState(false);
+  const [emitiendoNc, setEmitiendoNc] = useState(false);
   const [showDescuento, setShowDescuento] = useState(false);
   // Dialog de selección de curso cuando hay múltiples con items pendientes
   const [showMarcharPicker, setShowMarcharPicker] = useState(false);
@@ -175,6 +182,21 @@ export function VentaScreen() {
 
   // Alias para mantener compat con código existente que llama reload()
   const reload = reloadVenta;
+
+  // ── Factura activa de la venta (para congelar la mesa) ──────────────────
+  // Carga al montar y cada vez que cambia la venta. Después de emitir factura
+  // o NC llamamos refreshFacturaActiva() a mano para reflejar el cambio.
+  useEffect(() => {
+    let cancelled = false;
+    void getFacturaActivaDeVenta(ventaId).then((f) => { if (!cancelled) setFacturaActiva(f); });
+    return () => { cancelled = true; };
+  }, [ventaId]);
+
+  async function refreshFacturaActiva() {
+    const f = await getFacturaActivaDeVenta(ventaId);
+    setFacturaActiva(f);
+    return f;
+  }
 
   // Cache: qué items tienen modifiers asignados.
   // Sprint 7 HIGH #3: cleanup con `cancelled` flag para evitar setState
@@ -261,6 +283,50 @@ export function VentaScreen() {
   }
 
   const editable = venta.estado !== 'cobrada' && venta.estado !== 'anulada';
+  // Mesa facturada = congelada. Los controles siguen activos, pero cualquier
+  // intento de editar la cuenta dispara el diálogo de nota de crédito.
+  const facturada = facturaActiva != null;
+
+  // Si la mesa está facturada, abre el diálogo de NC y devuelve true (bloquea
+  // la acción de edición). Devuelve false si se puede editar normal.
+  function pedirNcSiFacturada(): boolean {
+    if (facturada) { setShowNcConfirm(true); return true; }
+    return false;
+  }
+
+  // Genera la nota de crédito que cancela la factura activa → descongela.
+  async function emitirNcParaEditar() {
+    if (!facturaActiva) { setShowNcConfirm(false); return; }
+    setEmitiendoNc(true);
+    try {
+      const { data: cred } = await getCredencialesAFIP();
+      if (!cred?.cuit) { toast.error('No se pudo leer el CUIT del emisor'); return; }
+      await anularFacturaConNC({
+        factura_original_id: facturaActiva.id,
+        factura_original_tipo: facturaActiva.tipo_comprobante,
+        factura_original_numero: facturaActiva.numero,
+        punto_venta: facturaActiva.punto_venta,
+        cuit_emisor: cred.cuit,
+        importe_neto: Number(facturaActiva.importe_neto),
+        importe_iva: Number(facturaActiva.importe_iva),
+        importe_total: Number(facturaActiva.importe_total),
+        venta_pos_id: ventaId,
+        doc_tipo: (facturaActiva.doc_tipo ?? undefined) as AfipDocTipo | undefined,
+        doc_nro: facturaActiva.doc_nro ?? undefined,
+        cliente_razon_social: facturaActiva.cliente_razon_social ?? undefined,
+      });
+      toast.success('Nota de crédito generada. La mesa quedó habilitada para editar.');
+      setShowNcConfirm(false);
+      await refreshFacturaActiva(); // ahora facturaActiva = null → descongelada
+      reload();
+    } catch (err) {
+      toast.error('No se pudo generar la nota de crédito', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setEmitiendoNc(false);
+    }
+  }
 
   const cursosExistentes = Array.from(itemsPorCurso.keys());
   const maxCurso = Math.max(3, ...cursosExistentes);
@@ -333,6 +399,7 @@ export function VentaScreen() {
 
   async function repetirItem(itemRow: VentaPosItem) {
     if (!editable || !empleado) return;
+    if (pedirNcSiFacturada()) return;
     const cat = catalogo.find((c) => c.id === itemRow.item_id);
     if (!cat) { toast.error('Item no encontrado en catálogo'); return; }
     const mods = itemRow.modificadores?.map((m) => ({
@@ -346,6 +413,7 @@ export function VentaScreen() {
 
   async function removeItem(itemRow: VentaPosItem) {
     if (!editable) return;
+    if (pedirNcSiFacturada()) return;
     if (itemRow.estado !== 'hold') {
       toast.error('Solo se pueden quitar items en hold (no enviados a cocina)');
       return;
@@ -384,6 +452,7 @@ export function VentaScreen() {
 
   async function clickItem(it: ItemConGrupo) {
     if (!editable) return;
+    if (pedirNcSiFacturada()) return;
     const now = Date.now();
     const last = clickCooldownRef.current.get(it.id) ?? 0;
     if (now - last < 350) return;
@@ -417,6 +486,7 @@ export function VentaScreen() {
 
   async function changeQty(itemRow: VentaPosItem, qty: number) {
     if (qty <= 0) return;
+    if (pedirNcSiFacturada()) return;
     // Optimista: refleja el cambio en items + recalcula el total de la venta
     // ANTES de esperar la red. Sin esto, el "Total" de abajo se quedaba
     // congelado hasta que el reload del server lo refrescaba.
@@ -449,6 +519,7 @@ export function VentaScreen() {
 
   async function guardarEdicionItem() {
     if (!editandoItem) return;
+    if (pedirNcSiFacturada()) return;
     const nombre = editNombreDraft.trim() || null;
     const precio = editPrecioDraft > 0 ? editPrecioDraft : undefined;
     // Optimista
@@ -567,19 +638,6 @@ export function VentaScreen() {
     }
   }
 
-  // Handler del botón "Hold": alterna stay en TODOS los items en hold.
-  // Si todos ya están en stay → los libera. Si no → los pone todos en stay.
-  async function handleHoldTodos() {
-    const holdItems = items.filter((i) => i.estado === 'hold');
-    if (holdItems.length === 0) return;
-    const todosEnStay = holdItems.every((i) => i.stay_until_release);
-    const nuevoStay = !todosEnStay;
-    const aTogglerar = holdItems.filter((i) => i.stay_until_release !== nuevoStay);
-    await Promise.all(aTogglerar.map((i) => toggleItemStay(i.id)));
-    toast.success(nuevoStay ? `⏸ ${holdItems.length} item(s) en hold` : `▶ Hold liberado`);
-    reload();
-  }
-
   async function mandarItemSolo(itemRow: VentaPosItem) {
     const { error } = await mandarItemIndividual(itemRow.id);
     if (error) { toast.error(error); return; }
@@ -684,9 +742,10 @@ export function VentaScreen() {
           onModificarCantidad={changeQty}
           onRemoveItem={removeItem}
           onRepetirItem={repetirItem}
-          onAnularItem={(it) => setAnularItemTarget(it)}
-          onCortesiaItem={(it) => setCortesiaItemTarget(it)}
+          onAnularItem={(it) => { if (pedirNcSiFacturada()) return; setAnularItemTarget(it); }}
+          onCortesiaItem={(it) => { if (pedirNcSiFacturada()) return; setCortesiaItemTarget(it); }}
           onCambiarPrecio={(it) => {
+            if (pedirNcSiFacturada()) return;
             setPrecioItemTarget(it);
             setPrecioNuevo(Number(it.precio_unitario));
             setPrecioMotivo('');
@@ -695,6 +754,7 @@ export function VentaScreen() {
           onMandarItemSolo={mandarItemSolo}
           onMandarCurso={mandarCursoHandler}
           onEditarItem={(it) => {
+            if (pedirNcSiFacturada()) return;
             setEditandoItem(it);
             setEditNombreDraft(it.nombre_display ?? '');
             setEditPrecioDraft(Number(it.precio_unitario));
@@ -705,11 +765,11 @@ export function VentaScreen() {
           venta={venta}
           editable={editable}
           totalHold={items.filter((i) => i.estado === 'hold').length}
-          todosEnStay={items.filter((i) => i.estado === 'hold').every((i) => i.stay_until_release)}
+          facturada={facturada}
           onMarchar={handleMarchar}
-          onHold={() => void handleHoldTodos()}
           onMesa={() => setShowMesaControl(true)}
           onCobrar={() => setShowCobro(true)}
+          onFactura={() => setShowEmitirFactura(true)}
           onListo={() => void handleListoPedido()}
         />
       </aside>
@@ -737,10 +797,15 @@ export function VentaScreen() {
           empleadoId={empleado.id}
           onCobrado={() => {
             reload();
-            void getCredencialesAFIP().then((r) => {
-              if (r.data?.activa) setShowEmitirFactura(true);
+            // Si ya se facturó antes de cobrar (mesa congelada), no reofrecemos
+            // el diálogo — salimos directo. Si no, y AFIP está activo, lo abrimos.
+            void (async () => {
+              const yaFacturada = await refreshFacturaActiva();
+              if (yaFacturada) { navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'); return; }
+              const { data } = await getCredencialesAFIP();
+              if (data?.activa) setShowEmitirFactura(true);
               else navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
-            });
+            })();
           }}
         />
       )}
@@ -799,11 +864,40 @@ export function VentaScreen() {
           open={showEmitirFactura}
           onOpenChange={setShowEmitirFactura}
           venta={venta}
-          onClose={() => {
-            navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
+          facturaExistente={facturaActiva}
+          onClose={(emitio) => {
+            if (emitio) { void refreshFacturaActiva(); reload(); }
+            // Post-cobro salimos al listado; con la mesa abierta nos quedamos
+            // (quedó congelada, lista para cobrar).
+            if (venta.estado === 'cobrada') {
+              navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
+            }
           }}
         />
       )}
+
+      {/* Confirmación de nota de crédito al intentar editar una mesa facturada */}
+      <Dialog open={showNcConfirm} onOpenChange={(o) => { if (!o) setShowNcConfirm(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Esta mesa ya está facturada</DialogTitle>
+            <DialogDescription>
+              {facturaActiva && (
+                <>Factura {facturaActiva.tipo_comprobante === 1 ? 'A' : facturaActiva.tipo_comprobante === 6 ? 'B' : 'C'} #{facturaActiva.numero}. </>
+              )}
+              Para modificarla hay que generar una nota de crédito que la cancela. Después podés editar y volver a facturar.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowNcConfirm(false)} disabled={emitiendoNc}>
+              No, dejar así
+            </Button>
+            <Button onClick={() => void emitirNcParaEditar()} disabled={emitiendoNc}>
+              {emitiendoNc ? 'Generando NC…' : 'Sí, generar nota de crédito'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showDescuento && (
         <DiscountDialog
@@ -859,10 +953,15 @@ export function VentaScreen() {
           empleadoId={empleado.id}
           onCobrado={() => {
             reload();
-            void getCredencialesAFIP().then((r) => {
-              if (r.data?.activa) setShowEmitirFactura(true);
+            // Si ya se facturó antes de cobrar (mesa congelada), no reofrecemos
+            // el diálogo — salimos directo. Si no, y AFIP está activo, lo abrimos.
+            void (async () => {
+              const yaFacturada = await refreshFacturaActiva();
+              if (yaFacturada) { navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'); return; }
+              const { data } = await getCredencialesAFIP();
+              if (data?.activa) setShowEmitirFactura(true);
               else navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
-            });
+            })();
           }}
         />
       )}

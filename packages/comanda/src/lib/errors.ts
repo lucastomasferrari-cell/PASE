@@ -50,6 +50,7 @@ const TRADUCCIONES: Record<string, string> = {
   VENTA_YA_COBRADA: 'La venta ya fue cobrada.',
   VENTA_ANULADA: 'La venta fue anulada.',
   VENTA_NO_EDITABLE: 'La venta ya no se puede editar.',
+  VENTA_FACTURADA: 'Esta mesa ya está facturada. Para modificarla hay que generar una nota de crédito.',
   VENTA_NO_REOPEN: 'La venta no se puede reabrir desde este estado.',
   VENTAS_CROSS_LOCAL: 'Las ventas pertenecen a locales distintos.',
   VENTAS_IGUALES: 'No podés unir una venta consigo misma.',
