@@ -634,7 +634,7 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
   // 1. Levantar venta + tenant_id
   const { data: venta } = await supabase
     .from('ventas_pos')
-    .select('id, tenant_id, total, subtotal, cliente_nombre, cliente_email')
+    .select('id, tenant_id, local_id, total, subtotal, cliente_nombre, cliente_email')
     .eq('id', ventaId)
     .single();
   if (!venta) return { ok: false, error: 'venta_no_encontrada' };
@@ -700,7 +700,18 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
     return { ok: false, error: 'afip_sdk_init_failed: ' + e.message };
   }
 
-  const ptoVta = cred.punto_venta;
+  // Punto de venta del LOCAL de la venta (multi-sucursal, mismo CUIT). Si el
+  // local no tiene PV configurado, no auto-emitimos (se marca pendiente). Ver
+  // migración 202607221900 + afip-cae.js.
+  let ptoVta = null;
+  if (venta.local_id != null) {
+    const { data: lRow } = await supabase
+      .from('locales').select('afip_punto_venta').eq('id', venta.local_id).single();
+    ptoVta = lRow?.afip_punto_venta ?? null;
+  }
+  if (ptoVta == null) {
+    return { ok: false, skipped: 'afip_local_sin_pv' };
+  }
   let numero;
   try {
     const ultimo = await afipSdk.ElectronicBilling.getLastVoucher(ptoVta, cbteTipo);

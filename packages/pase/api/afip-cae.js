@@ -121,8 +121,24 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'AFIP_SDK_INIT_FAILED', detail: err.message });
   }
 
-  // ── Resolver número de comprobante ────────────────────────────────────
-  const ptoVta = cred.punto_venta;
+  // ── Punto de venta del LOCAL de la venta ──────────────────────────────
+  // Multi-sucursal: cada local tiene su propio PV bajo el mismo CUIT
+  // (locales.afip_punto_venta). Si el local no lo tiene configurado, NO
+  // emitimos — evita facturar con un PV que no le corresponde. Ver
+  // migración 202607221900. (cred.punto_venta queda como legado, no se usa.)
+  let ptoVta = null;
+  {
+    const { data: vRow } = await supabase
+      .from('ventas_pos').select('local_id').eq('id', body.venta_pos_id).eq('tenant_id', tenantId).single();
+    if (vRow?.local_id != null) {
+      const { data: lRow } = await supabase
+        .from('locales').select('afip_punto_venta').eq('id', vRow.local_id).single();
+      ptoVta = lRow?.afip_punto_venta ?? null;
+    }
+  }
+  if (ptoVta == null) {
+    return res.status(400).json({ error: 'AFIP_LOCAL_SIN_PUNTO_VENTA', detail: 'El local de esta venta no tiene punto de venta AFIP configurado.' });
+  }
   const cbteTipo = Number(body.tipo_comprobante);
   let numero;
   try {
