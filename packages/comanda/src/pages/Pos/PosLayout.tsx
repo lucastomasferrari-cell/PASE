@@ -4,6 +4,7 @@ import { Search, Smartphone, Maximize2, Minimize2, Moon, Sun } from 'lucide-reac
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { getTurnoAbierto } from '@/services/turnosCajaService';
+import { listLocalesAccesibles } from '@/services/configService';
 import type { TurnoCaja } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { BusyModeButton } from '@/components/BusyModeButton';
@@ -22,6 +23,7 @@ export function PosLayout() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
+  const [localNombre, setLocalNombre] = useState<string | null>(null);
   const [allChecksOpen, setAllChecksOpen] = useState(false);
   const [allChecksFilters, setAllChecksFilters] = useState<AllChecksInitialFilters | undefined>(undefined);
 
@@ -44,6 +46,17 @@ export function PosLayout() {
       cancelled = true;
       window.removeEventListener('comanda:turno-changed', refetch);
     };
+  }, [localId]);
+
+  // Nombre del local activo para mostrarlo en el header (multi-sucursal).
+  useEffect(() => {
+    if (localId === null) { setLocalNombre(null); return; }
+    let cancelled = false;
+    void listLocalesAccesibles().then(({ data }) => {
+      if (cancelled) return;
+      setLocalNombre(data.find((l) => l.id === localId)?.nombre ?? null);
+    });
+    return () => { cancelled = true; };
   }, [localId]);
 
   // Atajo: tecla "/" abre el modal de todas las cuentas (no en inputs).
@@ -124,6 +137,11 @@ export function PosLayout() {
             <Link to="/" className="text-lg font-medium tracking-wide text-primary flex-shrink-0">
               COMANDA
             </Link>
+            {localNombre && (
+              <span className="flex-shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-sm font-medium text-primary truncate max-w-[10rem]" title={`Sucursal activa: ${localNombre}`}>
+                {localNombre}
+              </span>
+            )}
             {turno && (
               <>
                 <span className="text-muted-foreground hidden md:inline">·</span>
