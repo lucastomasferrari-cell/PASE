@@ -26,6 +26,7 @@
     "driver.js": "^1.4.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "node-forge": "^1.4.0",
     "open-props": "^1.7.23",
     "pdfjs-dist": "^6.0.227",
     "pptxgenjs": "^4.0.1",
