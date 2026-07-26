@@ -224,6 +224,7 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
     requiredPermission: 'comanda.configuracion.editar',
     subItems: [
       { slug: 'local',          label: 'Local',                 href: '/configuracion/local' },
+      { slug: 'autorizaciones', label: 'Autorizaciones',        href: '/configuracion/autorizaciones' },
       { slug: 'cubiertos',      label: 'Cubierto por sector',   href: '/configuracion/cubiertos' },
       { slug: 'integraciones',  label: 'Integraciones (WhatsApp, Email, Stripe…)', href: '/configuracion/integraciones' },
       { slug: 'afip',           label: 'Factura electrónica AFIP', href: '/configuracion/afip' },

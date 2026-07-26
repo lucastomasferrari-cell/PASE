@@ -12,6 +12,9 @@ import {
   type DescuentoTipo, requiereOverride, calcularMontoDescuento, aplicarDescuento,
 } from '@/services/descuentosService';
 import { useIdempotencyKey } from '@/lib/idempotency';
+import { useAuth } from '@/lib/auth';
+import { useLocalActivo } from '@/lib/localActivo';
+import { useAutorizaciones } from '@/lib/useAutorizaciones';
 import { ManagerOverrideDialog } from './ManagerOverrideDialog';
 import { formatARS } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -34,13 +37,16 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
   const [showOverride, setShowOverride] = useState(false);
   const [saving, setSaving] = useState(false);
   const idempotencyKey = useIdempotencyKey(open ? `${ventaId}-open` : 'closed');
+  const { user } = useAuth();
+  const [localId] = useLocalActivo(user);
+  const autoriz = useAutorizaciones(localId);
 
   useEffect(() => {
     if (open) { setTipo('porcentaje'); setValor(10); setMotivo(''); setShowOverride(false); setSaving(false); }
   }, [open]);
 
   const monto = calcularMontoDescuento(tipo, valor, subtotal);
-  const requiereOver = requiereOverride(tipo, valor, total);
+  const requiereOver = requiereOverride(tipo, valor, total, { activo: autoriz.reqDescuento, pct: autoriz.pctDescuento });
   const totalConDescuento = Math.max(0, total - monto);
 
   async function aplicar(args?: { managerId: string }) {
@@ -145,7 +151,7 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
               </div>
               {requiereOver && (
                 <div className="text-xs text-warning font-medium pt-2">
-                  ⚠ Requiere autorización de manager (supera 15%)
+                  ⚠ Requiere autorización de manager (supera {autoriz.pctDescuento}%)
                 </div>
               )}
             </div>

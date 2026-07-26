@@ -488,6 +488,14 @@ export interface ComandaLocalSettings extends HorariosLocal {
    * false (sushi/fast casual), oculta toda esa UI y manda todo en una tanda. */
   usar_cursos: boolean;
   timezone: string;
+  // Autorizaciones de manager configurables (default OFF). Ver pantalla
+  // Configuración → Autorizaciones y RPCs fn_movimiento_caja_comanda /
+  // fn_aplicar_descuento_comanda (leen estos flags).
+  req_auth_movimiento: boolean;
+  req_auth_movimiento_umbral: number;
+  req_auth_descuento: boolean;
+  req_auth_descuento_pct: number;
+  req_auth_cambio_precio: boolean;
   // MESA módulo #3 — configuración de reservas online
   reservas_activas: boolean;
   reservas_capacidad_max: number | null;

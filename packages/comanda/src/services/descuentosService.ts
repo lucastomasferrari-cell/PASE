@@ -6,9 +6,19 @@ export type DescuentoTipo = 'porcentaje' | 'monto';
 const UMBRAL_PCT = 15;
 const UMBRAL_RATIO = 0.20;
 
-export function requiereOverride(tipo: DescuentoTipo, valor: number, total: number): boolean {
-  if (tipo === 'porcentaje') return valor > UMBRAL_PCT;
-  if (tipo === 'monto') return valor > total * UMBRAL_RATIO;
+// cfg (opcional): config de autorizaciones del local. Si se pasa y activo=false,
+// NUNCA pide override (apagado). Si activo, usa su umbral %; si no se pasa,
+// mantiene los defaults históricos (para tests y callers legacy).
+export function requiereOverride(
+  tipo: DescuentoTipo,
+  valor: number,
+  total: number,
+  cfg?: { activo: boolean; pct: number },
+): boolean {
+  if (cfg && !cfg.activo) return false;
+  const pct = cfg ? cfg.pct : UMBRAL_PCT;
+  if (tipo === 'porcentaje') return valor > pct;
+  if (tipo === 'monto') return valor > total * (cfg ? cfg.pct / 100 : UMBRAL_RATIO);
   return false;
 }
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
+import { useAutorizaciones } from '@/lib/useAutorizaciones';
 import { type ItemConGrupo } from '../../services/itemsService';
 import {
   agregarItem, modificarItem, mandarCurso, mandarItemIndividual, toggleItemStay, updateVentaMeta, quitarItemHold,
@@ -64,6 +65,8 @@ export function VentaScreen() {
 
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
   const { venta, setVenta, items, setItems, catalogo, grupos, loading, reloadVenta, reloadFull, addOptimistic, reconcileAdd } = useVentaData(ventaId);
+  // Config de autorizaciones del local (default OFF). Ver Configuración → Autorizaciones.
+  const autoriz = useAutorizaciones(venta?.local_id ?? null);
 
   // Persistimos el modo de la venta activa para que el sidebar sepa qué icono
   // marcar (la URL /pos/venta/:id no incluye el slug del modo).
@@ -962,10 +965,21 @@ export function VentaScreen() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPrecioItemTarget(null)}>Cancelar</Button>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 if (precioMotivo.trim().length < 5) { toast.error('Motivo: mínimo 5 caracteres'); return; }
                 if (precioNuevo < 0) { toast.error('Precio inválido'); return; }
-                setShowPrecioMgr(true);
+                // Si la autorización de cambio de precio está activada → pedir PIN
+                // de manager. Si está apagada (default) → aplicar directo, con el
+                // propio cajero como actor del cambio.
+                if (autoriz.reqCambioPrecio) { setShowPrecioMgr(true); return; }
+                if (!precioItemTarget || !empleado) return;
+                const idKey = `precio-item-${precioItemTarget.id}-${Math.floor(Date.now() / 5000)}`;
+                const { error } = await modificarPrecioItem(precioItemTarget.id, precioNuevo, empleado.id, precioMotivo.trim(), idKey);
+                if (error) { toast.error(error); return; }
+                toast.success('Precio actualizado');
+                setPrecioItemTarget(null);
+                setPrecioMotivo('');
+                reload();
               }}
               disabled={precioNuevo < 0 || precioMotivo.trim().length < 5}
             >

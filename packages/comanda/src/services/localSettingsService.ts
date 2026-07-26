@@ -35,6 +35,11 @@ export interface LocalSettingsPatch {
   features_pos_modos?: PosModo[];
   usar_cursos?: boolean;
   descuento_efectivo_pct?: number;
+  req_auth_movimiento?: boolean;
+  req_auth_movimiento_umbral?: number;
+  req_auth_descuento?: boolean;
+  req_auth_descuento_pct?: number;
+  req_auth_cambio_precio?: boolean;
   horario_lun?: string | null;
   horario_mar?: string | null;
   horario_mie?: string | null;

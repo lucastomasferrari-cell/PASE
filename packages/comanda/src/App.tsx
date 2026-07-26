@@ -127,6 +127,7 @@ const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLi
 
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
+const SettingsAutorizaciones = lazy(() => import('./pages/Settings/SettingsAutorizaciones').then(m => ({ default: m.SettingsAutorizaciones })));
 const SettingsAfip = lazy(() => import('./pages/Settings/SettingsAfip').then(m => ({ default: m.SettingsAfip })));
 const AfipPendientes = lazy(() => import('./pages/Settings/AfipPendientes').then(m => ({ default: m.AfipPendientes })));
 const SettingsIntegraciones = lazy(() => import('./pages/Settings/SettingsIntegraciones').then(m => ({ default: m.SettingsIntegraciones })));
@@ -383,6 +384,7 @@ export default function App() {
                   {/* ── Configuración ─────────────────────────────────── */}
                   <Route path="/configuracion" element={<Navigate to="/configuracion/local" replace />} />
                   <Route path="/configuracion/local" element={<SettingsLocal />} />
+                  <Route path="/configuracion/autorizaciones" element={<SettingsAutorizaciones />} />
                   <Route path="/configuracion/afip" element={<SettingsAfip />} />
                   <Route path="/configuracion/afip-pendientes" element={<AfipPendientes />} />
                   <Route path="/configuracion/integraciones" element={<SettingsIntegraciones />} />

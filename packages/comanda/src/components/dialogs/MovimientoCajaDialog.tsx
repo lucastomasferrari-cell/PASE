@@ -15,6 +15,7 @@ import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useAuth } from '@/lib/auth';
 import { useIdempotencyKey } from '@/lib/idempotency';
+import { useAutorizaciones } from '@/lib/useAutorizaciones';
 import { registrarMovimiento } from '@/services/turnosCajaService';
 import { ManagerOverrideDialog } from './ManagerOverrideDialog';
 import { formatARS } from '@/lib/format';
@@ -27,13 +28,6 @@ interface Props {
   tipo: TipoMovimiento;
   onConfirmado: () => void;
 }
-
-// Umbral único de manager override, alineado con fn_movimiento_caja_comanda
-// (fix 03-jul: todos los tipos ≥ $5000 requieren PIN de manager).
-// Antes el frontend usaba umbrales distintos por tipo y NO disparaba el
-// dialog para deposito → la RPC lo rechazaba sin que el UI pidiera PIN
-// (reporte Camilo 10-jul, "no puedo ingresar saldo inicial").
-const UMBRAL_MOV_OVERRIDE = 5_000;
 
 export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }: Props) {
   const { user } = useAuth();
@@ -48,15 +42,16 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
   // está abierto. Doble-click usa el mismo key → RPC retorna mismo
   // resultado sin re-ejecutar.
   const idempotencyKey = useIdempotencyKey(open ? 'open' : 'closed');
+  // Config de autorizaciones por local (default OFF). La RPC usa la misma config.
+  const autoriz = useAutorizaciones(localId);
 
   useEffect(() => {
     if (open) { setMonto(0); setMotivo(''); setMetodo('efectivo'); setShowOverride(false); setSaving(false); }
   }, [open]);
 
-  // Alinear con la RPC: cualquier tipo con monto ≥ $5000 requiere PIN de
-  // manager. Antes solo retiro/ajuste — depósito no disparaba el dialog y
-  // la RPC lo rechazaba silenciosamente.
-  const requiereOverride = Math.abs(monto) >= UMBRAL_MOV_OVERRIDE;
+  // Pide PIN de manager SOLO si la config del local lo activó y el monto
+  // supera el umbral configurado. Apagado por default → no molesta.
+  const requiereOverride = autoriz.reqMovimiento && Math.abs(monto) >= autoriz.umbralMovimiento;
   const motivoMinimo = requiereOverride ? 10 : 5;
 
   async function ejecutar(managerId?: string) {
@@ -139,7 +134,7 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
             <div className="rounded-md bg-warning/10 border border-warning/30 p-3 text-sm flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
               <span>
-                Movimiento de {formatARS(UMBRAL_MOV_OVERRIDE)} o más — requiere PIN de manager (podés autorizar con tu propio PIN si sos manager o dueño).
+                Movimiento de {formatARS(autoriz.umbralMovimiento)} o más — requiere PIN de manager (podés autorizar con tu propio PIN si sos manager o dueño).
               </span>
             </div>
           )}
