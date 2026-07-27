@@ -24,8 +24,9 @@ import { createDuenoClient } from './helpers/supabaseClient';
 const LOCAL = 'Local Prueba 2';
 const SENTINEL_NUMERO = 99_900_000 + Math.floor(Math.random() * 100_000);
 const AFIP_PV = 9999; // punto de venta ficticio para no chocar con reales
-const AFIP_NRO_FACTURA = SENTINEL_NUMERO;
-const AFIP_NRO_NC = SENTINEL_NUMERO;
+// numero_local de ventas_pos es único; cada test usa uno distinto (el
+// afterEach hace soft-delete, no borra, así que reusar chocaría).
+let seqTest = 0;
 
 test.describe('Mesa facturada congelada + NC (mutante)', () => {
   let db: SupabaseClient;
@@ -34,6 +35,7 @@ test.describe('Mesa facturada congelada + NC (mutante)', () => {
   let canalId: number;
   let itemId: number;
   let ventaId: number | null = null;
+  let nroComprobante: number; // numero único por test para factura + NC
 
   test.beforeEach(async () => {
     db = await createDuenoClient();
@@ -56,10 +58,13 @@ test.describe('Mesa facturada congelada + NC (mutante)', () => {
     if (!items || items.length === 0) throw new Error('Sin items en el tenant — crear uno antes.');
     itemId = items[0].id as number;
 
+    seqTest += 1;
+    nroComprobante = SENTINEL_NUMERO + seqTest;
+
     // Venta sentinel + 1 ítem (sin cobrar, sin turno: insert directo dueño).
     const { data: ventaIns, error: vErr } = await db.from('ventas_pos').insert({
       tenant_id: tenantId, local_id: localId,
-      numero_local: SENTINEL_NUMERO,
+      numero_local: nroComprobante,
       modo: 'mostrador', canal_id: canalId,
       estado: 'abierta', origen: 'pos', subtotal: 1000, total: 1000,
     }).select('id').single();
@@ -107,7 +112,7 @@ test.describe('Mesa facturada congelada + NC (mutante)', () => {
     expect(e1).toBeNull();
 
     // ── 2. emitir "factura" (tipo 6) → mesa congelada ─────────────────────
-    const { error: eFac } = await insertarComprobante(6, AFIP_NRO_FACTURA);
+    const { error: eFac } = await insertarComprobante(6, nroComprobante);
     expect(eFac).toBeNull();
 
     // MUTANTE: agregar ítem ahora debe fallar.
@@ -128,7 +133,7 @@ test.describe('Mesa facturada congelada + NC (mutante)', () => {
     expect(e3?.message || '').toMatch(/VENTA_FACTURADA/);
 
     // ── 4. emitir NC (tipo 8) → NO rompe el CHECK y descongela ────────────
-    const { error: eNc } = await insertarComprobante(8, AFIP_NRO_NC);
+    const { error: eNc } = await insertarComprobante(8, nroComprobante);
     expect(eNc).toBeNull(); // valida el fix del CHECK (tipo 8 aceptado)
 
     // Ahora factura(1) == NC(1) → no hay factura activa → editable de nuevo.
@@ -137,5 +142,28 @@ test.describe('Mesa facturada congelada + NC (mutante)', () => {
       item_id: itemId, cantidad: 1, precio_unitario: 1000, subtotal: 1000, curso: 1, estado: 'hold',
     });
     expect(e4).toBeNull();
+  });
+
+  test('bloquea descuento y anular, pero NO el cobro (trigger ventas_pos)', async () => {
+    // Facturar la venta.
+    const { error: eFac } = await insertarComprobante(6, nroComprobante);
+    expect(eFac).toBeNull();
+
+    // MUTANTE: aplicar descuento a una mesa facturada → bloqueado.
+    const { error: eDesc } = await db.from('ventas_pos')
+      .update({ descuento_total: 500, descuento_efectivo_pct: 10 }).eq('id', ventaId!);
+    expect(eDesc).not.toBeNull();
+    expect(eDesc?.message || '').toMatch(/VENTA_FACTURADA/);
+
+    // MUTANTE: anular una mesa facturada → bloqueado (hay que hacer NC).
+    const { error: eAnul } = await db.from('ventas_pos')
+      .update({ estado: 'anulada' }).eq('id', ventaId!);
+    expect(eAnul).not.toBeNull();
+    expect(eAnul?.message || '').toMatch(/VENTA_FACTURADA/);
+
+    // CLAVE: cobrar una mesa facturada SÍ tiene que poder (facturar → cobrar).
+    const { error: eCobro } = await db.from('ventas_pos')
+      .update({ estado: 'cobrada', cobrada_at: new Date().toISOString() }).eq('id', ventaId!);
+    expect(eCobro).toBeNull();
   });
 });
