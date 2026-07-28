@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Plug, ChevronRight } from 'lucide-react';
 import { INTEGRACIONES, listEstados, type EstadoIntegracion, type IntegracionDef } from '@/lib/integraciones';
+import { MetaPixelConfig } from './MetaPixelConfig';
 
 const CATS: IntegracionDef['categoria'][] = ['Mensajería', 'Reputación', 'Publicidad', 'SEO'];
 
@@ -30,6 +31,9 @@ export function Integraciones() {
       <p className="text-sm text-ink-muted">
         Conectá tus herramientas para automatizar campañas y traer las métricas reales. Está todo listo — falta enchufar cada API.
       </p>
+
+      {/* Config real de Meta Pixel + Conversions API (por cliente). */}
+      <MetaPixelConfig />
 
       {CATS.map((cat) => (
         <div key={cat}>
