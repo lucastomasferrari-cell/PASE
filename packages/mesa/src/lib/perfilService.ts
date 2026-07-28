@@ -55,6 +55,13 @@ export async function getPerfil(slug: string): Promise<{ data: PerfilLocalData |
   return { data: (data as PerfilLocalData | null) ?? null, error: false };
 }
 
+// Pixel de Meta del cliente (por slug), o null si no tiene Meta activo.
+export async function getMetaPixelId(slug: string): Promise<string | null> {
+  const { data, error } = await db().rpc('fn_meta_pixel_publico', { p_local_slug: slug });
+  if (error) return null;
+  return (data as string | null) ?? null;
+}
+
 // ─── Reservas ──────────────────────────────────────────────────────────────
 
 export interface SlotDisponibilidad { hora: string; disponible: boolean; restantes: number }
@@ -83,6 +90,8 @@ export async function crearReservaPublica(args: {
   slug: string; nombre: string; telefono: string; email?: string;
   fechaHora: string; personas: number; notas?: string; zona?: string | null;
   atribucion?: import('./atribucion').Atribucion | null;
+  // Para la Conversions API de Meta: event_id (dedup con el Pixel) + cookies fb.
+  metaEventId?: string; fbp?: string; fbc?: string;
 }): Promise<{ ok: boolean; estado?: string; id?: number; cancelToken?: string; error?: string }> {
   // El alta pública ya no llama a la RPC directo (se le revocó anon): pega a
   // /api/reservar, que corre con service_role y aplica rate limit por IP antes
@@ -104,6 +113,10 @@ export async function crearReservaPublica(args: {
         // Atribución de marketing (de dónde vino el cliente). El endpoint la
         // guarda en la reserva. Es best-effort: si falta, la reserva igual se crea.
         atribucion: args.atribucion ?? null,
+        // Meta Conversions API (server-side): mismo event_id que el Pixel + cookies.
+        metaEventId: args.metaEventId ?? null,
+        fbp: args.fbp ?? null,
+        fbc: args.fbc ?? null,
         // Incluye teléfono: antes era slug-nombre-fechaHora → dos personas
         // distintas con el mismo nombre y horario colisionaban (la 2ª "heredaba"
         // la reserva de la 1ª). Con el teléfono, mismo cliente que re-envía =

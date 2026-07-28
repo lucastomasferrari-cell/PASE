@@ -17,9 +17,11 @@ import { supabaseConfigurado } from '@/lib/supabase';
 import {
   getPerfil, crearReservaPublica, notificarConfirmacionReserva, anotarseEspera,
   getZonasReservables, getSlotsDisponibilidad, inscribirEventoYPagar, comprarGiftcardYPagar,
+  getMetaPixelId,
   type PerfilLocalData, type SlotDisponibilidad,
 } from '@/lib/perfilService';
 import { getAtribucion } from '@/lib/atribucion';
+import { initPixel, trackReservaPixel, getFbCookies, nuevoEventId } from '@/lib/metaPixel';
 
 const fmtARS = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 const DIAS: Array<[keyof PerfilLocalData['local']['horarios'], string]> = [
@@ -46,6 +48,14 @@ export function PerfilLocal() {
       setEstado('ok');
       document.title = `${p.local.nombre} — Reservas | mesa.`;
     })();
+    return () => { cancel = true; };
+  }, [slug]);
+
+  // Meta Pixel del cliente (si tiene Meta activo): init + PageView.
+  useEffect(() => {
+    if (!supabaseConfigurado || !slug) return;
+    let cancel = false;
+    void getMetaPixelId(slug).then((pid) => { if (!cancel && pid) initPixel(pid); });
     return () => { cancel = true; };
   }, [slug]);
 
@@ -403,14 +413,21 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     const dietasTxt = dietas.length ? `Dietas: ${dietas.join(', ')}.` : '';
     const notasFinal = [dietasTxt, notas.trim()].filter(Boolean).join(' ');
     setConfirmando(true);
+    // Meta: mismo event_id para el Pixel (cliente) y la Conversions API (server) → dedup.
+    const atrib = getAtribucion();
+    const metaEventId = nuevoEventId();
+    const { fbp, fbc } = getFbCookies(atrib?.fbclid ?? null);
     try {
       const r = await crearReservaPublica({
         slug, nombre: nombre.trim(), telefono: telefono.trim(),
         email: email.trim() || undefined,
         fechaHora: fechaHoraISO(), personas, notas: notasFinal || undefined, zona,
-        atribucion: getAtribucion(),
+        atribucion: atrib,
+        metaEventId, fbp, fbc,
       });
       if (!r.ok) { toast.error(traducirMotivoReserva(r.error)); return; }
+      // Conversión Meta del lado del cliente (el server manda la suya con el mismo id).
+      trackReservaPixel(metaEventId);
       // Confirmación automática al cliente (email). Fire-and-forget.
       if (r.id && email.trim()) void notificarConfirmacionReserva(r.id);
       setEstadoFinal(r.estado ?? 'pendiente');

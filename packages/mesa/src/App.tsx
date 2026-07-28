@@ -6,6 +6,7 @@
 //                COMANDA en el próximo sprint; auth Supabase compartida)
 
 import { Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { LandingMesa } from './pages/LandingMesa';
 import { PerfilLocal } from './pages/PerfilLocal';
 import { AdminHome } from './pages/AdminHome';
@@ -15,13 +16,17 @@ import { DejarResena } from './pages/DejarResena';
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingMesa />} />
-      <Route path="/admin" element={<AdminHome />} />
-      <Route path="/r/confirmacion/:tipo/:id" element={<Confirmacion />} />
-      <Route path="/r/cancelar/:id" element={<CancelarReserva />} />
-      <Route path="/r/resena/:id" element={<DejarResena />} />
-      <Route path="/:slug" element={<PerfilLocal />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<LandingMesa />} />
+        <Route path="/admin" element={<AdminHome />} />
+        <Route path="/r/confirmacion/:tipo/:id" element={<Confirmacion />} />
+        <Route path="/r/cancelar/:id" element={<CancelarReserva />} />
+        <Route path="/r/resena/:id" element={<DejarResena />} />
+        <Route path="/:slug" element={<PerfilLocal />} />
+      </Routes>
+      {/* Analytics web (pageviews/comportamiento). Se activa desde Vercel → mesa. */}
+      <Analytics />
+    </>
   );
 }

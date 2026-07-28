@@ -78,6 +78,54 @@ export default async function handler(req, res) {
       } catch { /* best-effort: la reserva ya existe */ }
     }
 
+    // ── Meta Conversions API (server-side) ────────────────────────────────
+    // Le avisamos a Meta "esta persona reservó" con el mismo event_id que el
+    // Pixel del cliente → dedup. Usa el Pixel + token del cliente (tenant).
+    // Best-effort: si algo falla, la reserva ya está creada.
+    if (row?.id && b.metaEventId) {
+      try {
+        const { data: cls } = await db.from('comanda_local_settings')
+          .select('local_id').eq('slug', slug).is('deleted_at', null).maybeSingle();
+        let mi = null;
+        if (cls?.local_id != null) {
+          const { data: loc } = await db.from('locales').select('tenant_id').eq('id', cls.local_id).maybeSingle();
+          if (loc?.tenant_id) {
+            const { data } = await db.from('marketing_integraciones')
+              .select('meta_pixel_id, meta_capi_token, meta_test_event_code, meta_activa')
+              .eq('tenant_id', loc.tenant_id).maybeSingle();
+            mi = data;
+          }
+        }
+        if (mi && mi.meta_activa && mi.meta_pixel_id && mi.meta_capi_token) {
+          const sha = (v) => createHash('sha256').update(String(v)).digest('hex');
+          const user_data = {
+            client_ip_address: ip !== 'unknown' ? ip : undefined,
+            client_user_agent: req.headers['user-agent'] || undefined,
+            fbp: b.fbp || undefined,
+            fbc: b.fbc || undefined,
+          };
+          if (email) user_data.em = [sha(String(email).trim().toLowerCase())];
+          if (telefono) user_data.ph = [sha(String(telefono).replace(/\D/g, ''))];
+          const payload = {
+            data: [{
+              event_name: 'Schedule',
+              event_time: Math.floor(Date.now() / 1000),
+              event_id: String(b.metaEventId),
+              action_source: 'website',
+              event_source_url: req.headers['referer'] || undefined,
+              user_data,
+              custom_data: { content_category: 'reserva', num_items: personasInt },
+            }],
+          };
+          if (mi.meta_test_event_code) payload.test_event_code = mi.meta_test_event_code;
+          await fetch(
+            `https://graph.facebook.com/v19.0/${mi.meta_pixel_id}/events?access_token=${encodeURIComponent(mi.meta_capi_token)}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
+          );
+        }
+      } catch { /* best-effort: no romper la reserva */ }
+    }
+
     return res.status(200).json({
       ok: true, id: row?.id, estado: row?.estado, cancelToken: row?.cancel_token ?? null,
     });
