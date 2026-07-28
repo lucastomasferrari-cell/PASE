@@ -52,6 +52,7 @@ export function AdminMapa({ localId }: Props) {
   const [cargando, setCargando] = useState(true);
   const [walkInMesa, setWalkInMesa] = useState<number | null>(null);
   const [editando, setEditando] = useState(false);
+  const [zonaFiltro, setZonaFiltro] = useState<string | null>(null);  // null = todas
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: number; offX: number; offY: number; x: number; y: number; moved: boolean } | null>(null);
 
@@ -71,19 +72,32 @@ export function AdminMapa({ localId }: Props) {
     return () => clearInterval(id);
   }, [reload]);
 
-  // En modo edición TODAS las mesas van al canvas (las sin ubicar arrancan en
-  // una grilla en cascada para poder arrastrarlas al lugar). Fuera de edición,
-  // solo las que tienen posición guardada.
+  // Zonas disponibles (salón, terraza, …) para el filtro. Solo se muestra el
+  // selector si hay más de una: así cada zona se ve/edita por separado en vez
+  // de todas encimadas en el mismo lienzo (pedido Camilo, 28-jul).
+  const zonas = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of mesas) if (m.zona) s.add(m.zona);
+    return Array.from(s).sort();
+  }, [mesas]);
+  const mesasZona = useMemo(
+    () => (zonaFiltro ? mesas.filter((m) => m.zona === zonaFiltro) : mesas),
+    [mesas, zonaFiltro],
+  );
+
+  // En modo edición TODAS las mesas (de la zona) van al canvas (las sin ubicar
+  // arrancan en una grilla en cascada para poder arrastrarlas al lugar). Fuera
+  // de edición, solo las que tienen posición guardada.
   const ubicadas = useMemo(() => {
-    if (!editando) return mesas.filter((m) => m.pos_x !== null);
+    if (!editando) return mesasZona.filter((m) => m.pos_x !== null);
     let i = 0;
-    return mesas.map((m) => {
+    return mesasZona.map((m) => {
       if (m.pos_x !== null && m.pos_y !== null) return m;
       const x = 20 + (i % 6) * 135, y = 20 + Math.floor(i / 6) * 95; i++;
       return { ...m, pos_x: x, pos_y: y };
     });
-  }, [mesas, editando]);
-  const sinUbicar = useMemo(() => (editando ? [] : mesas.filter((m) => m.pos_x === null)), [mesas, editando]);
+  }, [mesasZona, editando]);
+  const sinUbicar = useMemo(() => (editando ? [] : mesasZona.filter((m) => m.pos_x === null)), [mesasZona, editando]);
 
   // ── Arrastrar mesas (pointer events + pointer capture) ──
   function onPointerDownMesa(e: React.PointerEvent, m: Mesa) {
@@ -116,9 +130,9 @@ export function AdminMapa({ localId }: Props) {
 
   const conteo = useMemo(() => {
     const c: Record<EstadoMesaLive, number> = { libre: 0, ocupada_ticket: 0, ocupada_reserva: 0, reservada_pronto: 0 };
-    for (const m of mesas) c[estados.get(m.id)?.estado_live ?? 'libre']++;
+    for (const m of mesasZona) c[estados.get(m.id)?.estado_live ?? 'libre']++;
     return c;
-  }, [mesas, estados]);
+  }, [mesasZona, estados]);
 
   if (cargando) return <div className="py-16 text-center text-ink-muted">Cargando plano…</div>;
 
@@ -149,6 +163,21 @@ export function AdminMapa({ localId }: Props) {
           <RefreshCw className="h-3.5 w-3.5" /> Actualizar
         </button>
       </div>
+
+      {/* Filtro por zona: ver/editar cada zona por separado (salón, terraza, …). */}
+      {zonas.length > 1 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-ink-muted mr-0.5">Zona:</span>
+          {[null, ...zonas].map((z) => (
+            <button key={z ?? '__todas'} onClick={() => setZonaFiltro(z)}
+                    className={`text-xs rounded-md px-2.5 py-1 border transition-colors ${
+                      zonaFiltro === z ? 'bg-brand-500 text-white border-brand-500' : 'text-ink-soft hover:text-ink border-ink/15'
+                    }`}>
+              {z ?? 'Todas'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {editando && (
         <p className="text-xs text-brand-700 bg-brand-50 border border-brand-200 rounded-md px-3 py-2">
