@@ -34,6 +34,7 @@ export function SettingsMesas() {
   const [editing, setEditing] = useState<Mesa | 'new' | null>(null);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState<number | null>(null);
+  const [zonaPlano, setZonaPlano] = useState<string | null>(null);  // filtro del Plano (null = todas)
 
   const reload = useCallback(async () => {
     if (localId === null) return;
@@ -49,6 +50,11 @@ export function SettingsMesas() {
   const filtered = mesas.filter((m) =>
     !search || m.numero.toLowerCase().includes(search.toLowerCase()) || (m.zona ?? '').toLowerCase().includes(search.toLowerCase()),
   );
+
+  // Zonas para el filtro del Plano (así se edita cada zona por separado en vez
+  // de todas encimadas). Solo se muestra el selector si hay más de una.
+  const zonasPlano = Array.from(new Set(mesas.map((m) => m.zona).filter(Boolean) as string[])).sort();
+  const mesasPlano = zonaPlano ? mesas.filter((m) => m.zona === zonaPlano) : mesas;
 
   async function handleMesaMoved(id: number, x: number, y: number) {
     setSaving(id);
@@ -141,11 +147,24 @@ export function SettingsMesas() {
             </CardContent></Card>
           ) : (
             <>
+              {zonasPlano.length > 1 && (
+                <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                  <span className="text-xs text-muted-foreground mr-0.5">Zona:</span>
+                  {[null, ...zonasPlano].map((z) => (
+                    <button key={z ?? '__todas'} onClick={() => setZonaPlano(z)}
+                            className={`text-xs rounded-md px-2.5 py-1 border transition-colors ${
+                              zonaPlano === z ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground border-border'
+                            }`}>
+                      {z ?? 'Todas'}
+                    </button>
+                  ))}
+                </div>
+              )}
               {saving !== null && (
                 <p className="text-xs text-muted-foreground mb-2">Guardando posición…</p>
               )}
               <FloorPlanCanvas
-                mesas={mesas}
+                mesas={mesasPlano}
                 readonly={false}
                 onMesaMoved={handleMesaMoved}
               />
