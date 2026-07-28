@@ -15,17 +15,18 @@ const DIAS: { dia: number; label: string }[] = [
   { dia: 0, label: 'Domingo' },
 ];
 
-// Los horarios son los del NEGOCIO (columnas horario_dom..sab, formato
-// "HH:MM – HH:MM" o null=cerrado). Es el único origen: la página pública los
-// muestra y el motor de reservas los deriva (trigger sync_reservas_horarios).
-const HCOL: Record<number, string> = {
-  0: 'horario_dom', 1: 'horario_lun', 2: 'horario_mar', 3: 'horario_mie',
-  4: 'horario_jue', 5: 'horario_vie', 6: 'horario_sab',
-};
-function parseHorario(txt: string | null | undefined): { activo: boolean; abre: string; cierra: string } {
-  const parts = txt ? txt.split(/\s*[–-]\s*/) : [];
-  if (parts.length >= 2 && parts[0] && parts[1]) return { activo: true, abre: parts[0].trim(), cierra: parts[1].trim() };
-  return { activo: false, abre: '20:00', cierra: '00:00' };
+// Los horarios del SALÓN viven en `reservas_horarios` (jsonb, array de
+// {dia,abre,cierra}) — su propia fuente, INDEPENDIENTE del delivery (que usa
+// horario_*, editable desde la tienda). Cada día puede tener VARIAS franjas
+// (ej. almuerzo + cena). dia: 0=domingo … 6=sábado.
+type Franja = { abre: string; cierra: string };
+
+function franjasDelDia(rh: unknown, dia: number): Franja[] {
+  if (!Array.isArray(rh)) return [];
+  return (rh as Array<{ dia?: number; abre?: string; cierra?: string }>)
+    .filter((e) => e && Number(e.dia) === dia)
+    .map((e) => ({ abre: String(e.abre ?? '20:00'), cierra: String(e.cierra ?? '00:00') }))
+    .sort((a, b) => a.abre.localeCompare(b.abre));
 }
 interface MailTpl { titulo: string; subtitulo: string }
 interface Form {
@@ -40,7 +41,7 @@ interface Form {
   slot_min: string;
   pacing_max: string;
   notas_visibles: string;
-  horarios: { dia: number; activo: boolean; abre: string; cierra: string }[];
+  horarios: { dia: number; activo: boolean; franjas: Franja[] }[];
   notif_confirmacion: boolean;
   notif_recordatorio: boolean;
   notif_resena: boolean;
@@ -89,8 +90,9 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       pacing_max: s.reservas_pacing_max_por_franja != null ? String(s.reservas_pacing_max_por_franja) : '',
       notas_visibles: (s.reservas_notas_visibles_cliente as string | null) ?? '',
       horarios: DIAS.map(({ dia }) => {
-        const p = parseHorario(s[HCOL[dia]!] as string | null);
-        return { dia, activo: p.activo, abre: p.abre, cierra: p.cierra };
+        const fr = franjasDelDia(s.reservas_horarios, dia);
+        // Si el día está cerrado dejamos una franja default lista para cuando lo prendan.
+        return { dia, activo: fr.length > 0, franjas: fr.length > 0 ? fr : [{ abre: '20:00', cierra: '00:00' }] };
       }),
       notif_confirmacion: s.reservas_notif_confirmacion == null ? true : Boolean(s.reservas_notif_confirmacion),
       notif_recordatorio: s.reservas_notif_recordatorio == null ? true : Boolean(s.reservas_notif_recordatorio),
@@ -109,11 +111,13 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
     if (!form) return;
     setGuardando(true);
     try {
-      // Escribimos las columnas de negocio horario_* (única fuente); el trigger
-      // deriva reservas_horarios para el motor. Así la página pública y las
-      // reservas quedan siempre en sync con lo que se edita acá.
-      const horariosCols: Record<string, string | null> = {};
-      for (const h of form.horarios) horariosCols[HCOL[h.dia]!] = h.activo ? `${h.abre} – ${h.cierra}` : null;
+      // Horarios del SALÓN → reservas_horarios (fuente propia, multi-franja).
+      // NO tocamos horario_* (eso es el delivery, se edita en la tienda).
+      const reservasHorarios = form.horarios
+        .filter((h) => h.activo)
+        .flatMap((h) => h.franjas
+          .filter((f) => f.abre && f.cierra)
+          .map((f) => ({ dia: h.dia, abre: f.abre, cierra: f.cierra })));
       const { error } = await db().from('comanda_local_settings').update({
         reservas_activas: form.activas,
         reservas_requiere_confirmacion: form.requiere_confirmacion,
@@ -136,7 +140,7 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         reservas_tpl_recordatorio_subtitulo: form.tpl_recordatorio.subtitulo.trim() || null,
         reservas_tpl_resena_titulo: form.tpl_resena.titulo.trim() || null,
         reservas_tpl_resena_subtitulo: form.tpl_resena.subtitulo.trim() || null,
-        ...horariosCols,
+        reservas_horarios: reservasHorarios,
         updated_at: new Date().toISOString(),
       }).eq('id', settingsId);
       if (error) { toast.error('No se pudo guardar: ' + error.message); return; }
@@ -145,8 +149,26 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
   }
 
   function set(patch: Partial<Form>) { setForm((f) => f ? { ...f, ...patch } : f); }
-  function setHorario(dia: number, patch: Partial<{ activo: boolean; abre: string; cierra: string }>) {
-    setForm((f) => f ? { ...f, horarios: f.horarios.map((h) => h.dia === dia ? { ...h, ...patch } : h) } : f);
+  function setDiaActivo(dia: number, activo: boolean) {
+    setForm((f) => f ? { ...f, horarios: f.horarios.map((h) => h.dia === dia ? { ...h, activo } : h) } : f);
+  }
+  function setFranja(dia: number, idx: number, patch: Partial<Franja>) {
+    setForm((f) => f ? {
+      ...f, horarios: f.horarios.map((h) => h.dia === dia
+        ? { ...h, franjas: h.franjas.map((fr, i) => i === idx ? { ...fr, ...patch } : fr) } : h),
+    } : f);
+  }
+  function addFranja(dia: number) {
+    setForm((f) => f ? {
+      ...f, horarios: f.horarios.map((h) => h.dia === dia
+        ? { ...h, franjas: [...h.franjas, { abre: '12:00', cierra: '15:00' }] } : h),
+    } : f);
+  }
+  function removeFranja(dia: number, idx: number) {
+    setForm((f) => f ? {
+      ...f, horarios: f.horarios.map((h) => h.dia === dia
+        ? { ...h, franjas: h.franjas.length > 1 ? h.franjas.filter((_, i) => i !== idx) : h.franjas } : h),
+    } : f);
   }
   function setTpl(key: 'tpl_confirmacion' | 'tpl_recordatorio' | 'tpl_resena', patch: Partial<MailTpl>) {
     setForm((f) => f ? { ...f, [key]: { ...f[key], ...patch } } : f);
@@ -209,23 +231,31 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         </Field>
       </Card>
 
-      {/* Horarios */}
-      <Card icon={<Clock className="h-4 w-4 text-brand-500" />} title="Horarios de atención">
-        <p className="text-xs text-ink-muted -mt-1">Los días y franjas en que abre el local. Es lo que se muestra en la página pública y lo que habilita las reservas online (un solo lugar para editarlo).</p>
-        <div className="space-y-2">
+      {/* Horarios del salón */}
+      <Card icon={<Clock className="h-4 w-4 text-brand-500" />} title="Horarios del salón (reservas)">
+        <p className="text-xs text-ink-muted -mt-1">Los días y horas en que abre el <b>salón</b> para reservas. Podés poner <b>más de una franja</b> por día (ej. mediodía y noche). El horario del <b>delivery</b> se configura aparte en la tienda online.</p>
+        <div className="space-y-2.5">
           {form.horarios.map((h) => (
-            <div key={h.dia} className="flex items-center gap-3 flex-wrap">
-              <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer">
-                <Toggle checked={h.activo} onChange={(v) => setHorario(h.dia, { activo: v })} />
+            <div key={h.dia} className="flex items-start gap-3 flex-wrap py-0.5">
+              <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer pt-1.5">
+                <Toggle checked={h.activo} onChange={(v) => setDiaActivo(h.dia, v)} />
                 <span className="text-sm">{DIAS.find((d) => d.dia === h.dia)?.label}</span>
               </label>
               {h.activo ? (
-                <div className="flex items-center gap-2">
-                  <input type="time" value={h.abre} onChange={(e) => setHorario(h.dia, { abre: e.target.value })} className="w-28 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
-                  <span className="text-ink-muted text-sm">a</span>
-                  <input type="time" value={h.cierra} onChange={(e) => setHorario(h.dia, { cierra: e.target.value })} className="w-28 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
+                <div className="flex flex-col gap-1.5">
+                  {h.franjas.map((fr, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input type="time" value={fr.abre} onChange={(e) => setFranja(h.dia, i, { abre: e.target.value })} className="w-28 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
+                      <span className="text-ink-muted text-sm">a</span>
+                      <input type="time" value={fr.cierra} onChange={(e) => setFranja(h.dia, i, { cierra: e.target.value })} className="w-28 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
+                      {h.franjas.length > 1 && (
+                        <button type="button" onClick={() => removeFranja(h.dia, i)} className="text-ink-muted hover:text-red-500 text-sm px-1.5" title="Quitar franja">✕</button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addFranja(h.dia)} className="text-xs text-brand-600 hover:text-brand-700 text-left w-fit mt-0.5">+ agregar franja</button>
                 </div>
-              ) : <span className="text-xs text-ink-muted/60 italic">cerrado</span>}
+              ) : <span className="text-xs text-ink-muted/60 italic pt-1.5">cerrado</span>}
             </div>
           ))}
         </div>
