@@ -56,6 +56,28 @@ export default async function handler(req, res) {
     if (error) return res.status(200).json({ ok: false, error: error.message });
 
     const row = Array.isArray(data) ? data[0] : data;
+
+    // Atribución de marketing (best-effort): guardamos de dónde vino el cliente
+    // en la reserva recién creada. No tocamos la RPC — UPDATE con service_role.
+    // Si falla, no rompe la reserva (ya está creada).
+    if (row?.id && b.atribucion && typeof b.atribucion === 'object') {
+      try {
+        const a = b.atribucion;
+        const clip = (v) => (typeof v === 'string' && v ? v.slice(0, 200) : null);
+        await db.from('reservas').update({
+          utm_source: clip(a.utm_source),
+          utm_medium: clip(a.utm_medium),
+          utm_campaign: clip(a.utm_campaign),
+          utm_content: clip(a.utm_content),
+          utm_term: clip(a.utm_term),
+          fbclid: clip(a.fbclid),
+          gclid: clip(a.gclid),
+          attr_referrer: clip(a.referrer),
+          attr_landing: clip(a.landing),
+        }).eq('id', row.id);
+      } catch { /* best-effort: la reserva ya existe */ }
+    }
+
     return res.status(200).json({
       ok: true, id: row?.id, estado: row?.estado, cancelToken: row?.cancel_token ?? null,
     });

@@ -82,6 +82,7 @@ export async function getZonasReservables(slug: string): Promise<string[]> {
 export async function crearReservaPublica(args: {
   slug: string; nombre: string; telefono: string; email?: string;
   fechaHora: string; personas: number; notas?: string; zona?: string | null;
+  atribucion?: import('./atribucion').Atribucion | null;
 }): Promise<{ ok: boolean; estado?: string; id?: number; cancelToken?: string; error?: string }> {
   // El alta pública ya no llama a la RPC directo (se le revocó anon): pega a
   // /api/reservar, que corre con service_role y aplica rate limit por IP antes
@@ -100,6 +101,9 @@ export async function crearReservaPublica(args: {
         personas: args.personas,
         notas: args.notas ?? null,
         zona: args.zona ?? null,
+        // Atribución de marketing (de dónde vino el cliente). El endpoint la
+        // guarda en la reserva. Es best-effort: si falta, la reserva igual se crea.
+        atribucion: args.atribucion ?? null,
         // Incluye teléfono: antes era slug-nombre-fechaHora → dos personas
         // distintas con el mismo nombre y horario colisionaban (la 2ª "heredaba"
         // la reserva de la 1ª). Con el teléfono, mismo cliente que re-envía =

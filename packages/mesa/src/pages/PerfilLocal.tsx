@@ -19,6 +19,7 @@ import {
   getZonasReservables, getSlotsDisponibilidad, inscribirEventoYPagar, comprarGiftcardYPagar,
   type PerfilLocalData, type SlotDisponibilidad,
 } from '@/lib/perfilService';
+import { getAtribucion } from '@/lib/atribucion';
 
 const fmtARS = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 const DIAS: Array<[keyof PerfilLocalData['local']['horarios'], string]> = [
@@ -407,6 +408,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
         slug, nombre: nombre.trim(), telefono: telefono.trim(),
         email: email.trim() || undefined,
         fechaHora: fechaHoraISO(), personas, notas: notasFinal || undefined, zona,
+        atribucion: getAtribucion(),
       });
       if (!r.ok) { toast.error(traducirMotivoReserva(r.error)); return; }
       // Confirmación automática al cliente (email). Fire-and-forget.
