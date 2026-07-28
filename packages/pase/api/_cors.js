@@ -25,6 +25,7 @@ const ALLOWED_ORIGINS = new Set([
   // Apps nuevas del ecosistema Cocina (25-jun-2026)
   'https://habitue-ruddy.vercel.app',
   'https://mesa-orpin.vercel.app',
+  'https://reservas.comanda.lat',
   'https://accesos-eight.vercel.app',
   // Localhost para dev
   'http://localhost:5173',

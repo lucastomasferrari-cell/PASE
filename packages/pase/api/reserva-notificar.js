@@ -134,7 +134,7 @@ export default async function handler(req, res) {
   const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   const apiKey = process.env.RESEND_API_KEY;
   const fromEnv = process.env.RESEND_FROM;
-  const mesaBase = (process.env.MESA_PUBLIC_BASE || 'https://mesa-orpin.vercel.app').replace(/\/$/, '');
+  const mesaBase = (process.env.MESA_PUBLIC_BASE || 'https://reservas.comanda.lat').replace(/\/$/, '');
   const fromHdr = (localNombre) => (fromEnv && fromEnv.includes('<')) ? fromEnv : `${localNombre} <${fromEnv}>`;
   const cancelUrl = (r) => `${mesaBase}/r/cancelar/${r.id}${r.cancel_token ? `?t=${r.cancel_token}` : ''}`;
   const resenaUrl = (r) => `${mesaBase}/r/resena/${r.id}${r.cancel_token ? `?t=${r.cancel_token}` : ''}`;

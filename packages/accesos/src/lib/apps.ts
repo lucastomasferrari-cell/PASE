@@ -27,7 +27,7 @@ export interface AppDef {
 export const APPS: AppDef[] = [
   { key: 'pase', nombre: 'PASE', emoji: '', desc: 'Back-office: EERR, RRHH, Caja, Conciliación, Facturas.', paraQuien: 'Dueño, admin, contadora', url: 'https://pase-yndx.vercel.app', tier: 'administrativa' },
   { key: 'comanda', nombre: 'COMANDA', emoji: '', desc: 'POS: ventas, salón, KDS, tienda online.', paraQuien: 'Cajeros, mozos, cocina', url: 'https://pase-comanda.vercel.app', tier: 'operativa' },
-  { key: 'mesa', nombre: 'MESA', emoji: '', desc: 'Reservas, plano del salón, comensales.', paraQuien: 'Encargados de reservas, anfitriones', url: 'https://mesa-orpin.vercel.app/admin', tier: 'operativa' },
+  { key: 'mesa', nombre: 'MESA', emoji: '', desc: 'Reservas, plano del salón, comensales.', paraQuien: 'Encargados de reservas, anfitriones', url: 'https://reservas.comanda.lat/admin', tier: 'operativa' },
   { key: 'habitue', nombre: 'Habitué', emoji: '', desc: 'CRM y marketing: segmentos, campañas, fidelidad.', paraQuien: 'Marketing, dueño', url: 'https://habitue-ruddy.vercel.app/admin', tier: 'administrativa' },
   { key: 'instagram', nombre: 'Instagram bot', emoji: '', desc: 'Bot de Instagram: respuestas automáticas y campañas.', paraQuien: 'Marketing, dueño', url: 'https://pase-instagram-bot.vercel.app', tier: 'administrativa' },
   { key: 'accesos', nombre: 'Accesos', emoji: '', desc: 'Gestión de personas y permisos (este panel).', paraQuien: 'Dueño', url: '', tier: 'administrativa' },
