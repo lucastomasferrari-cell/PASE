@@ -65,6 +65,52 @@ export async function listReservas(opts: ListReservasOpts = {}): Promise<{ data:
   return { data: (data ?? []) as Reserva[], error: null };
 }
 
+// ─── Atribución de reservas (de dónde vienen) ─────────────────────────
+export interface ReservaAtribucionRow {
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  fbclid: string | null;
+  gclid: string | null;
+  attr_referrer: string | null;
+  estado: string;
+}
+
+// Trae la atribución de marketing de las reservas del local en un rango
+// (por created_at = cuándo se hizo la reserva). Para el reporte "por fuente".
+export async function getReservasAtribucion(
+  localId: number, desde?: string, hasta?: string,
+): Promise<{ data: ReservaAtribucionRow[]; error: string | null }> {
+  let q = db.from('reservas')
+    .select('utm_source, utm_medium, utm_campaign, fbclid, gclid, attr_referrer, estado')
+    .is('deleted_at', null)
+    .eq('local_id', localId);
+  if (desde) q = q.gte('created_at', desde);
+  if (hasta) q = q.lte('created_at', hasta);
+  const { data, error } = await q.limit(3000);
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as ReservaAtribucionRow[], error: null };
+}
+
+// Clasifica una reserva en una "fuente" legible (Meta pauta / IG orgánico /
+// Google / directo / etc.) a partir de UTM + click-ids + referrer.
+export function clasificarFuenteReserva(r: ReservaAtribucionRow): string {
+  const src = (r.utm_source ?? '').toLowerCase();
+  const med = (r.utm_medium ?? '').toLowerCase();
+  const ref = (r.attr_referrer ?? '').toLowerCase();
+  const esMeta = /facebook|instagram|meta|fb|ig/.test(src);
+  const esPaga = /paid|cpc|pauta|ads/.test(med);
+
+  if (r.fbclid || (esMeta && esPaga)) return 'Meta · Pauta';
+  if (r.gclid || (src === 'google' && esPaga)) return 'Google Ads';
+  if (src.includes('instagram') || ref.includes('instagram')) return 'Instagram · orgánico';
+  if (src.includes('facebook') || ref.includes('facebook')) return 'Facebook · orgánico';
+  if (src === 'google' || ref.includes('google')) return 'Google · orgánico';
+  if (src) return `${src}${med ? ' · ' + med : ''}`;
+  if (ref) return 'Referido web';
+  return 'Directo';
+}
+
 // MESA módulo #1 (09-jun): alta MANUAL por el staff. La creación pública
 // (fn_crear_reserva_publica) sigue aparte — esta valida contra el local
 // visible del usuario autenticado y es idempotente.

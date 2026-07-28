@@ -51,6 +51,7 @@ const ADMIN_NAVIGATION_RAW: NavCategory[] = [
       { slug: 'canales',           label: 'Canales',            href: '/reportes/canales' },
       { slug: 'empleados',         label: 'Performance empleados', href: '/reportes/empleados' },
       { slug: 'tiempos',           label: 'Tiempos',            href: '/reportes/tiempos' },
+      { slug: 'reservas-fuente',   label: 'Reservas por fuente', href: '/reportes/reservas-fuente' },
       { slug: 'auditoria',         label: 'Auditoría',          href: '/reportes/auditoria' },
     ],
   },

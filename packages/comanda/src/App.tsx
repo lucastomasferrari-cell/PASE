@@ -101,6 +101,7 @@ const UsuariosPosPage = lazy(() => import('./pages/Empleados/UsuariosPosPage'));
 const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m => ({ default: m.ReporteVentas })));
 const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos').then(m => ({ default: m.SettingsRecibos })));
 const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReportePerformanceEmpleados').then(m => ({ default: m.ReportePerformanceEmpleados })));
+const ReporteReservasFuente = lazy(() => import('./pages/Reportes/ReporteReservasFuente').then(m => ({ default: m.ReporteReservasFuente })));
 const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').then(m => ({ default: m.TrackingDelivery })));
 const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').then(m => ({ default: m.ConciliacionMpView })));
 const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
@@ -273,6 +274,7 @@ export default function App() {
                     <Route path="cmv" element={<ReporteCMV />} />
                     <Route path="ventas" element={<ReporteVentas />} />
                     <Route path="empleados" element={<ReportePerformanceEmpleados />} />
+                    <Route path="reservas-fuente" element={<ReporteReservasFuente />} />
                   </Route>
                   <Route path="/reportes/auditoria" element={<SettingsAuditoria />} />
                   {/* /reportes/ventas ahora vive bajo el layout — ver Route 'ventas' arriba */}
