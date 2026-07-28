@@ -102,7 +102,11 @@ export function AdminHome() {
     e.preventDefault();
     setEntrando(true);
     try {
-      const mail = email.includes('@') ? email : `${email}@pase.local`;
+      // trim + minúscula: el teclado del celu suele meter un espacio o mayúscula
+      // al final del usuario → sin esto el email queda inválido y da "usuario o
+      // contraseña incorrectos" (COMANDA ya lo limpiaba, MESA no — bug 28-jul).
+      const raw = email.trim().toLowerCase();
+      const mail = raw.includes('@') ? raw : `${raw}@pase.local`;
       const { data, error } = await db().auth.signInWithPassword({ email: mail, password });
       if (error || !data.session) { toast.error('Usuario o contraseña incorrectos'); return; }
 
@@ -144,6 +148,7 @@ export function AdminHome() {
           <div>
             <label htmlFor="m-email" className={loginLabelCls}>Usuario o email</label>
             <input id="m-email" className={loginInputCls} placeholder="tu@email.com"
+                   autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email"
                    value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
           </div>
           <div>

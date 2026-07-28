@@ -79,7 +79,10 @@ export default function Login({ onLogin }: LoginProps) {
     if (!usuario || !password) return;
     setLoading(true); setErr("");
 
-    const authEmail = usuario.includes("@") ? usuario : usuario + "@pase.local";
+    // trim + minúscula: evita que un espacio/mayúscula del teclado (típico en
+    // celu) invalide el email y dé "usuario o contraseña incorrectos".
+    const usuarioNorm = usuario.trim().toLowerCase();
+    const authEmail = usuarioNorm.includes("@") ? usuarioNorm : usuarioNorm + "@pase.local";
     const { data: authData, error: authErr } = await db.auth.signInWithPassword({
       email: authEmail,
       password,
@@ -181,7 +184,8 @@ export default function Login({ onLogin }: LoginProps) {
 
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Usuario</label>
-          <input autoComplete="username" value={usuario} onChange={(e) => setUsuario(e.target.value)}
+          <input autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            value={usuario} onChange={(e) => setUsuario(e.target.value)}
             placeholder="Ingresá tu usuario" onKeyDown={(e) => e.key === "Enter" && go()}
             style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
         </div>
