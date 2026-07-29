@@ -9,6 +9,7 @@ import { listMesasConVentas, type MesaConVenta } from '@/services/mesasService';
 import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta, modificarItem } from '@/services/ventasService';
 import { resolveCanalPorModo } from '@/services/canalesService';
 import { listItems, type ItemConGrupo } from '@/services/itemsService';
+import { filtrarCatalogoPorCanal } from './hooks/useVentaData';
 import { listGrupos } from '@/services/gruposService';
 import type { VentaPosItem, ItemGrupo } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -327,7 +328,12 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, puedeCobrar, onVol
       listGrupos(tenantId, marcaId, { localId: lid }),
       listVentasItems(ventaId),
     ]);
-    setCatalogo(cRes.data);
+    // Filtrar por el canal de la venta (salón usa la lista "Salón", etc.):
+    // solo muestra los items VENDIBLES en la lista de ese canal. Antes el
+    // handheld mostraba el catálogo crudo → los items de delivery aparecían en
+    // mesas (bug reportado por Camilo). Mismo filtro que la VentaScreen normal.
+    const canalId = (vRes.data as { canal_id?: number | null } | null)?.canal_id ?? null;
+    setCatalogo(await filtrarCatalogoPorCanal(cRes.data, canalId, lid));
     setGrupos(gRes.data);
     setItems(iRes.data);
     setVenta(vRes.data);

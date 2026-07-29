@@ -33,7 +33,7 @@ export interface UseVentaDataResult {
 // precio del canal (fn_agregar_item_comanda); esto alinea la PANTALLA.
 // Degradación segura: si el canal no tiene precios cargados, no se filtra nada
 // (mismo fallback a precio_madre que hace el RPC).
-async function filtrarCatalogoPorCanal(
+export async function filtrarCatalogoPorCanal(
   catalogo: ItemConGrupo[],
   canalId: number | null,
   localId: number | null,
