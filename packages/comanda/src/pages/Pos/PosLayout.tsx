@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, Navigate } from 'react-router-dom';
 import { Search, Smartphone, Maximize2, Minimize2, Moon, Sun } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { getTurnoAbierto } from '@/services/turnosCajaService';
 import { listLocalesAccesibles } from '@/services/configService';
@@ -21,6 +22,7 @@ import { useTheme } from '@/hooks/useTheme';
 // <Outlet />. Reemplaza el layout viejo con íconos sueltos en el header.
 export function PosLayout() {
   const { user } = useAuth();
+  const { empleado } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
   const [localNombre, setLocalNombre] = useState<string | null>(null);
@@ -104,6 +106,11 @@ export function PosLayout() {
       document.removeEventListener('webkitfullscreenchange', onChange);
     };
   }, []);
+  // Guard mozo/camarero: su única vista es el handheld. Si intenta entrar a
+  // cualquier ruta del POS normal (caja, mostrador, salón, admin), lo mandamos
+  // de vuelta al handheld. Defense-in-depth además del DefaultModeRedirect.
+  const esMozo = empleado != null && (empleado.rol_pos as string) === 'mozo';
+
   const toggleFullscreen = useCallback(async () => {
     const doc = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
     const docExit = document as Document & { webkitExitFullscreen?: () => Promise<void> };
@@ -117,6 +124,8 @@ export function PosLayout() {
       }
     } catch { /* silencioso */ }
   }, []);
+
+  if (esMozo) return <Navigate to="/pos/handheld" replace />;
 
   const minutosTurno = turno
     ? Math.max(0, Math.floor((Date.now() - new Date(turno.abierto_at).getTime()) / 60_000))

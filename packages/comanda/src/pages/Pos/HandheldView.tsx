@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listMesasConVentas, type MesaConVenta } from '@/services/mesasService';
-import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta } from '@/services/ventasService';
+import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta, modificarItem } from '@/services/ventasService';
 import { resolveCanalPorModo } from '@/services/canalesService';
 import { listItems, type ItemConGrupo } from '@/services/itemsService';
 import { listGrupos } from '@/services/gruposService';
@@ -67,6 +67,8 @@ export function HandheldView() {
   if (!empleado) {
     return <div className="p-8 text-center text-muted-foreground">Sesión POS requerida.</div>;
   }
+  // El mozo/camarero solo toma pedidos: NO cobra (eso lo hace el cajero).
+  const puedeCobrar = (empleado.rol_pos as string) !== 'mozo';
   if (localId === null) {
     return <div className="p-8 text-center text-muted-foreground">Seleccioná un local.</div>;
   }
@@ -118,6 +120,7 @@ export function HandheldView() {
           mesa={pantalla.mesa}
           empleadoId={empleado.id}
           tenantId={user?.tenant_id ?? ''}
+          puedeCobrar={puedeCobrar}
           onVolver={() => setPantalla({ tipo: 'mesas' })}
         />
       )}
@@ -280,11 +283,12 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
 // Pantalla 2: catálogo + carga rápida + mandar a cocina
 // ────────────────────────────────────────────────────────────────────────
 
-function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
+function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, puedeCobrar, onVolver }: {
   ventaId: number;
   mesa: MesaConVenta;
   empleadoId: string;
   tenantId: string;
+  puedeCobrar: boolean;
   onVolver: () => void;
 }) {
   const [catalogo, setCatalogo] = useState<ItemConGrupo[]>([]);
@@ -300,6 +304,8 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
   const [venta, setVenta] = useState<VentaPos | null>(null);
   const [showCobro, setShowCobro] = useState(false);
   const [cursoActivo, setCursoActivo] = useState<number>(1);
+  // Aclaración/nota de un item en hold (antes de mandar a cocina).
+  const [notaItem, setNotaItem] = useState<VentaPosItem | null>(null);
   const online = useOnlineStatus();
 
   const reload = useCallback(async () => {
@@ -574,12 +580,23 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
               {itemsHold.map((it) => {
                 const nombre = catalogo.find((c) => c.id === it.item_id)?.nombre ?? `Item #${it.item_id}`;
                 return (
-                  <div key={it.id} className="flex items-center gap-2 text-xs px-2 py-1.5 bg-muted/40 rounded">
-                    <div className="flex-1 truncate">
-                      <span className="font-medium">{it.cantidad}×</span> {nombre}
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => setNotaItem(it)}
+                    className="w-full flex items-center gap-2 text-xs px-2 py-1.5 bg-muted/40 rounded text-left active:bg-muted"
+                    title="Tocá para agregar una aclaración"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate">
+                        <span className="font-medium">{it.cantidad}×</span> {nombre}
+                      </div>
+                      {it.notas
+                        ? <div className="text-[10px] text-warning-foreground/80 truncate">📝 {it.notas}</div>
+                        : <div className="text-[10px] text-muted-foreground/60">+ aclaración</div>}
                     </div>
                     <strong className="tabular-nums">{formatARS(it.subtotal)}</strong>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -610,10 +627,9 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
           </div>
         )}
 
-        {/* Cobrar — siempre visible si la venta tiene total > 0 y no está
-            cobrada. El mozo puede cobrar la mesa desde el celu sin volver
-            al mostrador (estilo Toast Go). */}
-        {venta && venta.estado !== 'cobrada' && venta.estado !== 'anulada' && Number(venta.total) > 0 && (
+        {/* Cobrar — solo si el rol puede cobrar (el mozo/camarero NO cobra;
+            eso lo hace el cajero). Cajero/manager/admin sí ven el botón. */}
+        {puedeCobrar && venta && venta.estado !== 'cobrada' && venta.estado !== 'anulada' && Number(venta.total) > 0 && (
           <Button
             variant="default"
             size="lg"
@@ -642,6 +658,16 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
         />
       )}
 
+      {/* Aclaración de un item en hold (antes de mandar a cocina). */}
+      {notaItem && (
+        <ItemNotaDialog
+          item={notaItem}
+          nombre={catalogo.find((c) => c.id === notaItem.item_id)?.nombre ?? `Item #${notaItem.item_id}`}
+          onClose={() => setNotaItem(null)}
+          onSaved={() => { setNotaItem(null); reload(); }}
+        />
+      )}
+
       {/* PaymentDialog — Toast Go style: mozo cobra desde la mesa.
           Multi-pago (efectivo + tarjeta), vuelto, propina. Igual que el
           PaymentDialog del POS normal — reusamos el componente. */}
@@ -661,6 +687,49 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Componente: ItemNotaDialog — aclaración por item (sin sal, punto, etc.)
+// ────────────────────────────────────────────────────────────────────────
+
+function ItemNotaDialog({ item, nombre, onClose, onSaved }: {
+  item: VentaPosItem;
+  nombre: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState(item.notas ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function guardar() {
+    setSaving(true);
+    const { error } = await modificarItem(item.id, { notas: draft.trim() || null });
+    setSaving(false);
+    if (error) { toast.error(error); return; }
+    toast.success('Aclaración guardada');
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center p-3" onClick={onClose}>
+      <div className="w-full max-w-sm bg-card rounded-xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="text-sm font-semibold">Aclaración · {nombre}</div>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          autoFocus
+          rows={3}
+          placeholder="Ej: sin sal, punto jugoso, sin cebolla…"
+          className="w-full text-sm rounded-md border border-input bg-background p-2 resize-none"
+        />
+        <div className="flex gap-2 justify-end">
+          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button variant="success" onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+        </div>
+      </div>
     </div>
   );
 }

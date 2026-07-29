@@ -28,6 +28,12 @@ export function DefaultModeRedirect() {
   // Sin empleado: dejar que PinGate muestre el PinPad
   if (!empleado) return null;
 
+  // Mozo/camarero: su única vista es el handheld (tomar pedido en la mesa).
+  // No pasa por los modos normales del POS.
+  if ((empleado.rol_pos as string) === 'mozo') {
+    return <Navigate to="/pos/handheld" replace />;
+  }
+
   const preferred: PosModo = DEFAULT_MODE_BY_ROL[empleado.rol_pos] ?? 'salon';
 
   // Si el modo preferido NO está habilitado en este local, usar el primero
