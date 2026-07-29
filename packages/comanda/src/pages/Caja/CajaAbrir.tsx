@@ -4,8 +4,9 @@ import { DoorOpen } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
-import { abrirTurno, getTurnoAbierto } from '../../services/turnosCajaService';
+import { abrirTurno, getTurnoAbierto, getUltimoCierreEfectivo } from '../../services/turnosCajaService';
 import { MoneyInput } from '../../components/MoneyInput';
+import { formatARS } from '../../lib/format';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -18,6 +19,7 @@ export function CajaAbrir() {
   const navigate = useNavigate();
 
   const [montoInicial, setMontoInicial] = useState(0);
+  const [cierreAnterior, setCierreAnterior] = useState<number | null>(null);
   const [notas, setNotas] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -25,10 +27,14 @@ export function CajaAbrir() {
 
   useEffect(() => {
     if (localId === null) return;
-    getTurnoAbierto(localId).then((res) => {
-      if (res.data) navigate('/caja', { replace: true });
+    void (async () => {
+      const res = await getTurnoAbierto(localId);
+      if (res.data) { navigate('/caja', { replace: true }); return; }
+      // Traer el efectivo del cierre anterior y pre-cargarlo (editable).
+      const prev = await getUltimoCierreEfectivo(localId);
+      if (prev != null) { setCierreAnterior(prev); setMontoInicial(prev); }
       setChequeando(false);
-    });
+    })();
   }, [localId, navigate]);
 
   if (chequeando) return <CenteredCard>Verificando turno…</CenteredCard>;
@@ -73,6 +79,11 @@ export function CajaAbrir() {
             <div className="space-y-2">
               <Label>Monto inicial (efectivo en caja)</Label>
               <MoneyInput value={montoInicial} onChange={setMontoInicial} autoFocus />
+              {cierreAnterior != null && (
+                <p className="text-xs text-muted-foreground">
+                  Traído del cierre anterior: {formatARS(cierreAnterior)}. Podés ajustarlo si sacaste o agregaste efectivo.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

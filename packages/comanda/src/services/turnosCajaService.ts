@@ -13,6 +13,21 @@ export async function getTurnoAbierto(localId: number): Promise<{ data: TurnoCaj
   return { data: (data?.[0] as TurnoCaja | undefined) ?? null, error: null };
 }
 
+// Efectivo declarado en el cierre del último turno cerrado del local. Se usa
+// para pre-cargar la apertura del turno siguiente (el efectivo queda en la caja).
+export async function getUltimoCierreEfectivo(localId: number): Promise<number | null> {
+  const { data, error } = await db
+    .from('turnos_caja')
+    .select('monto_final_declarado')
+    .eq('local_id', localId)
+    .eq('estado', 'cerrado')
+    .order('cerrado_at', { ascending: false })
+    .limit(1);
+  if (error) return null;
+  const row = data?.[0] as { monto_final_declarado: number | null } | undefined;
+  return row && row.monto_final_declarado != null ? Number(row.monto_final_declarado) : null;
+}
+
 export async function abrirTurno(
   localId: number,
   cajeroId: string,
