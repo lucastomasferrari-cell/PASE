@@ -34,6 +34,9 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
   const { empleado } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const [monto, setMonto] = useState(0);
+  // Solo para ajuste: dirección. false = suma efectivo, true = resta (ajuste hacia
+  // abajo, puede dejar la caja en negativo). La RPC ya acepta monto negativo.
+  const [restar, setRestar] = useState(false);
   const [metodo, setMetodo] = useState('efectivo');
   const [motivo, setMotivo] = useState('');
   const [showOverride, setShowOverride] = useState(false);
@@ -46,7 +49,7 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
   const autoriz = useAutorizaciones(localId);
 
   useEffect(() => {
-    if (open) { setMonto(0); setMotivo(''); setMetodo('efectivo'); setShowOverride(false); setSaving(false); }
+    if (open) { setMonto(0); setRestar(false); setMotivo(''); setMetodo('efectivo'); setShowOverride(false); setSaving(false); }
   }, [open]);
 
   // Pide PIN de manager SOLO si la config del local lo activó y el monto
@@ -64,9 +67,11 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
       toast.error(`Motivo: mínimo ${motivoMinimo} caracteres`);
       return;
     }
+    // Ajuste con dirección "restar" → monto negativo (baja el efectivo del turno).
+    const montoEfectivo = tipo === 'ajuste' && restar ? -monto : monto;
     setSaving(true);
     const { error } = await registrarMovimiento(
-      localId, empleado.id, tipo, monto, metodo, motivo.trim(),
+      localId, empleado.id, tipo, montoEfectivo, metodo, motivo.trim(),
       idempotencyKey, managerId ?? null,
     );
     setSaving(false);
@@ -106,6 +111,25 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
             <Label>Monto</Label>
             <MoneyInput value={monto} onChange={setMonto} autoFocus />
           </div>
+
+          {tipo === 'ajuste' && (
+            <div className="space-y-2">
+              <Label>Dirección</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setRestar(false)}
+                        className={`h-11 rounded-md border text-sm font-medium transition-colors ${!restar ? 'border-success bg-success/10 text-success' : 'border-border text-muted-foreground hover:bg-accent'}`}>
+                  ▲ Sumar efectivo
+                </button>
+                <button type="button" onClick={() => setRestar(true)}
+                        className={`h-11 rounded-md border text-sm font-medium transition-colors ${restar ? 'border-destructive bg-destructive/10 text-destructive' : 'border-border text-muted-foreground hover:bg-accent'}`}>
+                  ▼ Restar efectivo
+                </button>
+              </div>
+              {restar && (
+                <p className="text-xs text-muted-foreground">Baja el efectivo del turno {formatARS(monto)}. Puede dejar la caja en negativo.</p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Método</Label>
