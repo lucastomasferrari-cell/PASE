@@ -71,6 +71,9 @@ export interface AfipFacturaInput {
   doc_tipo?: AfipDocTipo;
   doc_nro?: string;
   cliente_razon_social?: string;
+  /** Condición IVA del receptor (RG 5616). Códigos AFIP: 1=RI, 4=Exento,
+   *  5=Consumidor Final, 6=Monotributo. Factura A NO admite 5. */
+  condicion_iva_receptor?: number;
   request_uuid: string; // UUID estable para idempotency
   /** Para NC/ND: referencia a la factura original. AFIP rechaza si falta. */
   cbtes_asoc?: AfipCbteAsoc[];

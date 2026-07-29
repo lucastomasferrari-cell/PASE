@@ -27,6 +27,7 @@ import { getCredencialesAFIP } from '@/lib/afip/service';
 import { imprimirTicket } from '@/services/printerService';
 import { listVentasItems } from '@/services/ventasService';
 import { listLocalesAccesibles } from '@/services/configService';
+import { listItems } from '@/services/itemsService';
 import type { AfipCredencialesPublic, AfipFacturaResult, AfipTipoComprobante, AfipDocTipo } from '@/lib/afip/types';
 import type { VentaPos } from '@/types/database';
 import { formatARS } from '@/lib/format';
@@ -48,6 +49,23 @@ interface DatosCliente {
   doc_tipo: AfipDocTipo;
   doc_nro: string;
   cliente_razon_social: string;
+  // Condición IVA del receptor (RG 5616, obligatoria). Códigos AFIP:
+  // 1=Resp. Inscripto, 4=Exento, 5=Consumidor Final, 6=Monotributo.
+  condicion_iva: number;
+}
+
+// Opciones de condición IVA del cliente según la clase de comprobante.
+// Factura A → el receptor DEBE ser un contribuyente inscripto (RI/Monotributo);
+// Consumidor Final (5) es INVÁLIDO para A (error AFIP 10243).
+const CONDICIONES_IVA = [
+  { id: 1, label: 'Responsable Inscripto' },
+  { id: 6, label: 'Monotributo' },
+  { id: 4, label: 'Exento' },
+  { id: 5, label: 'Consumidor Final' },
+];
+// Default de condición IVA según el tipo de comprobante.
+function condicionDefault(tipo: AfipTipoComprobante): number {
+  return tipo === 1 ? 1 : 5; // A → Resp. Inscripto ; B/C → Consumidor Final
 }
 
 export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, facturaExistente }: Props) {
@@ -59,6 +77,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
     doc_tipo: 80, // CUIT (default para "cliente con datos")
     doc_nro: '',
     cliente_razon_social: venta.cliente_nombre ?? '',
+    condicion_iva: 5, // se ajusta al elegir tipo (A→RI, B→CF)
   });
   const [emitting, setEmitting] = useState(false);
   const emittingRef = useRef(false);
@@ -126,6 +145,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
     docTipo: AfipDocTipo;
     docNro?: string;
     razon?: string;
+    condicionIva?: number;
   }) {
     if (emittingRef.current) return;
     if (!creds?.activa) { toast.error('AFIP no está activo en este tenant'); return; }
@@ -149,6 +169,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
         doc_tipo: opts.docTipo,
         doc_nro: opts.docNro || undefined,
         cliente_razon_social: opts.razon || undefined,
+        condicion_iva_receptor: opts.condicionIva ?? condicionDefault(opts.tipo),
         request_uuid: crypto.randomUUID(),
       });
       setResultado(result);
@@ -174,11 +195,13 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
     if (!resultado || !creds || !emitido) return;
     setImprimiendo(true);
     try {
-      const [itemsR, locales] = await Promise.all([
+      const [itemsR, locales, catR] = await Promise.all([
         listVentasItems(venta.id),
         listLocalesAccesibles(),
+        listItems({ tenantId: creds.tenant_id, localId: venta.local_id }),
       ]);
       const local = locales.data.find((l) => l.id === venta.local_id);
+      const catalogo = catR.data;
       const pagos: Array<{ metodo: string; monto: number; cuotas?: number | null }> = [
         { metodo: 'Pagado', monto: total },
       ];
@@ -189,7 +212,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
         titulo: local?.nombre ?? 'COMANDA',
         cuit_emisor: creds.cuit,
         items: itemsR.data.map((it) => ({
-          nombre: 'Item ' + it.item_id,
+          nombre: it.nombre_display ?? catalogo.find((c) => c.id === it.item_id)?.nombre ?? `Item #${it.item_id}`,
           cantidad: Number(it.cantidad),
           subtotal: Number(it.subtotal),
         })),
@@ -299,7 +322,10 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
               {esRI && (
                 <div className="space-y-1.5">
                   <Label>Tipo factura</Label>
-                  <Select value={String(form.tipo_comprobante)} onValueChange={(v) => setForm((f) => ({ ...f, tipo_comprobante: Number(v) as AfipTipoComprobante }))}>
+                  <Select value={String(form.tipo_comprobante)} onValueChange={(v) => {
+                    const t = Number(v) as AfipTipoComprobante;
+                    setForm((f) => ({ ...f, tipo_comprobante: t, condicion_iva: condicionDefault(t) }));
+                  }}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">Factura A</SelectItem>
@@ -341,6 +367,22 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
                 className="h-10"
               />
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Condición IVA del cliente</Label>
+              <Select value={String(form.condicion_iva)} onValueChange={(v) => setForm((f) => ({ ...f, condicion_iva: Number(v) }))}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CONDICIONES_IVA
+                    // Para Factura A el receptor NO puede ser Consumidor Final.
+                    .filter((o) => !(form.tipo_comprobante === 1 && o.id === 5))
+                    .map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {form.tipo_comprobante === 1 && (
+                <p className="text-xs text-muted-foreground">Una Factura A requiere un cliente inscripto (RI o Monotributo).</p>
+              )}
+            </div>
           </div>
 
           <DialogFooter className="gap-2">
@@ -353,6 +395,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
                 docTipo: form.doc_tipo,
                 docNro: form.doc_nro,
                 razon: form.cliente_razon_social,
+                condicionIva: form.condicion_iva,
               })}
               disabled={emitting}
             >
@@ -392,7 +435,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose, factur
 
             <button
               type="button"
-              onClick={() => emitir({ tipo: tipoDefault, ivaPct: ivaPctDefault, docTipo: 99 })}
+              onClick={() => emitir({ tipo: tipoDefault, ivaPct: ivaPctDefault, docTipo: 99, condicionIva: 5 })}
               disabled={emitting}
               className="w-full flex items-center gap-3 rounded-xl bg-primary text-primary-foreground p-4 text-left hover:opacity-95 disabled:opacity-60 transition"
             >
