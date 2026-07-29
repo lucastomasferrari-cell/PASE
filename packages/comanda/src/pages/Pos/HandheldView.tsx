@@ -6,7 +6,8 @@ import { useAuth } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listMesasConVentas, type MesaConVenta } from '@/services/mesasService';
-import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta, modificarItem } from '@/services/ventasService';
+import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta } from '@/services/ventasService';
+import { ItemNotaDialog } from '@/components/dialogs/ItemNotaDialog';
 import { resolveCanalPorModo } from '@/services/canalesService';
 import { listItems, type ItemConGrupo } from '@/services/itemsService';
 import { filtrarCatalogoPorCanal } from './hooks/useVentaData';
@@ -693,49 +694,6 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, puedeCobrar, onVol
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────
-// Componente: ItemNotaDialog — aclaración por item (sin sal, punto, etc.)
-// ────────────────────────────────────────────────────────────────────────
-
-function ItemNotaDialog({ item, nombre, onClose, onSaved }: {
-  item: VentaPosItem;
-  nombre: string;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [draft, setDraft] = useState(item.notas ?? '');
-  const [saving, setSaving] = useState(false);
-
-  async function guardar() {
-    setSaving(true);
-    const { error } = await modificarItem(item.id, { notas: draft.trim() || null });
-    setSaving(false);
-    if (error) { toast.error(error); return; }
-    toast.success('Aclaración guardada');
-    onSaved();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center p-3" onClick={onClose}>
-      <div className="w-full max-w-sm bg-card rounded-xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
-        <div className="text-sm font-semibold">Aclaración · {nombre}</div>
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          autoFocus
-          rows={3}
-          placeholder="Ej: sin sal, punto jugoso, sin cebolla…"
-          className="w-full text-sm rounded-md border border-input bg-background p-2 resize-none"
-        />
-        <div className="flex gap-2 justify-end">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button variant="success" onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
-        </div>
-      </div>
     </div>
   );
 }

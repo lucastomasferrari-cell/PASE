@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Trash2, PauseCircle, Play, CloudUpload } from 'lucide-react';
+import { Send, Trash2, PauseCircle, Play, CloudUpload, StickyNote } from 'lucide-react';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
 import type { VentaPosItem } from '../../../types/database';
@@ -26,6 +26,7 @@ interface CheckRowProps {
   onMandarSolo: () => void;
   onToggleStay: () => void;
   onEditar: () => void;
+  onEditNota: () => void;
   editable: boolean;
   usarCursos?: boolean;
   flashed?: boolean;
@@ -39,7 +40,7 @@ interface CheckRowProps {
 // scroll; el envío global vive en el footer (Marchar / Hold / Cobrar).
 function CheckRow({
   item, catalogo, onQty, onRemove, onRepetir, onAnular,
-  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar,
+  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar, onEditNota,
   editable, usarCursos = true, flashed, selected, onSelect,
 }: CheckRowProps) {
   const it = catalogo.find((c) => c.id === item.item_id);
@@ -116,6 +117,11 @@ function CheckRow({
                 className="h-7 w-7 flex items-center justify-center rounded text-destructive hover:bg-destructive/10">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
+              <button type="button" onClick={onEditNota} title="Aclaración (sin sal, punto, etc.)"
+                className={cn(btnCls, 'inline-flex items-center gap-1',
+                  item.notas && 'text-primary border-primary/40')}>
+                <StickyNote className="h-3 w-3" /> {item.notas ? 'Aclaración' : 'Nota'}
+              </button>
               <div className="flex-1" />
               {usarCursos && (
                 <button type="button" onClick={onMandarSolo} title="Enviar solo este item a cocina"
@@ -169,6 +175,7 @@ export interface VentaListaPanelProps {
   onMandarItemSolo: (item: VentaPosItem) => void;
   onMandarCurso: (curso: number) => void;
   onEditarItem: (item: VentaPosItem) => void;
+  onEditNotaItem: (item: VentaPosItem) => void;
 }
 
 export const VentaListaPanel = React.memo(function VentaListaPanel({
@@ -189,6 +196,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
   onMandarItemSolo,
   onMandarCurso,
   onEditarItem,
+  onEditNotaItem,
 }: VentaListaPanelProps) {
   const totalItems = Array.from(itemsPorCurso.values()).reduce((s, a) => s + a.length, 0);
   // Item seleccionado (patrón Toast): solo el seleccionado muestra sus acciones.
@@ -251,6 +259,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                     onMandarSolo={() => onMandarItemSolo(it)}
                     onToggleStay={() => onToggleStay(it)}
                     onEditar={() => onEditarItem(it)}
+                    onEditNota={() => onEditNotaItem(it)}
                     editable={editable}
                     usarCursos={usarCursos}
                     flashed={lastAddedRowId === it.id}

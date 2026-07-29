@@ -18,6 +18,7 @@ import { getCredencialesAFIP } from '@/lib/afip/service';
 import { getFacturaActivaDeVenta, anularFacturaConNC, type FacturaVentaRow } from '@/lib/afip/client';
 import type { AfipDocTipo } from '@/lib/afip/types';
 import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
+import { ItemNotaDialog } from '@/components/dialogs/ItemNotaDialog';
 import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
 import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
@@ -160,6 +161,7 @@ export function VentaScreen() {
 
   // Editor inline de nombre/precio (doble click en la lista)
   const [editandoItem, setEditandoItem] = useState<VentaPosItem | null>(null);
+  const [notaItem, setNotaItem] = useState<VentaPosItem | null>(null);
   const [editNombreDraft, setEditNombreDraft] = useState('');
   const [editPrecioDraft, setEditPrecioDraft] = useState(0);
 
@@ -759,6 +761,7 @@ export function VentaScreen() {
             setEditNombreDraft(it.nombre_display ?? '');
             setEditPrecioDraft(Number(it.precio_unitario));
           }}
+          onEditNotaItem={(it) => { if (pedirNcSiFacturada()) return; setNotaItem(it); }}
         />
 
         <VentaFooter
@@ -784,6 +787,15 @@ export function VentaScreen() {
             await addItem(pendingModifiers, mods, notas, cantidad);
             setPendingModifiers(null);
           }}
+        />
+      )}
+
+      {notaItem && (
+        <ItemNotaDialog
+          item={notaItem}
+          nombre={notaItem.nombre_display ?? catalogo.find((c) => c.id === notaItem.item_id)?.nombre ?? `Item #${notaItem.item_id}`}
+          onClose={() => setNotaItem(null)}
+          onSaved={() => { setNotaItem(null); void reload(); }}
         />
       )}
 
