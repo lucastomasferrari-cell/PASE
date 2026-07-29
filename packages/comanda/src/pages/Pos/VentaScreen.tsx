@@ -906,6 +906,7 @@ export function VentaScreen() {
           ventaId={ventaId}
           subtotal={Number(venta.subtotal)}
           total={Number(venta.total)}
+          descuentoActual={Number(venta.descuento_total)}
           onAplicado={reload}
         />
       )}

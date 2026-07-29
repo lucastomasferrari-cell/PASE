@@ -636,6 +636,7 @@ export function PedidoDetalle() {
         ventaId={venta.id}
         subtotal={Number(venta.subtotal)}
         total={Number(venta.total)}
+        descuentoActual={Number(venta.descuento_total)}
         onAplicado={() => { setDiscountOpen(false); reload(); }}
       />
 

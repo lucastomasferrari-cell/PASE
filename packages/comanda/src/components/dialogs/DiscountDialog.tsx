@@ -25,12 +25,14 @@ interface Props {
   ventaId: number;
   subtotal: number;
   total: number;
+  /** Descuento actualmente aplicado a la venta (para mostrar "Quitar"). */
+  descuentoActual?: number;
   onAplicado: () => void;
 }
 
 const MOTIVO_MIN = 5;
 
-export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, onAplicado }: Props) {
+export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, descuentoActual = 0, onAplicado }: Props) {
   const [tipo, setTipo] = useState<DescuentoTipo>('porcentaje');
   const [valor, setValor] = useState<number>(10);
   const [motivo, setMotivo] = useState('');
@@ -67,6 +69,22 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
     setSaving(false);
     if (error) { toast.error(error); return; }
     toast.success(`Descuento aplicado: −${formatARS(monto)}`);
+    onAplicado();
+    onOpenChange(false);
+  }
+
+  // Quitar el descuento aplicado: aplica un descuento de 0 (la RPC lo acepta y
+  // limpia descuento_total + descuento_efectivo_pct). No requiere manager (0 no
+  // supera ningún umbral).
+  async function quitar() {
+    setSaving(true);
+    const { error } = await aplicarDescuento(
+      { ventaId, tipo: 'monto', valor: 0, motivo: 'Descuento quitado', idempotencyKey },
+      subtotal,
+    );
+    setSaving(false);
+    if (error) { toast.error(error); return; }
+    toast.success('Descuento quitado');
     onAplicado();
     onOpenChange(false);
   }
@@ -158,6 +176,11 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
           </div>
 
           <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
+            {descuentoActual > 0 && (
+              <Button variant="ghost" className="text-destructive hover:text-destructive mr-auto" onClick={quitar} disabled={saving}>
+                Quitar descuento (−{formatARS(descuentoActual)})
+              </Button>
+            )}
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancelar
             </Button>
