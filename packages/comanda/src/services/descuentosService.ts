@@ -59,6 +59,23 @@ export async function aplicarDescuento(
   return { error: error?.message ?? null };
 }
 
+// Quitar el descuento aplicado. La RPC fn_aplicar_descuento_comanda con monto 0
+// resetea descuento_total + descuento_efectivo_pct. NO usa aplicarDescuento
+// (que bloquea monto<=0). Monto 0 no supera ningún umbral → no pide manager.
+export async function quitarDescuento(
+  ventaId: number,
+  idempotencyKey?: string,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_aplicar_descuento_comanda', {
+    p_venta_id: ventaId,
+    p_monto: 0,
+    p_motivo: 'Descuento quitado',
+    p_manager_id: null,
+    p_idempotency_key: idempotencyKey ?? null,
+  });
+  return { error: error?.message ?? null };
+}
+
 // Descuento efectivo con auto-recalc: guarda el % en la venta, y cada vez
 // que cambian los items la RPC de recalc de totales lo recomputa. NO usa
 // el flujo de aplicarDescuento (que guarda monto fijo).

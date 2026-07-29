@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  type DescuentoTipo, requiereOverride, calcularMontoDescuento, aplicarDescuento,
+  type DescuentoTipo, requiereOverride, calcularMontoDescuento, aplicarDescuento, quitarDescuento,
 } from '@/services/descuentosService';
 import { useIdempotencyKey } from '@/lib/idempotency';
 import { useAuth } from '@/lib/auth';
@@ -78,10 +78,7 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, d
   // supera ningún umbral).
   async function quitar() {
     setSaving(true);
-    const { error } = await aplicarDescuento(
-      { ventaId, tipo: 'monto', valor: 0, motivo: 'Descuento quitado', idempotencyKey },
-      subtotal,
-    );
+    const { error } = await quitarDescuento(ventaId, idempotencyKey);
     setSaving(false);
     if (error) { toast.error(error); return; }
     toast.success('Descuento quitado');
