@@ -39,6 +39,11 @@ interface Form {
   anticipacion_max_dias: string;
   duracion_estimada_min: string;
   slot_min: string;
+  // Turnos fijos (opcional). Si usar_turnos → se ofrecen SOLO estas horas
+  // (en vez del intervalo), con un cupo de personas por turno.
+  usar_turnos: boolean;
+  turnos: string[];
+  cupo_por_turno: string;
   pacing_max: string;
   notas_visibles: string;
   horarios: { dia: number; activo: boolean; franjas: Franja[] }[];
@@ -87,6 +92,11 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       anticipacion_max_dias: String(s.reservas_anticipacion_max_dias ?? 30),
       duracion_estimada_min: String(s.reservas_duracion_estimada_min ?? 90),
       slot_min: String(s.reservas_slot_min ?? 30),
+      usar_turnos: Array.isArray(s.reservas_turnos) && (s.reservas_turnos as unknown[]).length > 0,
+      turnos: Array.isArray(s.reservas_turnos) && (s.reservas_turnos as unknown[]).length > 0
+        ? (s.reservas_turnos as string[])
+        : ['20:00', '22:30'],
+      cupo_por_turno: s.reservas_cupo_por_turno != null ? String(s.reservas_cupo_por_turno) : '',
       pacing_max: s.reservas_pacing_max_por_franja != null ? String(s.reservas_pacing_max_por_franja) : '',
       notas_visibles: (s.reservas_notas_visibles_cliente as string | null) ?? '',
       horarios: DIAS.map(({ dia }) => {
@@ -128,6 +138,12 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         reservas_anticipacion_max_dias: Number(form.anticipacion_max_dias) || 30,
         reservas_duracion_estimada_min: Number(form.duracion_estimada_min) || 90,
         reservas_slot_min: Number(form.slot_min) || 30,
+        // Turnos fijos: si está activo, guardamos las horas válidas ordenadas;
+        // si no, [] (modo intervalo). El cupo solo aplica con turnos.
+        reservas_turnos: form.usar_turnos
+          ? Array.from(new Set(form.turnos.filter((t) => /^\d{1,2}:\d{2}$/.test(t)))).sort()
+          : [],
+        reservas_cupo_por_turno: form.usar_turnos && form.cupo_por_turno ? Number(form.cupo_por_turno) : null,
         reservas_pacing_max_por_franja: form.pacing_max ? Number(form.pacing_max) : null,
         reservas_notas_visibles_cliente: form.notas_visibles.trim() || null,
         reservas_notif_confirmacion: form.notif_confirmacion,
@@ -172,6 +188,15 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
   }
   function setTpl(key: 'tpl_confirmacion' | 'tpl_recordatorio' | 'tpl_resena', patch: Partial<MailTpl>) {
     setForm((f) => f ? { ...f, [key]: { ...f[key], ...patch } } : f);
+  }
+  function setTurno(idx: number, val: string) {
+    setForm((f) => f ? { ...f, turnos: f.turnos.map((t, i) => i === idx ? val : t) } : f);
+  }
+  function addTurno() {
+    setForm((f) => f ? { ...f, turnos: [...f.turnos, '20:00'] } : f);
+  }
+  function removeTurno(idx: number) {
+    setForm((f) => f ? { ...f, turnos: f.turnos.filter((_, i) => i !== idx) } : f);
   }
 
   if (cargando || !form) {
@@ -220,6 +245,33 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
             <p className="text-xs text-ink-muted mt-1">Cada cuánto se ofrece un turno. Ej: 120 = turnos de 2h (20:00, 22:00); 30 = cada media hora.</p>
           </Field>
         </div>
+      </Card>
+
+      {/* Turnos fijos (opcional) */}
+      <Card icon={<Clock className="h-4 w-4 text-brand-500" />} title="Turnos fijos (opcional)">
+        <Row label="Usar turnos fijos" desc="En vez de un horario cada X minutos, ofrecés solo las horas exactas que elijas (ej. 20:00 y 22:30).">
+          <Toggle checked={form.usar_turnos} onChange={(v) => set({ usar_turnos: v })} />
+        </Row>
+        {form.usar_turnos && (
+          <div className="space-y-4 pt-1">
+            <Field label="Horarios de los turnos">
+              <div className="flex flex-wrap items-center gap-2">
+                {form.turnos.map((t, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <input type="time" value={t} onChange={(e) => setTurno(i, e.target.value)} className="w-28 rounded-lg border border-ink/15 px-2 py-1.5 text-sm" />
+                    <button type="button" onClick={() => removeTurno(i)} className="text-ink-muted hover:text-red-500 text-sm px-1" title="Quitar turno">✕</button>
+                  </div>
+                ))}
+                <button type="button" onClick={addTurno} className="text-xs text-brand-600 hover:text-brand-700 rounded-lg border border-dashed border-ink/25 px-3 py-1.5">+ turno</button>
+              </div>
+              <p className="text-xs text-ink-muted mt-1.5">Se ofrecen estas horas en todos los días abiertos (dentro del horario del salón). Con turnos fijos se ignora el intervalo de arriba.</p>
+            </Field>
+            <Field label="Cupo por turno (personas)">
+              <input type="number" min={1} className="w-40 rounded-lg border border-ink/15 px-3 py-2 text-sm" value={form.cupo_por_turno} placeholder="ej. 40" onChange={(e) => set({ cupo_por_turno: e.target.value })} />
+              <p className="text-xs text-ink-muted mt-1">Personas máximas por turno. Cuando se llena, ese turno deja de ofrecerse.</p>
+            </Field>
+          </div>
+        )}
       </Card>
 
       {/* Asignación de mesas */}

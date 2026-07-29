@@ -272,6 +272,7 @@ const MOTIVOS_RESERVA: Record<string, string> = {
   CERRADO_ESE_DIA: 'El local está cerrado ese día.',
   FUERA_DE_HORARIO: 'Ese horario está fuera del horario de atención.',
   SIN_CUPO: 'No hay lugar en ese horario. Probá otro.',
+  CUPO_TURNO_COMPLETO: 'Ese turno se llenó. Probá otro horario.',
   TELEFONO_REQUERIDO: 'El teléfono es obligatorio.',
   NOMBRE_REQUERIDO: 'Ingresá tu nombre.',
   DEMASIADAS_RESERVAS: 'Ya tenés varias reservas activas con ese teléfono.',
