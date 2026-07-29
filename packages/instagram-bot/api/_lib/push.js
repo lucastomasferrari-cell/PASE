@@ -4,8 +4,10 @@
 // todas las suscripciones de admin_push_subscriptions del tenant del bot
 // (filtradas por usuarios con rol superadmin).
 //
-// Cooldown: si ya se envió push de esa conversación en los últimos 5 minutos,
-// skip — evita spam si el cliente manda 10 mensajes seguidos.
+// Una notificación por CADA mensaje entrante del cliente (como cualquier app
+// de mensajería), sin cooldown ni tope. El tag es único por mensaje (usa el
+// `mid` de Meta) → las notificaciones se apilan en el celu en vez de que la
+// última reemplace a la anterior.
 //
 // Env vars requeridas en Vercel del bot:
 //   - VAPID_PUBLIC_KEY
@@ -19,8 +21,6 @@ import webpush from 'web-push';
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@pase.local';
-
-const COOLDOWN_MS = 5 * 60 * 1000; // 5 min — anti-spam por conversación
 
 let vapidConfigured = false;
 function ensureVapid() {
@@ -40,26 +40,15 @@ function ensureVapid() {
  * @param {object} args.cliente — { ig_username, nombre opcional }
  * @param {string} args.texto — texto del mensaje (truncado)
  * @param {object} args.conv — fila ig_conversaciones
+ * @param {string} [args.mid] — id del mensaje de Meta (para tag único por mensaje)
  * @returns {Promise<{sent: number, skipped: number}>}
  */
-export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
+export async function notificarDMNuevo({ db, cfg, cliente, texto, conv, mid }) {
   if (!ensureVapid()) {
     return { sent: 0, skipped: 0, reason: 'vapid_no_config' };
   }
 
-  // Cooldown: si esta conversación notificó en los últimos 5 min, skip.
-  const cooldownAt = new Date(Date.now() - COOLDOWN_MS).toISOString();
-  const { data: lastNotif } = await db.from('ig_eventos')
-    .select('id, created_at')
-    .eq('tipo', 'push_enviado')
-    .eq('conversacion_id', conv.id)
-    .gte('created_at', cooldownAt)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (lastNotif && lastNotif.length > 0) {
-    return { sent: 0, skipped: 1, reason: 'cooldown' };
-  }
+  // Sin cooldown ni tope: cada mensaje del cliente dispara su propia notif.
 
   // Buscar suscripciones de cualquier user del tenant del bot.
   // Ajustado 22-may noche por Lucas: sin filtro de rol. Si el user se suscribió
@@ -89,7 +78,9 @@ export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
     body: `💬 ${textoTruncado}`,
     url: `/mensajeria?conv=${conv.id}`,
     priority: 'normal',
-    tag: `ig-conv-${conv.id}`, // mismo tag → reemplaza notif anterior
+    // Tag único por mensaje → cada notif se apila (no reemplaza a la anterior),
+    // como WhatsApp. Fallback a conv.id si por algún motivo no vino el mid.
+    tag: mid ? `ig-msg-${mid}` : `ig-conv-${conv.id}`,
   });
 
   // Filtrar subs cuyo dueño desactivó `ig_dm_new` en /ajustes/notificaciones.
@@ -132,13 +123,13 @@ export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
     await db.from('admin_push_subscriptions').delete().in('endpoint', toDelete);
   }
 
-  // Log para idempotency del cooldown
+  // Log de auditoría de cada push enviado (ya no gobierna cooldown).
   if (sent > 0) {
     await db.from('ig_eventos').insert({
       tenant_id: cfg.tenant_id,
       conversacion_id: conv.id,
       tipo: 'push_enviado',
-      payload: { sent, failed, deleted: toDelete.length, skipped_by_pref: skippedByPref },
+      payload: { sent, failed, deleted: toDelete.length, skipped_by_pref: skippedByPref, mid: mid ?? null },
     });
   }
 

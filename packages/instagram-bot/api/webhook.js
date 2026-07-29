@@ -348,9 +348,10 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   }
 
   // Push notification a superadmins suscriptos (Lucas en celu).
-  // Cooldown de 5min por conversación — anti-spam.
+  // Una notificación POR cada mensaje del cliente (como WhatsApp), sin tope.
+  // El `mid` hace único el tag → las notifs se apilan en vez de reemplazarse.
   // No bloquea el flujo del bot si falla.
-  notificarDMNuevo({ db, cfg, cliente, texto, conv }).catch((e) => {
+  notificarDMNuevo({ db, cfg, cliente, texto, conv, mid }).catch((e) => {
     console.warn('[webhook] push notif falló (no crítico):', e?.message);
   });
 
