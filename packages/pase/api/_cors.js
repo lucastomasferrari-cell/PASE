@@ -27,6 +27,15 @@ const ALLOWED_ORIGINS = new Set([
   'https://mesa-orpin.vercel.app',
   'https://reservas.comanda.lat',
   'https://accesos-eight.vercel.app',
+  // Dominio propio comanda.lat (migración 29-jul-2026). Se mantienen los
+  // *.vercel.app de arriba como alias vivos (webhooks/print-agent/OAuth viejos).
+  'https://comanda.lat',
+  'https://pos.comanda.lat',
+  'https://pase.comanda.lat',
+  'https://habitue.comanda.lat',
+  'https://accesos.comanda.lat',
+  'https://admin.comanda.lat',
+  'https://bot.comanda.lat',
   // Localhost para dev
   'http://localhost:5173',
   'http://localhost:5174',
