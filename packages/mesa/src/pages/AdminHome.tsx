@@ -10,8 +10,9 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid, Gift } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid, Gift, Download } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
+import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { AdminTablero } from './AdminTablero';
 import { AdminDiario } from './AdminDiario';
@@ -35,6 +36,7 @@ export function AdminHome() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [entrando, setEntrando] = useState(false);
+  const { canInstall, install, isInstalled } = useInstallPrompt();
 
   const [locales, setLocales] = useState<LocalPerfil[]>([]);
   const [sel, setSel] = useState<number | null>(null);  // settings_id
@@ -160,6 +162,15 @@ export function AdminHome() {
             {entrando ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
+        {canInstall && (
+          <button type="button" onClick={() => void install()}
+                  className="mt-4 w-full h-11 rounded-lg border border-[#75AADB]/40 text-[#5f97cc] text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-[#75AADB]/10 transition">
+            <Download className="h-4 w-4" /> Instalar MESA como app
+          </button>
+        )}
+        {isInstalled && (
+          <p className="mt-4 text-center text-xs text-[#6E8CAB]">✓ App instalada</p>
+        )}
       </LoginCard>
     );
   }
@@ -197,6 +208,12 @@ export function AdminHome() {
         </nav>
         <div className="border-t border-ink/10 p-3">
           <div className="px-2 pb-2 text-xs text-ink-muted truncate" title={sesion.email}>{sesion.email}</div>
+          {canInstall && (
+            <button onClick={() => void install()}
+                    className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-brand-600 hover:bg-brand-600/5">
+              <Download className="h-4 w-4" /> Instalar como app
+            </button>
+          )}
           <button onClick={() => void salir()}
                   className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-ink-soft hover:bg-ink/5">
             <LogOut className="h-4 w-4" /> Salir
