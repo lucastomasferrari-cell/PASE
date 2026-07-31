@@ -128,7 +128,7 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         .flatMap((h) => h.franjas
           .filter((f) => f.abre && f.cierra)
           .map((f) => ({ dia: h.dia, abre: f.abre, cierra: f.cierra })));
-      const { error } = await db().from('comanda_local_settings').update({
+      const { data: filas, error } = await db().from('comanda_local_settings').update({
         reservas_activas: form.activas,
         reservas_requiere_confirmacion: form.requiere_confirmacion,
         reservas_telefono_obligatorio: form.telefono_obligatorio,
@@ -158,8 +158,15 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
         reservas_tpl_resena_subtitulo: form.tpl_resena.subtitulo.trim() || null,
         reservas_horarios: reservasHorarios,
         updated_at: new Date().toISOString(),
-      }).eq('id', settingsId);
+      }).eq('id', settingsId).select('id');
       if (error) { toast.error('No se pudo guardar: ' + error.message); return; }
+      // Si la RLS bloquea el UPDATE (usuario sin permiso comanda.config.editar),
+      // Supabase NO devuelve error pero afecta 0 filas. Sin este chequeo, la UI
+      // decía "guardado" y al recargar estaba todo como antes (bug Carlitos).
+      if (!filas || filas.length === 0) {
+        toast.error('No se guardó: tu cuenta no tiene permiso para editar la configuración. Pedile al dueño que te habilite "Configuración" en Accesos.');
+        return;
+      }
       toast.success('Configuración guardada');
     } finally { setGuardando(false); }
   }

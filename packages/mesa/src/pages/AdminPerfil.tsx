@@ -79,7 +79,7 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
     setGuardando(true);
     try {
       const fotos = form.mesa_fotos.map((f) => f.trim()).filter(Boolean).slice(0, MAX_FOTOS);
-      const { error } = await db().from('comanda_local_settings').update({
+      const { data: filas, error } = await db().from('comanda_local_settings').update({
         direccion: form.direccion?.trim() || null,
         telefono: form.telefono?.trim() || null,
         instagram: form.instagram?.trim() || null,
@@ -87,8 +87,14 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
         mesa_descripcion: form.mesa_descripcion?.trim() || null,
         mesa_fotos: fotos,
         updated_at: new Date().toISOString(),
-      }).eq('id', form.settings_id);
+      }).eq('id', form.settings_id).select('id');
       if (error) { toast.error('No se pudo guardar: ' + error.message); return; }
+      // RLS: sin permiso comanda.config.editar el UPDATE afecta 0 filas sin dar
+      // error → mostrarlo honesto en vez de "guardado" (bug Carlitos, 30-jul).
+      if (!filas || filas.length === 0) {
+        toast.error('No se guardó: tu cuenta no tiene permiso para editar la configuración. Pedile al dueño que te habilite "Configuración" en Accesos.');
+        return;
+      }
       toast.success('Perfil guardado — la página pública ya lo muestra');
       onSaved({ ...form, mesa_fotos: fotos });
     } finally {
