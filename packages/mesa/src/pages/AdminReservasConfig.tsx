@@ -164,7 +164,7 @@ export function AdminReservasConfig({ settingsId }: { settingsId: number }) {
       // Supabase NO devuelve error pero afecta 0 filas. Sin este chequeo, la UI
       // decía "guardado" y al recargar estaba todo como antes (bug Carlitos).
       if (!filas || filas.length === 0) {
-        toast.error('No se guardó: tu cuenta no tiene permiso para editar la configuración. Pedile al dueño que te habilite "Configuración" en Accesos.');
+        toast.error('No se guardó: tu cuenta no tiene acceso a este local en MESA. Avisale al dueño.');
         return;
       }
       toast.success('Configuración guardada');

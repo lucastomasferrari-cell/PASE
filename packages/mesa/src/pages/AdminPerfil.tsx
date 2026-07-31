@@ -92,7 +92,7 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
       // RLS: sin permiso comanda.config.editar el UPDATE afecta 0 filas sin dar
       // error → mostrarlo honesto en vez de "guardado" (bug Carlitos, 30-jul).
       if (!filas || filas.length === 0) {
-        toast.error('No se guardó: tu cuenta no tiene permiso para editar la configuración. Pedile al dueño que te habilite "Configuración" en Accesos.');
+        toast.error('No se guardó: tu cuenta no tiene acceso a este local en MESA. Avisale al dueño.');
         return;
       }
       toast.success('Perfil guardado — la página pública ya lo muestra');
