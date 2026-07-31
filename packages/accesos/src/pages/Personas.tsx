@@ -460,10 +460,14 @@ function FichaUsuario({ usuario, locales, marcas, roles, onReset, onClose, onSav
                 ) : a.key === 'comanda' ? (
                   <PermisosComanda value={accesosApp['comanda']?.permisos ?? []} onToggle={togglePermisoComanda} />
                 ) : (
-                  <p className="text-[11px] text-dim-300 inline-flex items-center gap-1.5">
-                    <Lock className="h-3 w-3" />
-                    {op ? `Entra a ${a.nombre} sin PIN, con acceso completo.` : `Acceso completo a ${a.nombre}.`}
-                    {' '}Lo que puede hacer lo define su <strong className="font-medium">rol{selectedRole ? ` (${selectedRole.nombre})` : ''}</strong>.
+                  <p className="text-[11px] text-dim-300 inline-flex items-start gap-1.5">
+                    <Lock className="h-3 w-3 mt-0.5 shrink-0" />
+                    <span>
+                      {op ? `Entra a ${a.nombre} sin PIN. ` : ''}
+                      <strong className="font-medium">Todo o nada:</strong> con acceso puede usar toda la app
+                      {usaLoc ? ' en los locales que elijas arriba' : ''}. {a.nombre} no tiene permisos por
+                      función — el detalle por función solo existe en PASE y COMANDA.
+                    </span>
                   </p>
                 )}
               </div>
