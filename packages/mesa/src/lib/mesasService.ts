@@ -60,7 +60,13 @@ export async function estadoMesasLive(localId: number): Promise<{ data: MesaEsta
   return {
     data: (data ?? []).map((r: Record<string, unknown>) => ({
       mesa_id: Number(r['mesa_id']),
-      estado_live: r['estado_live'] as EstadoMesaLive,
+      // Desacoplado de COMANDA (01-ago, pedido de Lucas): el mapa de MESA NO
+      // debe pintar una mesa como ocupada solo porque COMANDA tiene un ticket
+      // abierto en ella (generaba confusión + tickets colgados trababan el mapa).
+      // Se ignora 'ocupada_ticket' → se muestra libre. El "live" real (COMANDA
+      // en vivo dentro de MESA) queda para más adelante: para reactivarlo, borrar
+      // este map y volver a `r['estado_live'] as EstadoMesaLive`.
+      estado_live: (r['estado_live'] === 'ocupada_ticket' ? 'libre' : r['estado_live']) as EstadoMesaLive,
       venta_id: r['venta_id'] != null ? Number(r['venta_id']) : null,
       venta_total: r['venta_total'] != null ? Number(r['venta_total']) : null,
       venta_abierta_at: (r['venta_abierta_at'] as string | null) ?? null,

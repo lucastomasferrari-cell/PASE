@@ -149,7 +149,9 @@ export function AdminMapa({ localId }: Props) {
     <div className="mt-6 space-y-3">
       {/* Leyenda + contadores + refresco */}
       <div className="flex items-center gap-4 text-xs text-ink-muted flex-wrap">
-        {(Object.entries(ESTADO_STYLE) as [EstadoMesaLive, (typeof ESTADO_STYLE)[EstadoMesaLive]][]).map(([k, s]) => (
+        {(Object.entries(ESTADO_STYLE) as [EstadoMesaLive, (typeof ESTADO_STYLE)[EstadoMesaLive]][])
+          .filter(([k]) => k !== 'ocupada_ticket') /* desacoplado de COMANDA (01-ago) */
+          .map(([k, s]) => (
           <span key={k} className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${s.dot}`} />
             {ESTADO_LABEL[k]} <span className="font-medium text-ink-soft">({conteo[k]})</span>
