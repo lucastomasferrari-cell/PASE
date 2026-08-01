@@ -21,17 +21,17 @@ const CANVAS_H = 540;
 const ESTADO_STYLE: Record<EstadoMesaLive, { border: string; bg: string; text: string; dot: string }> = {
   libre:            { border: 'border-emerald-400', bg: 'bg-emerald-50', text: 'text-emerald-800', dot: 'bg-emerald-400' },
   ocupada_ticket:   { border: 'border-red-400',     bg: 'bg-red-50',     text: 'text-red-800',     dot: 'bg-red-400'     },
-  ocupada_reserva:  { border: 'border-indigo-400',  bg: 'bg-indigo-50',  text: 'text-indigo-800',  dot: 'bg-indigo-400'  },
-  reservada_pronto: { border: 'border-amber-400',   bg: 'bg-amber-50',   text: 'text-amber-800',   dot: 'bg-amber-400'   },
-  reservada_hoy:    { border: 'border-sky-400',     bg: 'bg-sky-50',     text: 'text-sky-800',     dot: 'bg-sky-400'     },
+  ocupada_reserva:    { border: 'border-indigo-400', bg: 'bg-indigo-50', text: 'text-indigo-800', dot: 'bg-indigo-400' },
+  reservada_parcial:  { border: 'border-amber-400',  bg: 'bg-amber-50',  text: 'text-amber-800',  dot: 'bg-amber-400'  },
+  reservada_completa: { border: 'border-rose-400',   bg: 'bg-rose-50',   text: 'text-rose-800',   dot: 'bg-rose-400'   },
 };
 
 const ESTADO_LABEL: Record<EstadoMesaLive, string> = {
   libre: 'Libre',
   ocupada_ticket: 'Ocupada (ticket)',
-  ocupada_reserva: 'En mesa (reserva)',
-  reservada_pronto: 'Reservada pronto',
-  reservada_hoy: 'Reservada hoy',
+  ocupada_reserva: 'En mesa',
+  reservada_parcial: 'Parcial (1 turno)',
+  reservada_completa: 'Completa',
 };
 
 function mesaSize(m: Mesa): { w: number; h: number } {
@@ -131,7 +131,7 @@ export function AdminMapa({ localId }: Props) {
   }
 
   const conteo = useMemo(() => {
-    const c: Record<EstadoMesaLive, number> = { libre: 0, ocupada_ticket: 0, ocupada_reserva: 0, reservada_pronto: 0, reservada_hoy: 0 };
+    const c: Record<EstadoMesaLive, number> = { libre: 0, ocupada_ticket: 0, ocupada_reserva: 0, reservada_parcial: 0, reservada_completa: 0 };
     for (const m of mesasZona) c[estados.get(m.id)?.estado_live ?? 'libre']++;
     return c;
   }, [mesasZona, estados]);

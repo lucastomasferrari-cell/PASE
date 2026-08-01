@@ -5,7 +5,7 @@
 import { db } from './supabase';
 
 export type FormaMesa = 'redondo' | 'cuadrado' | 'rectangular';
-export type EstadoMesaLive = 'libre' | 'ocupada_ticket' | 'ocupada_reserva' | 'reservada_pronto' | 'reservada_hoy';
+export type EstadoMesaLive = 'libre' | 'ocupada_ticket' | 'ocupada_reserva' | 'reservada_parcial' | 'reservada_completa';
 
 export interface Mesa {
   id: number;
@@ -30,6 +30,7 @@ export interface MesaEstadoLive {
   reserva_nombre: string | null;
   reserva_hora: string | null;
   reserva_personas: number | null;
+  reservas_hoy: number;
 }
 
 export async function listMesas(localId: number): Promise<{ data: Mesa[]; error: string | null }> {
@@ -74,6 +75,7 @@ export async function estadoMesasLive(localId: number): Promise<{ data: MesaEsta
       reserva_nombre: (r['reserva_nombre'] as string | null) ?? null,
       reserva_hora: (r['reserva_hora'] as string | null) ?? null,
       reserva_personas: r['reserva_personas'] != null ? Number(r['reserva_personas']) : null,
+      reservas_hoy: r['reservas_hoy'] != null ? Number(r['reservas_hoy']) : 0,
     })),
     error: null,
   };
