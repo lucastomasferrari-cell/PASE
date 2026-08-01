@@ -827,24 +827,32 @@ async function handlePartnerWebhook(req, res, provider) {
   const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
   const sigHeader = req.headers['x-signature'] || req.headers['x-rappi-signature'] || req.headers['x-peya-signature'] || null;
   const secret = mapeo?.webhook_secret || process.env[`${provider.toUpperCase().replace(/-/g, '_')}_WEBHOOK_SECRET`] || null;
-  if (secret && sigHeader) {
+  // Fix seguridad (auditoría 01-ago): si hay secret configurado, EXIGIR firma
+  // válida (hard-fail). Antes, si el secret estaba pero el header de firma no
+  // venía, la request caía fuera de ambas ramas y se procesaba sin verificar
+  // → cualquiera que supiera el external_local_id inyectaba pedidos falsos.
+  if (secret) {
     let valid = false;
-    try {
-      if (provider === 'rappi') {
-        valid = verifyRappiWebhookSignature(rawBody, sigHeader, secret);
-      } else if (provider === 'pedidos-ya') {
-        valid = verifyPedidosYaWebhookSignature(rawBody, sigHeader, secret);
-      } else {
-        valid = true; // deliverect / otros — sin verificador implementado todavía
+    if (sigHeader) {
+      try {
+        if (provider === 'rappi') {
+          valid = verifyRappiWebhookSignature(rawBody, sigHeader, secret);
+        } else if (provider === 'pedidos-ya') {
+          valid = verifyPedidosYaWebhookSignature(rawBody, sigHeader, secret);
+        } else {
+          // deliverect / otros: sin verificador implementado → NO se puede
+          // validar, así que se rechaza (fail-closed). TODO: verificador real.
+          valid = false;
+        }
+      } catch (e) {
+        console.warn(`[${provider}] HMAC verify threw:`, e?.message);
       }
-    } catch (e) {
-      console.warn(`[${provider}] HMAC verify threw:`, e?.message);
     }
     if (!valid) {
-      res.status(401).json({ error: 'INVALID_SIGNATURE' });
+      res.status(401).json({ error: sigHeader ? 'INVALID_SIGNATURE' : 'MISSING_SIGNATURE' });
       return;
     }
-  } else if (!secret) {
+  } else {
     console.warn(`[${provider}] webhook sin secret configurado — soft-fail (configurar mapeos_locales_externos.webhook_secret)`);
   }
 
@@ -972,6 +980,17 @@ async function handlePartnerWebhook(req, res, provider) {
 }
 
 // ─── NOTIFY: Recibimos tu pedido ────────────────────────────────────────────
+// ¿La venta viene de un canal online / self-service donde el cliente dejó su
+// email legítimamente? (tienda online, menú QR, pedido público, aggregators).
+// Las ventas de mostrador ('pos') NO — no deben mandar mails a destinatarios
+// arbitrarios. Whitelist (fail-closed): un origen desconocido NO se considera online.
+function esOrigenOnline(origen) {
+  if (!origen) return false;
+  return origen === 'tienda_online'
+    || origen.startsWith('webhook_')
+    || /qr|pedido|online|tienda|delivery/.test(origen);
+}
+
 async function handleNotifyPedido(req, res) {
   const { venta_id, email_destinatario } = req.body || {};
   if (!venta_id || !email_destinatario) {
@@ -984,25 +1003,29 @@ async function handleNotifyPedido(req, res) {
   // Lookup venta + local. Idempotency: si ya hay notif_email_recibido_at, skip.
   const { data: venta, error: verr } = await supabase
     .from('ventas_pos')
-    .select('id, local_id, numero_local, total, tipo_entrega, cliente_nombre, cliente_email, notif_email_recibido_at, programada_para')
+    .select('id, local_id, numero_local, total, tipo_entrega, cliente_nombre, cliente_email, notif_email_recibido_at, programada_para, origen')
     .eq('id', venta_id)
     .single();
   if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
 
-  // Fix auditoría 2026-05-21 ALTO-3: validar que email_destinatario sea el
-  // del cliente de la venta. Antes el endpoint era anónimo + sin validación
-  // → spam dirigido con dominio del local víctima.
-  // - Si venta tiene cliente_email guardado: debe matchear.
-  // - Si no lo tiene: lo guardamos ahora (1er envío, legítimo del cliente).
+  // Fix auditoría 2026-05-21 ALTO-3 + 01-ago: validar que email_destinatario sea
+  // el del cliente de la venta. Antes, para ventas de mostrador (sin email
+  // guardado) aceptaba cualquier destinatario → spam/phishing con el dominio del
+  // local. Ahora un destinatario NUEVO solo se acepta si la venta viene de un
+  // canal online/self-service (tienda, QR, pedido, aggregator), donde el cliente
+  // dejó su email; las ventas de mostrador ('pos') no mandan estos mails.
   if (venta.cliente_email) {
     if (venta.cliente_email.toLowerCase().trim() !== email_destinatario.toLowerCase().trim()) {
       res.status(403).json({ error: 'EMAIL_MISMATCH' });
       return;
     }
-  } else {
+  } else if (esOrigenOnline(venta.origen)) {
     // Persistir el email para validación de notif siguientes.
     // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
     await supabase.from('ventas_pos').update({ cliente_email: email_destinatario }).eq('id', venta_id);
+  } else {
+    res.status(403).json({ error: 'VENTA_SIN_EMAIL_CLIENTE' });
+    return;
   }
 
   if (venta.notif_email_recibido_at) {
@@ -1093,7 +1116,7 @@ async function handleNotifyListo(req, res) {
   const supabase = db();
   const { data: venta, error: verr } = await supabase
     .from('ventas_pos')
-    .select('id, local_id, numero_local, tipo_entrega, cliente_nombre, cliente_email, notif_email_listo_at')
+    .select('id, local_id, numero_local, tipo_entrega, cliente_nombre, cliente_email, notif_email_listo_at, origen')
     .eq('id', venta_id)
     .single();
   if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
@@ -1111,7 +1134,9 @@ async function handleNotifyListo(req, res) {
     res.status(403).json({ error: 'EMAIL_MISMATCH' });
     return;
   }
-  const emailFinal = venta.cliente_email || email_destinatario;
+  // Solo cae al email_destinatario del body si la venta es de canal online
+  // (evita mandar a un destinatario arbitrario en ventas de mostrador).
+  const emailFinal = venta.cliente_email || (esOrigenOnline(venta.origen) ? email_destinatario : null);
   if (!emailFinal) {
     res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
     return;
@@ -1188,7 +1213,7 @@ async function handleNotifyRechazado(req, res) {
   const supabase = db();
   const { data: venta, error: verr } = await supabase
     .from('ventas_pos')
-    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_rechazado_at')
+    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_rechazado_at, origen')
     .eq('id', venta_id)
     .single();
   if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
@@ -1198,7 +1223,8 @@ async function handleNotifyRechazado(req, res) {
     return;
   }
 
-  const emailFinal = email_destinatario || venta.cliente_email;
+  // Prioriza el email guardado; solo cae al del body si la venta es online.
+  const emailFinal = venta.cliente_email || (esOrigenOnline(venta.origen) ? email_destinatario : null);
   if (!emailFinal) {
     res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
     return;
@@ -1250,7 +1276,7 @@ async function handleNotifyEntregado(req, res) {
   const supabase = db();
   const { data: venta, error: verr } = await supabase
     .from('ventas_pos')
-    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_entregado_at')
+    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_entregado_at, origen')
     .eq('id', venta_id)
     .single();
   if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
@@ -1260,7 +1286,8 @@ async function handleNotifyEntregado(req, res) {
     return;
   }
 
-  const emailFinal = email_destinatario || venta.cliente_email;
+  // Prioriza el email guardado; solo cae al del body si la venta es online.
+  const emailFinal = venta.cliente_email || (esOrigenOnline(venta.origen) ? email_destinatario : null);
   if (!emailFinal) {
     res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
     return;
