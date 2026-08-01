@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { Modal, PageHeader } from "../components/ui";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso, debeReintentarCargaVacia } from "../lib/auth";
@@ -120,6 +120,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [_fechaPago, setFechaPago] = useState<string>(toISO(today));
   const [_adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
+  // Idempotencia: llave nueva por apertura del modal de adelanto (dedup en la RPC).
+  const idempAdel = useMemo(() => crypto.randomUUID(), [adelModal]);
   const [agModal, setAgModal] = useState(false);
   const [csModal, setCsModal] = useState(false);
   // concepto: CARGAS SOCIALES (F931/AFIP) o BOLETAS SINDICALES (sindicato/obra
@@ -870,6 +872,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       p_cuenta: adelForm.cuenta,
       p_fecha: adelForm.fecha,
       p_detalle: adelForm.descripcion || null,
+      p_idempotency_key: idempAdel,
     });
     if (error) { showError(translateRpcError(error)); return; }
 

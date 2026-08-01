@@ -988,6 +988,10 @@ export function TabSueldos({
   // manuales). Lo mantengo en el state por compat de tipos, siempre false.
   const [adelForm, setAdelForm] = useState({ monto: "", fecha: toISO(today), cuenta: "", motivo: "" });
   const [guardandoAdel, setGuardandoAdel] = useState(false);
+  // Idempotencia: llave nueva por cada apertura del modal → doble-click/reintento
+  // no crea dos adelantos (la RPC dedupea). Un adelanto nuevo del mismo empleado
+  // reabre el modal → llave distinta → NO se deduplica.
+  const idempAdel = useMemo(() => crypto.randomUUID(), [adelModalSlot]);
   const guardarAdelanto = async () => {
     if (!adelModalSlot) return;
     const parts = adelModalSlot.split("__");
@@ -1003,6 +1007,7 @@ export function TabSueldos({
         p_cuenta: adelForm.cuenta,
         p_fecha: adelForm.fecha,
         p_detalle: adelForm.motivo || null,
+        p_idempotency_key: idempAdel,
       });
       if (error) { showError(translateRpcError(error)); return; }
       // Cambio Lucas 31-may noche: ya no se diferencia entre adelantos
