@@ -10,13 +10,14 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid, Gift, Download } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle, SlidersHorizontal, LayoutGrid, Gift, Download, UtensilsCrossed } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { AdminTablero } from './AdminTablero';
 import { AdminDiario } from './AdminDiario';
 import { AdminReservas } from './AdminReservas';
+import { AdminServicio } from './AdminServicio';
 import { AdminMapa } from './AdminMapa';
 import { AdminEspera } from './AdminEspera';
 import { AdminRecordatorios } from './AdminRecordatorios';
@@ -28,7 +29,7 @@ import { AdminReservasConfig } from './AdminReservasConfig';
 import { AdminMesas } from './AdminMesas';
 import { AdminExperiencias } from './AdminExperiencias';
 
-type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'mesas' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'experiencias' | 'perfil' | 'config';
+type Seccion = 'tablero' | 'servicio' | 'diario' | 'reservas' | 'mapa' | 'mesas' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'experiencias' | 'perfil' | 'config';
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -179,6 +180,7 @@ export function AdminHome() {
 
   const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
     { key: 'tablero',    label: 'Tablero',          icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
+    { key: 'servicio',   label: 'Servicio',         icon: <UtensilsCrossed className="h-[18px] w-[18px]" /> },
     { key: 'diario',     label: 'Diario',           icon: <GanttChartSquare className="h-[18px] w-[18px]" /> },
     { key: 'reservas',   label: 'Reservas',         icon: <CalendarDays className="h-[18px] w-[18px]" /> },
     { key: 'mapa',       label: 'Mapa de mesas',    icon: <Map className="h-[18px] w-[18px]" /> },
@@ -252,6 +254,8 @@ export function AdminHome() {
           {localSel ? (
             seccion === 'tablero' ? (
               <AdminTablero localId={localSel.local_id} localSlug={localSel.slug} />
+            ) : seccion === 'servicio' ? (
+              <AdminServicio localId={localSel.local_id} localNombre={localSel.nombre} />
             ) : seccion === 'diario' ? (
               <AdminDiario localId={localSel.local_id} localNombre={localSel.nombre} />
             ) : seccion === 'reservas' ? (
