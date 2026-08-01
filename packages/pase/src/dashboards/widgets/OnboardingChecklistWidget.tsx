@@ -31,7 +31,7 @@ import type { WidgetContext } from "../types";
  */
 
 // URL de COMANDA — mismo hardcode que Onboarding.tsx (sin entorno aparte).
-const COMANDA_URL = "https://pase-comanda.vercel.app";
+const COMANDA_URL = "https://pos.comanda.lat";
 
 type PasoId = Exclude<OnboardingPaso, "completado">;
 

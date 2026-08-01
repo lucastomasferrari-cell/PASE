@@ -255,7 +255,7 @@ export function TabStock({ user, locales, localActivo }: Props) {
       {/* Nota: link a COMANDA para acciones operativas */}
       <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted2)" }}>
         Para cargar conteos, mermas, ajustes o configurar stock mínimo →
-        <a href="https://comanda-jet.vercel.app/inventario/alertas" target="_blank" rel="noreferrer"
+        <a href="https://pos.comanda.lat/inventario/alertas" target="_blank" rel="noreferrer"
            style={{ marginLeft: 6, color: "var(--acc)" }}>
           abrir COMANDA → Inventario ↗
         </a>

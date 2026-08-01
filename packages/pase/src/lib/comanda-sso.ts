@@ -23,7 +23,7 @@ const COMANDA_URL = (import.meta.env.VITE_COMANDA_URL as string | undefined)?.tr
 export async function abrirComanda(path: string = "/"): Promise<void> {
   if (!COMANDA_URL) {
     alert(
-      "VITE_COMANDA_URL no configurada. En prod debería apuntar a https://pase-comanda.vercel.app.",
+      "VITE_COMANDA_URL no configurada. En prod debería apuntar a https://pos.comanda.lat.",
     );
     return;
   }

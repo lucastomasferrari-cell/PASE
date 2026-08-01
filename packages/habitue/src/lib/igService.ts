@@ -6,7 +6,7 @@
 import { db } from './supabase';
 
 export const BOT_API_URL =
-  (import.meta.env.VITE_IG_BOT_URL as string | undefined) || 'https://pase-instagram-bot.vercel.app';
+  (import.meta.env.VITE_IG_BOT_URL as string | undefined) || 'https://bot.comanda.lat';
 
 export type EstadoConversacion = 'bot' | 'humano' | 'escalada' | 'cerrada' | 'spam';
 

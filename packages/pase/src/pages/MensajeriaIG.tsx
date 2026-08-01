@@ -11,7 +11,7 @@
 import type { Usuario } from "../types";
 
 const BOT_URL =
-  (import.meta.env.VITE_IG_BOT_URL as string | undefined) || "https://pase-instagram-bot.vercel.app";
+  (import.meta.env.VITE_IG_BOT_URL as string | undefined) || "https://bot.comanda.lat";
 
 function MessageCircleIcon({ size = 28 }: { size?: number }) {
   return (

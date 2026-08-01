@@ -47,7 +47,7 @@ interface StepDef {
 
 // URL de COMANDA — sin entorno aparte, hardcode al deploy actual.
 // Si en el futuro hay staging, mover a env var.
-const COMANDA_URL = "https://pase-comanda.vercel.app";
+const COMANDA_URL = "https://pos.comanda.lat";
 
 const STEPS: StepDef[] = [
   {
