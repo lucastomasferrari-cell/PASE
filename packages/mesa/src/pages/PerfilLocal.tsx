@@ -155,7 +155,8 @@ export function PerfilLocal() {
           </section>
 
           {/* Qué pedir — ventas reales. OCULTO TEMPORALMENTE (Lucas, 01-ago).
-              Para reactivar: borrar el `false &&` de la línea de abajo. */}
+              Para reactivar: borrar el `false &&` (y el eslint-disable de arriba). */}
+          {/* eslint-disable-next-line no-constant-binary-expression */}
           {false && populares.length > 0 && (
             <section>
               <Titulo icon={<Sparkles className="h-5 w-5 text-brand-500" />}>Qué pedir</Titulo>
