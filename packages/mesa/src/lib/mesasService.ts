@@ -5,7 +5,7 @@
 import { db } from './supabase';
 
 export type FormaMesa = 'redondo' | 'cuadrado' | 'rectangular';
-export type EstadoMesaLive = 'libre' | 'ocupada_ticket' | 'ocupada_reserva' | 'reservada_pronto';
+export type EstadoMesaLive = 'libre' | 'ocupada_ticket' | 'ocupada_reserva' | 'reservada_pronto' | 'reservada_hoy';
 
 export interface Mesa {
   id: number;
