@@ -154,8 +154,9 @@ export function PerfilLocal() {
             )}
           </section>
 
-          {/* Qué pedir — ventas reales */}
-          {populares.length > 0 && (
+          {/* Qué pedir — ventas reales. OCULTO TEMPORALMENTE (Lucas, 01-ago).
+              Para reactivar: borrar el `false &&` de la línea de abajo. */}
+          {false && populares.length > 0 && (
             <section>
               <Titulo icon={<Sparkles className="h-5 w-5 text-brand-500" />}>Qué pedir</Titulo>
               <p className="text-sm text-ink-muted -mt-2 mb-4">Lo más pedido por los comensales este mes — datos reales, no curaduría.</p>
