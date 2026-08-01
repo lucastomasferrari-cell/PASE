@@ -212,6 +212,9 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // invisible. Default vacío fuerza la elección consciente.
   const emptyForm = {fecha:toISO(today),cuenta:"",tipo:"Pago Gasto",importe:"",detalle:"",esEgreso:true};
   const [form, setForm] = useState(emptyForm);
+  // Idempotencia: llave estable por apertura de modal → doble-click / reintento
+  // no crea dos movimientos (la RPC dedupea por esta llave). Se regenera al abrir.
+  const [idempKeyMov, setIdempKeyMov] = useState<string>(() => crypto.randomUUID());
 
   // Defensive: si form.cuenta queda con un valor que no está en
   // cuentasOperablesList (edge cases de regression o cambio de scope), resetea
@@ -228,6 +231,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // a estado vacío (antes quedaban pre-llenados con el último movimiento).
   const abrirNuevoMovimiento = () => {
     setForm({...emptyForm, fecha: toISO(today)});
+    setIdempKeyMov(crypto.randomUUID());
     setModal(true);
   };
   // Selector de local en el modal cuando no hay localActivo y hay >1 local visible.
@@ -480,6 +484,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         p_importe: importe,
         p_detalle: form.detalle || tipoEfectivo,
         p_local_id: lid,
+        p_idempotency_key: idempKeyMov,
       });
       if (error) { showError(translateRpcError(error)); return; }
       showToast("Movimiento registrado");
