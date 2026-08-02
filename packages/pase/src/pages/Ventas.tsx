@@ -31,6 +31,9 @@ type VentaEditable = Omit<Venta, "monto" | "local_id"> & {
 export default function Ventas({ user, locales, localActivo }: VentasProps) {
   const [ventas,setVentas]=useState<Venta[]>([]);
   const [loading,setLoading]=useState(true);
+  // Truncado: si el rango tiene más ventas que el cap, avisamos (los totales por
+  // grupo quedarían parciales sin este aviso — bug de datos multi-local).
+  const [truncado,setTruncado]=useState<{mostradas:number;total:number}|null>(null);
   const [modalNuevo,setModalNuevo]=useState(false);
   const [showMaxirest,setShowMaxirest]=useState(false);
   const [detalleModal,setDetalleModal]=useState<CierreVentas | null>(null);
@@ -60,15 +63,24 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     // Optimización egress 2026-05-17: proyectar campos en vez de SELECT *.
     // El rango de fechas ya viene del debouncer (default 90d, modificable
     // por el user con el date picker). Limit 1000 como sanity cap.
+    const LIMIT=1000;
     let q=db.from("ventas")
       .select("id, fecha, local_id, turno, medio, monto, origen")
       .gte("fecha", debDesde)
       .lte("fecha", debHasta)
       .order("fecha",{ascending:false})
-      .limit(1000);
+      .limit(LIMIT);
     q=applyLocalScope(q,user,localActivo);
-    const {data}=await q;
-    setVentas((data||[]) as Venta[]);setLoading(false);
+    // Conteo real del rango: si supera el cap, avisamos que la lista (y los
+    // totales por grupo) quedan truncados → el usuario acota el rango.
+    let cq=db.from("ventas").select("id",{count:'exact',head:true})
+      .gte("fecha", debDesde).lte("fecha", debHasta);
+    cq=applyLocalScope(cq,user,localActivo);
+    const [{data},{count}]=await Promise.all([q,cq]);
+    const total=count??(data?.length||0);
+    setVentas((data||[]) as Venta[]);
+    setTruncado(total>LIMIT?{mostradas:data?.length||0,total}:null);
+    setLoading(false);
   };
   // Debounce de los date pickers: evita un fetch por cada tecla cuando el
   // usuario tipea YYYY-MM-DD manualmente (convención C6).
@@ -344,6 +356,11 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
             </label>
           </div>
         </div>
+        {truncado && (
+          <div style={{margin:"8px 0",padding:"8px 12px",borderRadius:8,background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:12}}>
+            ⚠ Mostrando las {truncado.mostradas} ventas más recientes de {truncado.total} del período. Acotá el rango de fechas o elegí un local para ver todo — con este rango, los totales por día pueden quedar incompletos.
+          </div>
+        )}
         {loading?<div className="loading">Cargando...</div>:grupos.length===0?(
           <EmptyState
             icon="📊"
