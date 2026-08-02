@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles, tienePermiso } from "../lib/auth";
@@ -256,6 +256,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // genera 2 movimientos (egreso en origen, ingreso en destino) vía RPC
   // transferencia_cuentas.
   const [transfModal, setTransfModal] = useState(false);
+  // Idempotencia: llave nueva por apertura del modal de transferencia (dedup en la RPC).
+  const idempTransf = useMemo(() => crypto.randomUUID(), [transfModal]);
   // transfForm: ahora soporta cross-local (Lucas 22-may noche).
   // local_destino_id null = same-local (el origen). Si se setea distinto,
   // la transferencia es cross-local.
@@ -525,6 +527,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         // Si destino != origen, lo pasamos. Si es same-local, mandamos null
         // (el RPC interpreta NULL = same-local, backward compat).
         p_local_destino_id: localDst !== lid ? localDst : null,
+        p_idempotency_key: idempTransf,
       });
       if (error) { showError(translateRpcError(error)); return; }
       showToast("Transferencia registrada");
