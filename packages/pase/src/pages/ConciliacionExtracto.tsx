@@ -684,6 +684,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // crear_gasto retorna {gasto_id, mov_id} → usamos mov_id directo (sin lookup).
   async function crearGastoDeFila(fila: FilaExtracto, tipo: string, cat: string): Promise<boolean> {
     const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${fila.descripcion}${fila.referencia_externa ? ` · ref ${fila.referencia_externa}` : ""}`;
+    // Llave de idempotencia DETERMINÍSTICA por (local, período, fila). Si el lote
+    // crashea a mitad y se re-corre (mismo cruce, mismo idx), la llave se repite →
+    // crear_gasto hace replay en vez de duplicar. Filas distintas tienen idx
+    // distinto → no hay falso-dedup de dos gastos legítimamente iguales.
+    const idempKey = `concil-gasto:${localActivo}:${periodoDesde.slice(0, 7)}:${fila.idx}`;
     const { data, error } = await db.rpc("crear_gasto", {
       p_fecha: fila.fecha,
       p_local_id: localActivo,
@@ -693,7 +698,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       p_detalle: detalle,
       p_cuenta: "MercadoPago",
       p_plantilla_id: null,
-      p_idempotency_key: crypto.randomUUID(),
+      p_idempotency_key: idempKey,
     });
     if (error) {
       showError(`${fila.descripcion.slice(0, 40)}: ${translateRpcError(error)}`);

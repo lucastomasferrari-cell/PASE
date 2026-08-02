@@ -5,7 +5,7 @@
 // (devengado ↔ cash). El upload de extracto se suma en la task siguiente.
 // Todo el cálculo vive en las RPCs (lib/cashflow.ts).
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "../lib/supabase";
 import { PageContainer, PageHeader, StatCard, Card, Modal } from "../components/ui";
 import { fmt_$, todayAR_ISO } from "../lib/utils";
@@ -682,6 +682,10 @@ function CrearGastoModal({ fila, lid, mesTxt, onClose, onDone }: {
               : tipo === "Impuesto" ? cats.GASTOS_IMPUESTOS
                 : tipo === "Otros" ? ["OTROS"] : [];
   const monto = Math.abs(fila.raw?.monto ?? 0);
+  // Llave de idempotencia estable por apertura del modal (por fila): un reintento
+  // tras error o un doble-submit reusa la misma llave → crear_gasto hace replay
+  // en vez de duplicar el gasto.
+  const idempKey = useMemo(() => crypto.randomUUID(), [fila]);
 
   async function crear() {
     if (!tipo) { setErr("Elegí un tipo"); return; }
@@ -692,7 +696,7 @@ function CrearGastoModal({ fila, lid, mesTxt, onClose, onDone }: {
     const { error } = await db.rpc("crear_gasto", {
       p_fecha: fila.raw.fecha, p_local_id: lid, p_categoria: cat, p_tipo: tipo,
       p_monto: monto, p_detalle: detalle, p_cuenta: "MercadoPago",
-      p_plantilla_id: null, p_idempotency_key: crypto.randomUUID(),
+      p_plantilla_id: null, p_idempotency_key: idempKey,
     });
     if (error) { setErr(translateRpcError(error.message)); setSaving(false); return; }
     void db.rpc("fn_aprender_gasto_alias", { p_local_id: lid, p_descripcion: fila.raw.descripcion, p_categoria: cat, p_tipo: tipo });
