@@ -80,6 +80,40 @@ const TABLAS_BACKUP = [
 
 const BUCKETS_CON_ARCHIVOS = ['facturas', 'blindaje', 'rrhh-documentos', 'empleados'];
 
+// Tablas del backup SIN columna `id` (PK compuesta). Son child tables chicas →
+// se leen en una sola query, sin paginar.
+const TABLAS_SIN_ID = new Set(['receta_items', 'factura_items_stock', 'remito_items']);
+// Tamaño de página al leer tablas grandes. Acota cada respuesta y evita depender
+// del tope de filas de PostgREST (fix auditoría 01-ago: mp_movimientos/auditoria
+// ya superan los 15k/tenant y crecen sin freno).
+const BACKUP_PAGE = 5000;
+
+// Lee TODAS las filas de `tabla` para un tenant. Para tablas con `id` pagina en
+// bloques de BACKUP_PAGE ordenando por id (orden total y estable) para no
+// saltear/duplicar filas ni quedar cortado por el max-rows de PostgREST.
+// Devuelve { data, error } con la misma forma que supabase-js.
+async function fetchAllRows(db, tabla, tenantId) {
+  if (TABLAS_SIN_ID.has(tabla)) {
+    return await db.from(tabla).select('*').eq('tenant_id', tenantId);
+  }
+  const acc = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await db
+      .from(tabla)
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('id', { ascending: true })
+      .range(from, from + BACKUP_PAGE - 1);
+    if (error) return { data: null, error };
+    const batch = data || [];
+    acc.push(...batch);
+    if (batch.length < BACKUP_PAGE) break;
+    from += BACKUP_PAGE;
+  }
+  return { data: acc, error: null };
+}
+
 const RETENTION_DAYS = 365;
 const PATH_REGEX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(\d{4}-\d{2}-\d{2})\.json\.gz$/;
 
@@ -135,7 +169,7 @@ async function runExport(db, res) {
     const errores = [];
 
     for (const tabla of TABLAS_BACKUP) {
-      const { data, error } = await db.from(tabla).select('*').eq('tenant_id', tenant.id);
+      const { data, error } = await fetchAllRows(db, tabla, tenant.id);
       if (error) {
         // 42P01 = tabla no existe (esperable para tablas condicionales).
         // PostgREST devuelve { code: '42P01' } o un mensaje genérico.
