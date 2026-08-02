@@ -97,6 +97,7 @@ const MAP: Record<string, string> = {
   LIQ_FINAL_YA_EXISTE: "Este empleado ya tiene liquidación final registrada",
   MONTO_EXCEDE_PENDIENTE: "El monto asignado supera el pendiente",
   JUSTIFICATIVO_NO_ENCONTRADO: "No se encontró el justificativo asociado",
+  JUSTIFICATIVO_YA_USADO: "Ese comprobante ya está conciliado con otro movimiento de MercadoPago. Elegí otro o creá uno nuevo.",
 
   // MP multi-factura
   OVER_ASSIGNMENT: "El total asignado a las facturas supera el monto del movimiento",
