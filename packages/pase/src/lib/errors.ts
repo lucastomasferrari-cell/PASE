@@ -18,6 +18,11 @@ const MAP: Record<string, string> = {
   // da acceso a locales nuevos.
   LOCAL_NO_AUTORIZADO: "No tenés asignado este local. Pedile al dueño que te lo asigne (Usuarios → tu nombre → Locales). El código de autorización del dueño NO sirve para esto — solo autoriza acciones en locales que ya tenés.",
   SALDO_INSUFICIENTE: "Saldo insuficiente en la cuenta seleccionada",
+  MOV_VINCULADO_FACTURA: "Este movimiento es el pago de una factura. Anulalo desde Compras/Facturas, no desde Caja (así también se revierte la factura).",
+  MOV_VINCULADO_REMITO: "Este movimiento es el pago de un remito. Anulalo desde Remitos, no desde Caja.",
+  MOV_VINCULADO_GASTO: "Este movimiento es el pago de un gasto. Anulalo desde Gastos, no desde Caja.",
+  MOV_VINCULADO_ADELANTO: "Este movimiento es un adelanto. Anulalo desde Equipo/Sueldos, no desde Caja.",
+  MOV_VINCULADO_PAGO_ESPECIAL: "Este movimiento es un pago de vacaciones/aguinaldo. Anulalo desde Equipo/Sueldos, no desde Caja.",
   CATEGORIA_REQUERIDA: "La categoría es obligatoria",
   TIPO_GASTO_INVALIDO: "No pude reconocer el tipo de gasto. Elegí un tipo válido (Gasto Fijo, Variable, Publicidad, Comisión o Impuesto) y una categoría de la lista.",
   MOTIVO_REQUERIDO: "El motivo es obligatorio",
