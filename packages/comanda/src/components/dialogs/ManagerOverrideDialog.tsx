@@ -22,16 +22,37 @@ interface Props {
   onAuthorized: (args: { managerId: string; motivo: string; ip: string | null }) => Promise<void> | void;
   // Si necesitamos capturar IP para audit
   captureIp?: boolean;
+  // Modo "solo motivo" (sin PIN de manager): cuando el usuario logueado YA tiene
+  // el permiso para la acción (rol_pos_permisos). Pide únicamente el motivo y
+  // ejecuta con `actorId` como responsable. Si es true, `actorId` es obligatorio.
+  soloMotivo?: boolean;
+  actorId?: string | null;
 }
 
 const MAX_INTENTOS = 3;
 const MOTIVO_MIN = 10;
+
+// Captura la IP pública para la auditoría (timeout 2s, fallback NULL si falla).
+async function obtenerIp(): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2000);
+    const r = await fetch('https://api.ipify.org?format=json', { signal: ctrl.signal });
+    clearTimeout(t);
+    if (r.ok) {
+      const j = (await r.json()) as { ip?: string };
+      return j.ip ?? null;
+    }
+  } catch { /* fallback NULL */ }
+  return null;
+}
 
 // Dialog reusable que pide PIN del manager + motivo, verifica con
 // fn_verificar_pin_pos filtrando rol_pos in ('manager','dueno'),
 // y si OK ejecuta onAuthorized. Captura IP via ipify (timeout 2s, fallback NULL).
 export function ManagerOverrideDialog({
   open, onOpenChange, accion, descripcion, onAuthorized, captureIp = true,
+  soloMotivo = false, actorId = null,
 }: Props) {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
@@ -61,6 +82,28 @@ export function ManagerOverrideDialog({
       setError(`El motivo debe tener al menos ${MOTIVO_MIN} caracteres`);
       return;
     }
+
+    // Modo "solo motivo": el usuario ya tiene el permiso; no se pide PIN.
+    // Ejecuta con actorId como responsable (queda en la auditoría con su motivo).
+    if (soloMotivo) {
+      if (!actorId) {
+        setError('Sin usuario activo para registrar la acción');
+        return;
+      }
+      setVerificando(true);
+      setError(null);
+      const ip = captureIp ? await obtenerIp() : null;
+      try {
+        await onAuthorized({ managerId: actorId, motivo: motivo.trim(), ip });
+        onOpenChange(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error ejecutando la acción');
+      } finally {
+        setVerificando(false);
+      }
+      return;
+    }
+
     if (pin.length !== 4) {
       setError('PIN del manager incompleto');
       return;
@@ -86,19 +129,7 @@ export function ManagerOverrideDialog({
       return;
     }
 
-    let ip: string | null = null;
-    if (captureIp) {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 2000);
-        const r = await fetch('https://api.ipify.org?format=json', { signal: ctrl.signal });
-        clearTimeout(t);
-        if (r.ok) {
-          const j = (await r.json()) as { ip?: string };
-          ip = j.ip ?? null;
-        }
-      } catch { /* fallback NULL */ }
-    }
+    const ip: string | null = captureIp ? await obtenerIp() : null;
 
     try {
       await onAuthorized({ managerId: empleadoId, motivo: motivo.trim(), ip });
@@ -119,7 +150,7 @@ export function ManagerOverrideDialog({
               <ShieldAlert className="h-5 w-5 text-warning" />
             </div>
             <div>
-              <DialogTitle>Autorización requerida</DialogTitle>
+              <DialogTitle>{soloMotivo ? 'Indicá el motivo' : 'Autorización requerida'}</DialogTitle>
               <DialogDescription>{accion}</DialogDescription>
             </div>
           </div>
@@ -139,6 +170,7 @@ export function ManagerOverrideDialog({
           />
         </div>
 
+        {!soloMotivo && (
         <div className="space-y-2">
           <Label>PIN del manager</Label>
           <div className="flex justify-center gap-3 my-2" aria-live="polite">
@@ -159,6 +191,7 @@ export function ManagerOverrideDialog({
             disabled={verificando}
           />
         </div>
+        )}
 
         {error && (
           <div className="text-center text-sm text-destructive font-medium">{error}</div>
@@ -172,9 +205,9 @@ export function ManagerOverrideDialog({
           <Button
             variant="warning"
             onClick={confirmar}
-            disabled={verificando || pin.length !== 4 || motivo.trim().length < MOTIVO_MIN}
+            disabled={verificando || (!soloMotivo && pin.length !== 4) || motivo.trim().length < MOTIVO_MIN}
           >
-            {verificando ? 'Verificando…' : 'Autorizar'}
+            {verificando ? (soloMotivo ? 'Confirmando…' : 'Verificando…') : (soloMotivo ? 'Confirmar' : 'Autorizar')}
           </Button>
         </DialogFooter>
       </DialogContent>

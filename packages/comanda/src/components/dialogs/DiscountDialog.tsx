@@ -13,6 +13,8 @@ import {
 } from '@/services/descuentosService';
 import { useIdempotencyKey } from '@/lib/idempotency';
 import { useAuth } from '@/lib/auth';
+import { useAuthPos } from '@/lib/authPos';
+import { usePermiso } from '@/lib/usePermiso';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useAutorizaciones } from '@/lib/useAutorizaciones';
 import { ManagerOverrideDialog } from './ManagerOverrideDialog';
@@ -40,8 +42,13 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, d
   const [saving, setSaving] = useState(false);
   const idempotencyKey = useIdempotencyKey(open ? `${ventaId}-open` : 'closed');
   const { user } = useAuth();
+  const { empleado } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const autoriz = useAutorizaciones(localId);
+  // Si el usuario tiene el permiso de descuento (rol_pos_permisos, editable en
+  // Accesos) y hay un empleado POS activo, un descuento grande lo hace él mismo
+  // con solo el motivo (que ya se captura acá) — sin PIN de manager.
+  const puedeDescuentoSolo = usePermiso('comanda.ventas.descuento') && !!empleado?.id;
 
   useEffect(() => {
     if (open) { setTipo('porcentaje'); setValor(10); setMotivo(''); setShowOverride(false); setSaving(false); }
@@ -90,8 +97,13 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, d
     if (motivo.trim().length < MOTIVO_MIN) {
       toast.error(`Motivo: mínimo ${MOTIVO_MIN} caracteres`); return;
     }
-    if (requiereOver) setShowOverride(true);
-    else aplicar();
+    if (requiereOver) {
+      // Con permiso propio: aplica él mismo (el motivo ya está). Si no, PIN de manager.
+      if (puedeDescuentoSolo) aplicar({ managerId: empleado!.id });
+      else setShowOverride(true);
+    } else {
+      aplicar();
+    }
   }
 
   return (
@@ -166,7 +178,9 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, d
               </div>
               {requiereOver && (
                 <div className="text-xs text-warning font-medium pt-2">
-                  ⚠ Requiere autorización de manager (supera {autoriz.pctDescuento}%)
+                  {puedeDescuentoSolo
+                    ? `⚠ Supera ${autoriz.pctDescuento}% — indicá el motivo`
+                    : `⚠ Requiere autorización de manager (supera ${autoriz.pctDescuento}%)`}
                 </div>
               )}
             </div>
@@ -185,7 +199,7 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, d
               onClick={intentarAplicar}
               disabled={saving || monto <= 0 || motivo.trim().length < MOTIVO_MIN}
             >
-              {saving ? 'Aplicando…' : (requiereOver ? 'Pedir autorización' : 'Aplicar descuento')}
+              {saving ? 'Aplicando…' : ((requiereOver && !puedeDescuentoSolo) ? 'Pedir autorización' : 'Aplicar descuento')}
             </Button>
           </DialogFooter>
         </DialogContent>

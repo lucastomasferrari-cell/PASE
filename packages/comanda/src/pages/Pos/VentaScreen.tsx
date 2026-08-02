@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
+import { usePermiso } from '../../lib/usePermiso';
 import { useAutorizaciones } from '@/lib/useAutorizaciones';
 import { type ItemConGrupo } from '../../services/itemsService';
 import {
@@ -64,6 +65,10 @@ export function VentaScreen() {
   const ventaId = Number(idStr);
   const { user } = useAuth();
   const { empleado, toggleFavorito } = useAuthPos();
+  // Permisos del rol (rol_pos_permisos, editables en Accesos): si el usuario los
+  // tiene, hace la acción él mismo con solo el motivo (sin PIN de manager).
+  const puedeAnularItem = usePermiso('comanda.items.anular');
+  const puedeAnularVenta = usePermiso('comanda.ventas.anular');
   const navigate = useNavigate();
 
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
@@ -1010,10 +1015,12 @@ export function VentaScreen() {
         />
       )}
 
-      {/* Anular item con manager override */}
+      {/* Anular item: con permiso propio pide solo motivo; si no, PIN de manager */}
       <ManagerOverrideDialog
         open={anularItemTarget !== null}
         onOpenChange={(o) => { if (!o) setAnularItemTarget(null); }}
+        soloMotivo={puedeAnularItem}
+        actorId={empleado?.id ?? null}
         accion="Anular item"
         descripcion={anularItemTarget ? `Anular "${catalogo.find((c) => c.id === anularItemTarget.item_id)?.nombre ?? 'item'}" × ${anularItemTarget.cantidad} (${formatARS(anularItemTarget.subtotal)}). Si ya se mandó a cocina, avisá al cocinero.` : ''}
         onAuthorized={async ({ managerId, motivo }) => {
@@ -1267,6 +1274,8 @@ export function VentaScreen() {
       <ManagerOverrideDialog
         open={showAnular}
         onOpenChange={setShowAnular}
+        soloMotivo={puedeAnularVenta}
+        actorId={empleado?.id ?? null}
         accion="Anular venta"
         descripcion={`Anular venta #${venta.numero_local} por ${formatARS(venta.total)}.`}
         onAuthorized={async ({ managerId, motivo }) => {
