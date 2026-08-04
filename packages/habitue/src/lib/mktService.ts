@@ -122,6 +122,15 @@ export async function saveConfig(cfg: Partial<MktConfig>): Promise<MktConfig> {
   return r.config;
 }
 
+// ── Atribución de ventas (cuánto vendiste por la campaña) ───────────────────
+export interface Atribucion { compradores: number; ventas: number; ingresos: number; }
+export async function atribucionVentas(campanaId: string, dias = 7): Promise<Atribucion> {
+  const { data, error } = await db().rpc('fn_mkt_atribucion_ventas', { p_campana_id: campanaId, p_dias: dias });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  return { compradores: row?.compradores ?? 0, ventas: row?.ventas ?? 0, ingresos: Number(row?.ingresos ?? 0) };
+}
+
 // ── Métricas derivadas ──────────────────────────────────────────────────────
 export function tasaApertura(c: MktCampana): number {
   const base = c.total_entregados || c.total_enviados;

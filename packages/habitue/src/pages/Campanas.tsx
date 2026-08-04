@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import { Mail, Plus, Send, ChevronLeft, Eye, Trash2, BarChart3, Users } from 'lucide-react';
 import {
   listCampanas, crearCampana, getCampana, actualizarCampana, eliminarCampana,
-  enviarCampana, enviarPrueba, tasaApertura, tasaClick,
-  type MktCampana, type MktEstado,
+  enviarCampana, enviarPrueba, tasaApertura, tasaClick, atribucionVentas,
+  type MktCampana, type MktEstado, type Atribucion,
 } from '@/lib/mktService';
 import { SEGMENTOS, listSegmento, type SegmentoKey } from '@/lib/segmentosService';
 
@@ -129,8 +129,18 @@ function Editor({ id, onVolver }: { id: string; onVolver: () => void }) {
   const [enviando, setEnviando] = useState(false);
   const [progreso, setProgreso] = useState<{ enviados: number; restantes: number } | null>(null);
   const [emailPrueba, setEmailPrueba] = useState('');
+  const [atrib, setAtrib] = useState<Atribucion | null>(null);
+  const [dias, setDias] = useState(7);
 
   useEffect(() => { void getCampana(id).then((x) => { setC(x); if (x?.html === '') setC({ ...x, html: HTML_STARTER }); }); }, [id]);
+
+  // Atribución de ventas: solo si la campaña ya se envió.
+  useEffect(() => {
+    if (!c?.enviada_at) { setAtrib(null); return; }
+    let vivo = true;
+    void atribucionVentas(id, dias).then((a) => { if (vivo) setAtrib(a); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [id, c?.enviada_at, dias]);
 
   // Contar destinatarios del segmento elegido (para mostrar "a X contactos").
   useEffect(() => {
@@ -279,6 +289,28 @@ function Editor({ id, onVolver }: { id: string; onVolver: () => void }) {
                 <Metrica label="Clicks" valor={`${c.total_clicks} (${tasaClick(c)}%)`} />
                 <Metrica label="Rebotes" valor={c.total_rebotes} />
                 <Metrica label="Bajas" valor={c.total_bajas} />
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-ink/10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium">Ventas atribuidas</div>
+                  <select value={dias} onChange={(e) => setDias(Number(e.target.value))}
+                    className="text-xs rounded-md border border-ink/15 px-2 py-1 bg-white">
+                    <option value={7}>7 días</option>
+                    <option value={14}>14 días</option>
+                    <option value={30}>30 días</option>
+                  </select>
+                </div>
+                {atrib === null ? (
+                  <div className="text-xs text-ink-muted">Calculando…</div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    <Metrica label="Ingresos" valor={`$${atrib.ingresos.toLocaleString('es-AR')}`} />
+                    <Metrica label="Compradores" valor={atrib.compradores} />
+                    <Metrica label="Ventas" valor={atrib.ventas} />
+                  </div>
+                )}
+                <p className="text-xs text-ink-muted mt-2">Ventas de contactos que recibieron la campaña, dentro de {dias} días del envío.</p>
               </div>
             </div>
           )}
