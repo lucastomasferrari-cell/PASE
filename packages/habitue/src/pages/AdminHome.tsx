@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone, Zap, Plug, Star, MessageCircle } from 'lucide-react';
+import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone, Zap, Plug, Star, MessageCircle, Mail } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { LoginCard, loginLabelCls, loginInputCls, loginBtnCls } from '../components/LoginCard';
 import { Tablero } from './Tablero';
@@ -17,13 +17,15 @@ import { Fidelidad } from './Fidelidad';
 import { Pauta } from './Pauta';
 import { Integraciones } from './Integraciones';
 import { Mensajeria } from './Mensajeria';
+import { Campanas } from './Campanas';
 
-type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'automatizaciones' | 'mensajeria' | 'calidad' | 'cupones' | 'fidelidad' | 'pauta' | 'integraciones';
+type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'campanas' | 'automatizaciones' | 'mensajeria' | 'calidad' | 'cupones' | 'fidelidad' | 'pauta' | 'integraciones';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'tablero', label: 'Tablero', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
   { key: 'comensales', label: 'Comensales', icon: <Users className="h-[18px] w-[18px]" /> },
-  { key: 'segmentos', label: 'Segmentos y campañas', icon: <Send className="h-[18px] w-[18px]" /> },
+  { key: 'segmentos', label: 'Segmentos', icon: <Send className="h-[18px] w-[18px]" /> },
+  { key: 'campanas', label: 'Email marketing', icon: <Mail className="h-[18px] w-[18px]" /> },
   { key: 'automatizaciones', label: 'Automatizaciones', icon: <Zap className="h-[18px] w-[18px]" /> },
   { key: 'mensajeria', label: 'Mensajería IG', icon: <MessageCircle className="h-[18px] w-[18px]" /> },
   { key: 'calidad', label: 'Calidad y reseñas', icon: <Star className="h-[18px] w-[18px]" /> },
@@ -187,6 +189,8 @@ export function AdminHome() {
             <Comensales tenantId={tenantId ?? ''} />
           ) : seccion === 'segmentos' ? (
             <Segmentos />
+          ) : seccion === 'campanas' ? (
+            <Campanas tenantId={tenantId ?? ''} />
           ) : seccion === 'automatizaciones' ? (
             <Automatizaciones tenantId={tenantId ?? ''} />
           ) : seccion === 'mensajeria' ? (
