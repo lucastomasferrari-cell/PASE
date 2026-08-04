@@ -44,6 +44,9 @@ export function AdminHome() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [seccion, setSeccion] = useState<Seccion>('tablero');
+  // Secciones permitidas. null = todas (dueño/admin o sin restricción). Un array
+  // = solo esas (rol acotado, ej. equipo de marketing → ['campanas','segmentos'…]).
+  const [permsHabitue, setPermsHabitue] = useState<Seccion[] | null>(null);
 
   useEffect(() => {
     if (!supabaseConfigurado) return;
@@ -77,12 +80,29 @@ export function AdminHome() {
     void (async () => {
       const [s, u] = await Promise.all([
         db().from('comanda_local_settings').select('tenant_id').is('deleted_at', null).limit(1).maybeSingle(),
-        db().from('usuarios').select('id').eq('email', sesion.email).maybeSingle(),
+        db().from('usuarios').select('id, rol, accesos_por_app').eq('email', sesion.email).maybeSingle(),
       ]);
       if (s.data?.tenant_id) setTenantId(s.data.tenant_id as string);
       if (u.data?.id) setUserId(u.data.id as number);
+      // Gateo de secciones: dueño/admin ven todo; si el user tiene una lista de
+      // permisos de Habitué asignada en Accesos, se limita a esas secciones.
+      const rol = (u.data as { rol?: string } | null)?.rol;
+      const perms = (u.data as { accesos_por_app?: { habitue?: { permisos?: string[] } } } | null)?.accesos_por_app?.habitue?.permisos;
+      if (rol && ['dueno', 'admin', 'superadmin'].includes(rol)) setPermsHabitue(null);
+      else if (Array.isArray(perms) && perms.length) setPermsHabitue(perms as Seccion[]);
+      else setPermsHabitue(null);
     })();
   }, [sesion]);
+
+  // Secciones visibles según permisos. Si la sección activa no está permitida,
+  // saltar a la primera visible.
+  const navVisible = permsHabitue ? NAV.filter((n) => permsHabitue.includes(n.key)) : NAV;
+  useEffect(() => {
+    if (permsHabitue && !permsHabitue.includes(seccion)) {
+      setSeccion(navVisible[0]?.key ?? 'campanas');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permsHabitue]);
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
@@ -147,7 +167,7 @@ export function AdminHome() {
           <span className="text-2xl font-medium text-brand-600">habitué<span className="text-gold">.</span></span>
         </div>
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          {NAV.map((it) => (
+          {navVisible.map((it) => (
             <button key={it.key} onClick={() => setSeccion(it.key)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       seccion === it.key ? 'bg-brand-50 text-brand-700' : 'text-ink-soft hover:bg-ink/5'
@@ -172,7 +192,7 @@ export function AdminHome() {
         </header>
 
         <nav className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 border-b border-ink/10 bg-white">
-          {NAV.map((it) => (
+          {navVisible.map((it) => (
             <button key={it.key} onClick={() => setSeccion(it.key)}
                     className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
                       seccion === it.key ? 'bg-brand-500 text-white' : 'text-ink-muted hover:bg-ink/5'
