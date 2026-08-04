@@ -117,7 +117,7 @@ export default async function handler(req, res) {
         .select('id', { count: 'exact', head: true }).eq('campana_id', campana_id);
       if (!yaHay) {
         let q = db.from('clientes').select('id, email, nombre')
-          .eq('tenant_id', tenantId).eq('marketing_opt_in', true).not('email', 'is', null);
+          .eq('tenant_id', tenantId).eq('acepta_marketing', true).not('email', 'is', null).is('deleted_at', null);
         if (Array.isArray(cliente_ids) && cliente_ids.length) q = q.in('id', cliente_ids);
         const { data: contactos } = await q;
         const { data: sup } = await db.from('mkt_supresiones').select('email').eq('tenant_id', tenantId);
