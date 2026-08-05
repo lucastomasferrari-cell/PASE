@@ -18,6 +18,7 @@ import { Pauta } from './Pauta';
 import { Integraciones } from './Integraciones';
 import { Mensajeria } from './Mensajeria';
 import { Campanas } from './Campanas';
+import { listMarcas, type Marca } from '@/lib/marcasService';
 
 type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'campanas' | 'automatizaciones' | 'mensajeria' | 'calidad' | 'cupones' | 'fidelidad' | 'pauta' | 'integraciones';
 
@@ -47,6 +48,10 @@ export function AdminHome() {
   // Secciones permitidas. null = todas (dueño/admin o sin restricción). Un array
   // = solo esas (rol acotado, ej. equipo de marketing → ['campanas','segmentos'…]).
   const [permsHabitue, setPermsHabitue] = useState<Seccion[] | null>(null);
+  // Marca activa (Neko / Maneki / Rene…). Define el remitente por defecto de las
+  // campañas de email. Se elige en el sidebar.
+  const [marcas, setMarcas] = useState<Marca[]>([]);
+  const [marcaId, setMarcaId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!supabaseConfigurado) return;
@@ -84,6 +89,9 @@ export function AdminHome() {
       ]);
       if (s.data?.tenant_id) setTenantId(s.data.tenant_id as string);
       if (u.data?.id) setUserId(u.data.id as number);
+      const ms = await listMarcas();
+      setMarcas(ms);
+      setMarcaId((prev) => prev ?? ms[0]?.id ?? null);
       // Gateo de secciones: dueño/admin ven todo; si el user tiene una lista de
       // permisos de Habitué asignada en Accesos, se limita a esas secciones.
       const rol = (u.data as { rol?: string } | null)?.rol;
@@ -166,6 +174,15 @@ export function AdminHome() {
         <div className="px-5 h-16 flex items-center">
           <span className="text-2xl font-medium text-brand-600">habitué<span className="text-gold">.</span></span>
         </div>
+        {marcas.length > 1 && (
+          <div className="px-3 pb-2">
+            <label className="block text-[11px] font-medium text-ink-muted px-1 mb-1">Marca</label>
+            <select value={marcaId ?? ''} onChange={(e) => setMarcaId(Number(e.target.value))}
+              className="w-full rounded-lg border border-ink/15 px-2.5 py-2 text-sm bg-white">
+              {marcas.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+          </div>
+        )}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           {navVisible.map((it) => (
             <button key={it.key} onClick={() => setSeccion(it.key)}
@@ -210,7 +227,7 @@ export function AdminHome() {
           ) : seccion === 'segmentos' ? (
             <Segmentos />
           ) : seccion === 'campanas' ? (
-            <Campanas tenantId={tenantId ?? ''} />
+            <Campanas tenantId={tenantId ?? ''} marca={marcas.find((m) => m.id === marcaId) ?? null} />
           ) : seccion === 'automatizaciones' ? (
             <Automatizaciones tenantId={tenantId ?? ''} />
           ) : seccion === 'mensajeria' ? (

@@ -71,7 +71,10 @@ export async function getCampana(id: string): Promise<MktCampana | null> {
 
 export async function crearCampana(tenantId: string, c: Partial<MktCampana>): Promise<MktCampana> {
   const { data, error } = await db().from('mkt_campanas')
-    .insert({ tenant_id: tenantId, nombre: c.nombre ?? 'Nueva campaña', asunto: c.asunto ?? '', html: c.html ?? '' })
+    .insert({
+      tenant_id: tenantId, nombre: c.nombre ?? 'Nueva campaña', asunto: c.asunto ?? '', html: c.html ?? '',
+      from_nombre: c.from_nombre ?? null, from_email: c.from_email ?? null,
+    })
     .select(CAMPOS).single();
   if (error) throw new Error(error.message);
   return data as MktCampana;

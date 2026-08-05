@@ -10,6 +10,7 @@ import {
   type MktCampana, type MktEstado, type Atribucion,
 } from '@/lib/mktService';
 import { SEGMENTOS, listSegmento, type SegmentoKey } from '@/lib/segmentosService';
+import { remitenteDeMarca, type Marca } from '@/lib/marcasService';
 
 const ESTADO_STYLE: Record<MktEstado, string> = {
   borrador: 'bg-ink/10 text-ink-soft',
@@ -35,7 +36,7 @@ function fecha(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 }
 
-export function Campanas({ tenantId }: { tenantId: string }) {
+export function Campanas({ tenantId, marca }: { tenantId: string; marca: Marca | null }) {
   const [modo, setModo] = useState<'lista' | 'editor'>('lista');
   const [campanas, setCampanas] = useState<MktCampana[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -52,7 +53,8 @@ export function Campanas({ tenantId }: { tenantId: string }) {
 
   async function nueva() {
     try {
-      const c = await crearCampana(tenantId, {});
+      const r = remitenteDeMarca(marca);
+      const c = await crearCampana(tenantId, r ? { from_nombre: r.nombre, from_email: r.email } : {});
       setEditId(c.id); setModo('editor');
     } catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo crear'); }
   }
@@ -60,7 +62,7 @@ export function Campanas({ tenantId }: { tenantId: string }) {
   function abrir(id: string) { setEditId(id); setModo('editor'); }
 
   if (modo === 'editor' && editId) {
-    return <Editor id={editId} onVolver={() => { setModo('lista'); setEditId(null); void recargar(); }} />;
+    return <Editor id={editId} marca={marca} onVolver={() => { setModo('lista'); setEditId(null); void recargar(); }} />;
   }
 
   return (
@@ -121,7 +123,7 @@ export function Campanas({ tenantId }: { tenantId: string }) {
 }
 
 // ─── Editor de campaña ──────────────────────────────────────────────────────
-function Editor({ id, onVolver }: { id: string; onVolver: () => void }) {
+function Editor({ id, marca, onVolver }: { id: string; marca: Marca | null; onVolver: () => void }) {
   const [c, setC] = useState<MktCampana | null>(null);
   const [seg, setSeg] = useState<SegmentoKey>('marketing');
   const [count, setCount] = useState<number | null>(null);
@@ -132,7 +134,20 @@ function Editor({ id, onVolver }: { id: string; onVolver: () => void }) {
   const [atrib, setAtrib] = useState<Atribucion | null>(null);
   const [dias, setDias] = useState(7);
 
-  useEffect(() => { void getCampana(id).then((x) => { setC(x); if (x?.html === '') setC({ ...x, html: HTML_STARTER }); }); }, [id]);
+  useEffect(() => {
+    void getCampana(id).then((x) => {
+      if (!x) { setC(null); return; }
+      const r = remitenteDeMarca(marca);
+      // Defaults: contenido starter + remitente de la marca activa si están vacíos.
+      setC({
+        ...x,
+        html: x.html === '' ? HTML_STARTER : x.html,
+        from_nombre: x.from_nombre || r?.nombre || '',
+        from_email: x.from_email || r?.email || '',
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // Atribución de ventas: solo si la campaña ya se envió.
   useEffect(() => {
@@ -223,6 +238,7 @@ function Editor({ id, onVolver }: { id: string; onVolver: () => void }) {
                 className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" placeholder="hola@..." />
             </div>
           </div>
+          <p className="-mt-2 text-xs text-ink-muted">Envía desde <b>{c.from_email || 'hola@mailing.comanda.lat'}</b>{marca ? ` · marca ${marca.nombre}` : ''}. Cambiá la marca en el sidebar.</p>
           <div>
             <label className="text-xs font-medium text-ink-soft flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Audiencia</label>
             <select value={seg} disabled={bloqueado} onChange={(e) => setSeg(e.target.value as SegmentoKey)}
