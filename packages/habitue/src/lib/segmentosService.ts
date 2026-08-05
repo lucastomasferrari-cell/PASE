@@ -6,7 +6,7 @@ import type { Cliente } from './clientesService';
 
 export type SegmentoKey =
   | 'perdidos' | 'riesgo' | 'recurrentes' | 'una_compra'
-  | 'nuevos' | 'vip' | 'top_gasto' | 'marketing';
+  | 'nuevos' | 'vip' | 'top_gasto' | 'marketing' | 'seed_test';
 
 export interface SegmentoDef {
   key: SegmentoKey;
@@ -26,6 +26,7 @@ export const SEGMENTOS: SegmentoDef[] = [
   { key: 'nuevos', label: 'Nuevos', emoji: '', descripcion: 'Primer pedido en los últimos 30 días. Dales la bienvenida.', sugerencia: 'bienvenida' },
   { key: 'vip', label: 'VIP', emoji: '', descripcion: 'Marcados como VIP a mano.', sugerencia: 'fidelizar' },
   { key: 'marketing', label: 'Aceptan promos', emoji: '', descripcion: 'Dieron OK para recibir marketing.', sugerencia: 'promo' },
+  { key: 'seed_test', label: '🧪 Prueba de entrega (seed)', emoji: '', descripcion: 'Casillas semilla para medir inbox vs spam en varios proveedores. Borrar después del test.', sugerencia: 'promo' },
 ];
 
 function diasAtras(n: number): string {
@@ -46,6 +47,7 @@ function aplicar(q: any, key: SegmentoKey): any {
     case 'nuevos':      return q.gte('primer_pedido_at', diasAtras(30));
     case 'vip':         return q.eq('vip', true);
     case 'marketing':   return q.eq('acepta_marketing', true);
+    case 'seed_test':   return q.eq('notas', 'SEED_TEST');
   }
 }
 
