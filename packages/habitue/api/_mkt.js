@@ -53,13 +53,31 @@ export function urlBaja(baseUrl, email, tenantId, secret) {
   return `${baseUrl}/api/mkt-unsubscribe?token=${encodeURIComponent(t)}`;
 }
 
+// Deriva una versión en texto plano desde el HTML. Mandar HTML + texto es una
+// señal fuerte anti-spam (los filtros penalizan el HTML-only). Simple pero suficiente:
+// saca estilos/scripts, convierte <a> en "texto (url)", quita tags y normaliza saltos.
+export function htmlAtexto(html) {
+  if (!html) return '';
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, txt) => `${txt.replace(/<[^>]+>/g, '').trim()} (${href})`)
+    .replace(/<(br|\/p|\/div|\/h[1-6]|\/li)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n').map((l) => l.trim()).join('\n')
+    .trim();
+}
+
 // ── Envío por Resend (un request = hasta 1 destinatario acá; batch aparte) ──
-// Devuelve { id, error }. Incluye headers List-Unsubscribe (one-click, requerido
-// por Gmail/Yahoo para envíos masivos) y tags para correlacionar en el webhook.
+// Devuelve { id, error }. Manda HTML + texto plano (anti-spam), headers
+// List-Unsubscribe (one-click, requerido por Gmail/Yahoo) y tags para el webhook.
 export async function resendEnviar({ apiKey, from, replyTo, to, subject, html, text, unsubUrl, tags }) {
   const headers = unsubUrl
     ? { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
     : undefined;
+  const textoPlano = text || (html ? htmlAtexto(html) : '');
   try {
     const r = await fetch(RESEND_API, {
       method: 'POST',
@@ -67,7 +85,8 @@ export async function resendEnviar({ apiKey, from, replyTo, to, subject, html, t
       body: JSON.stringify({
         from, to, subject,
         ...(replyTo ? { reply_to: replyTo } : {}),
-        ...(html ? { html } : { text: text || '' }),
+        ...(html ? { html } : {}),
+        ...(textoPlano ? { text: textoPlano } : {}),
         ...(headers ? { headers } : {}),
         ...(tags ? { tags } : {}),
       }),
