@@ -26,11 +26,21 @@ function secretBaja() {
   return process.env.MKT_UNSUB_SECRET || process.env.CRON_SECRET || 'mkt-dev-secret';
 }
 
+// ¿Es un email válido? Acepta "algo@dominio.tld" o "Nombre <algo@dominio.tld>".
+function emailValido(s) {
+  if (!s || typeof s !== 'string') return false;
+  const m = /<([^>]+)>/.exec(s);
+  const addr = (m ? m[1] : s).trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr);
+}
+
 // Arma el remitente "Nombre <email>" desde la campaña, o mkt_config, o env.
+// El reply_to solo se incluye si es un email válido (un typo no debe romper el envío).
 function remitente(campana, cfg) {
   const nombre = campana.from_nombre || cfg?.from_nombre || 'Neko';
   const email = campana.from_email || cfg?.from_email || process.env.RESEND_FROM_MARKETING || 'hola@mailing.comanda.lat';
-  return { from: `${nombre} <${email}>`, replyTo: campana.reply_to || cfg?.reply_to || null };
+  const rt = campana.reply_to || cfg?.reply_to || null;
+  return { from: `${nombre} <${email}>`, replyTo: emailValido(rt) ? rt : null };
 }
 
 // Inserta el link de baja: reemplaza {{unsubscribe}} si está, si no agrega footer.
