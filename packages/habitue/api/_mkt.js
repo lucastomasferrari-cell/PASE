@@ -92,10 +92,10 @@ export async function resendEnviar({ apiKey, from, replyTo, to, subject, html, t
       }),
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) return { id: null, error: data?.message || `HTTP ${r.status}` };
-    return { id: data?.id ?? null, error: null };
+    if (!r.ok) return { id: null, error: data?.message || `HTTP ${r.status}`, status: r.status };
+    return { id: data?.id ?? null, error: null, status: 200 };
   } catch (e) {
-    return { id: null, error: e instanceof Error ? e.message : String(e) };
+    return { id: null, error: e instanceof Error ? e.message : String(e), status: 0 };
   }
 }
 

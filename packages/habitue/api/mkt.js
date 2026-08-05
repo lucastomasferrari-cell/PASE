@@ -14,8 +14,14 @@
 import { checkUserAuth, checkCronAuth } from './_auth.js';
 import { renderTemplate, resendEnviar, urlBaja } from './_mkt.js';
 
-const LOTE = 200;            // destinatarios procesados por invocación (evita timeout)
-const CONCURRENCIA = 8;      // envíos Resend en paralelo
+// Resend permite 10 requests/segundo. Mandamos en grupos chicos con pausa para
+// quedar bien por debajo (~6/seg) y no comernos 429. LOTE bajo para terminar cada
+// invocación en <10s (compatible con timeout de Vercel Hobby); el front reintenta
+// hasta done. Los 429 quedan 'pendiente' (reintento), no 'fallido'.
+const LOTE = 40;             // destinatarios por invocación
+const GRUPO = 5;             // envíos en paralelo por tanda
+const PAUSA_MS = 800;        // pausa entre tandas → ~6 req/seg
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function baseUrl(req) {
   if (process.env.MKT_PUBLIC_URL) return process.env.MKT_PUBLIC_URL.replace(/\/$/, '');
@@ -48,15 +54,6 @@ function inyectarBaja(html, unsub) {
   const link = `<a href="${unsub}" style="color:#888">darte de baja</a>`;
   if (html.includes('{{unsubscribe}}')) return html.replace(/\{\{\s*unsubscribe\s*\}\}/g, unsub);
   return `${html}<div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888;text-align:center">Recibís este mail porque sos cliente. Podés ${link} cuando quieras.</div>`;
-}
-
-// Envía un array de tareas con concurrencia acotada.
-async function enLotes(items, n, fn) {
-  const out = [];
-  for (let i = 0; i < items.length; i += n) {
-    out.push(...await Promise.all(items.slice(i, i + n).map(fn)));
-  }
-  return out;
 }
 
 export default async function handler(req, res) {
@@ -161,22 +158,33 @@ export default async function handler(req, res) {
 
       const { from, replyTo } = remitente(campana, cfg);
       const bu = baseUrl(req), sec = secretBaja();
-      let enviados = 0, fallidos = 0;
-      await enLotes(pendientes || [], CONCURRENCIA, async (d) => {
-        const unsub = urlBaja(bu, d.email, tenantId, sec);
-        const html = inyectarBaja(renderTemplate(campana.html, { nombre: d.nombre || '', email: d.email }), unsub);
-        const { id, error } = await resendEnviar({
-          apiKey, from, replyTo, to: [d.email], subject: campana.asunto, html, unsubUrl: unsub,
-          tags: [{ name: 'campana_id', value: String(campana_id) }],
-        });
-        if (error) {
-          fallidos++;
-          await db.from('mkt_campana_destinatarios').update({ estado: 'fallido', error: error.slice(0, 300) }).eq('id', d.id);
-        } else {
-          enviados++;
-          await db.from('mkt_campana_destinatarios').update({ estado: 'enviado', resend_email_id: id, enviado_at: new Date().toISOString() }).eq('id', d.id);
-        }
-      });
+      let enviados = 0, fallidos = 0, reintentar = 0;
+      const lista = pendientes || [];
+      // Tandas de GRUPO en paralelo con pausa entre tandas (throttle anti-429).
+      for (let i = 0; i < lista.length; i += GRUPO) {
+        await Promise.all(lista.slice(i, i + GRUPO).map(async (d) => {
+          const unsub = urlBaja(bu, d.email, tenantId, sec);
+          const html = inyectarBaja(renderTemplate(campana.html, { nombre: d.nombre || '', email: d.email }), unsub);
+          const { id, error, status } = await resendEnviar({
+            apiKey, from, replyTo, to: [d.email], subject: campana.asunto, html, unsubUrl: unsub,
+            tags: [{ name: 'campana_id', value: String(campana_id) }],
+          });
+          if (error) {
+            if (status === 429) {
+              // Límite de velocidad: NO es fallo real → queda pendiente para reintento.
+              reintentar++;
+              await db.from('mkt_campana_destinatarios').update({ error: 'rate_limit' }).eq('id', d.id);
+            } else {
+              fallidos++;
+              await db.from('mkt_campana_destinatarios').update({ estado: 'fallido', error: error.slice(0, 300) }).eq('id', d.id);
+            }
+          } else {
+            enviados++;
+            await db.from('mkt_campana_destinatarios').update({ estado: 'enviado', resend_email_id: id, enviado_at: new Date().toISOString() }).eq('id', d.id);
+          }
+        }));
+        if (i + GRUPO < lista.length) await sleep(PAUSA_MS);
+      }
 
       // ¿Quedan pendientes?
       const { count: restan } = await db.from('mkt_campana_destinatarios')
