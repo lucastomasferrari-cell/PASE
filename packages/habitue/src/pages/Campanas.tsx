@@ -26,10 +26,13 @@ const ESTADO_LABEL: Record<MktEstado, string> = {
   enviada: 'Enviada', pausada: 'Pausada', cancelada: 'Cancelada', error: 'Error',
 };
 
-const HTML_STARTER = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
+const HTML_STARTER = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;line-height:1.6">
   <h1 style="font-size:22px">Hola {{nombre}} 👋</h1>
-  <p>Escribí acá tu mensaje. Podés usar <b>{{nombre}}</b> y se reemplaza por cada contacto.</p>
-  <p><a href="https://comanda.lat" style="display:inline-block;background:#111;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Ver más</a></p>
+  <p>Escribí acá tu mensaje. Contale a tu cliente qué hay de nuevo: un plato nuevo, una promo de la semana, un horario especial. Cuanto más natural y personal, mejor.</p>
+  <p>Podés usar <b>{{nombre}}</b> en cualquier parte y se reemplaza por el nombre de cada contacto, así el mail se siente uno a uno.</p>
+  <p>Un par de líneas más de texto real ayudan a que el correo entre a la bandeja principal (los filtros desconfían de los mails que son solo un botón).</p>
+  <p style="margin:24px 0"><a href="https://comanda.lat" style="display:inline-block;background:#111;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none">Ver el menú</a></p>
+  <p style="color:#666;font-size:14px">¡Te esperamos! 🍽️</p>
 </div>`;
 
 function fecha(iso: string | null) {
